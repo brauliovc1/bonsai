@@ -1,0 +1,86 @@
+name: Release
+
+# Pushing a tag like v1.2.3 tests the code, builds Bonsai-1.2.3.dmg and clean-claude-1.2.3-macos.zip with a
+# SHA256SUMS file, and attaches them to a new GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, so the build number (the commit count) is right.
+          fetch-depth: 0
+
+      # Package.swift needs Swift 6 (Xcode 16 or newer). If the runner's default Xcode is older, this selects
+      # the newest Xcode installed on the runner, with `sudo xcode-select -s /Applications/Xcode_<x>.app`.
+      - name: Select Xcode
+        run: bash .github/scripts/select-xcode.sh
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Test
+        run: swift test
+
+      # Both slices (arm64 and x86_64), ad-hoc signed: the app is not notarized, so people open it with
+      # "Open Anyway" on first launch (see the README).
+      - name: Build the release files
+        run: make dist VERSION="${GITHUB_REF_NAME#v}"
+
+      # Developer ID signing and notarization would go here, before "Create the release", once there is an
+      # Apple Developer account. Secrets to add to the repository (names are only suggestions):
+      #   MACOS_CERTIFICATE (the .p12, base64), MACOS_CERTIFICATE_PASSWORD, KEYCHAIN_PASSWORD,
+      #   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (an app-specific password)
+      # Replace the "Build the release files" step above with these, so the dmg is built from the signed app:
+      #
+      # - name: Import the signing certificate
+      #   env:
+      #     MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      #     MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      #   run: |
+      #     echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+      #     security create-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain"
+      #     security default-keychain -s "$RUNNER_TEMP/build.keychain"
+      #     security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain"
+      #     security import "$RUNNER_TEMP/certificate.p12" -k "$RUNNER_TEMP/build.keychain" \
+      #       -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+      #       -k "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/build.keychain"
+      #
+      # - name: Build the release files, signed with Developer ID
+      #   env:
+      #     SIGN_IDENTITY: Developer ID Application: <your name> (<team id>)
+      #   run: |
+      #     make dist VERSION="${GITHUB_REF_NAME#v}" SIGN_IDENTITY="$SIGN_IDENTITY" \
+      #       CODESIGN_FLAGS="--options runtime --timestamp"
+      #
+      # - name: Sign and notarize the dmg
+      #   env:
+      #     SIGN_IDENTITY: Developer ID Application: <your name> (<team id>)
+      #     APPLE_ID: ${{ secrets.APPLE_ID }}
+      #     APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      #     APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      #   run: |
+      #     dmg="dist/Bonsai-${GITHUB_REF_NAME#v}.dmg"
+      #     codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg"
+      #     xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+      #       --password "$APPLE_APP_PASSWORD" --wait
+      #     xcrun stapler staple "$dmg"
+      #     # Signing and stapling changed the dmg, so write SHA256SUMS again.
+      #     (cd dist && shasum -a 256 *.dmg *.zip > SHA256SUMS)
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
