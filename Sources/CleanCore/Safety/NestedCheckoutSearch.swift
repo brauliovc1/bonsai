@@ -18,6 +18,9 @@ public struct NestedCheckoutSearch: Sendable {
     public struct Result: Sendable, Equatable {
         /// Folders with their own `.git`, relative to the worktree, sorted.
         public var checkouts: [String]
+        /// The checkouts whose `.git` is not a folder (a linked worktree or submodule of some repo): never
+        /// a plain clone.
+        public var gitFiles: [String]
         /// Why the walk could not look everywhere (cap hit, unreadable folder); nil when it finished.
         public var incomplete: String?
         public var entries: Int
@@ -25,7 +28,7 @@ public struct NestedCheckoutSearch: Sendable {
 
     public func search(_ worktree: URL) -> Result {
         let root = worktree.path
-        var result = Result(checkouts: [], incomplete: nil, entries: 0)
+        var result = Result(checkouts: [], gitFiles: [], incomplete: nil, entries: 0)
         var pending: [String] = [""]
 
         while let relative = pending.popLast() {
@@ -38,6 +41,7 @@ public struct NestedCheckoutSearch: Sendable {
 
             var children: [(name: String, isDirectory: Bool)] = []
             var hasGit = false
+            var gitIsDirectory = false
             while let entry = readdir(directory) {
                 let name = Self.name(of: entry)
                 if name == "." || name == ".." { continue }
@@ -45,16 +49,19 @@ public struct NestedCheckoutSearch: Sendable {
                 if result.entries > limit {
                     result.incomplete = "stopped after \(limit) entries"
                     result.checkouts.sort()
+                    result.gitFiles.sort()
                     return result
                 }
                 if name == ".git" {
                     hasGit = true
+                    gitIsDirectory = Self.isDirectory(entry, path: folder + "/.git")
                     continue
                 }
                 children.append((name, Self.isDirectory(entry, path: folder + "/" + name)))
             }
             if hasGit, !relative.isEmpty {
                 result.checkouts.append(relative)
+                if !gitIsDirectory { result.gitFiles.append(relative) }
                 continue
             }
             for child in children where child.isDirectory {
@@ -62,6 +69,7 @@ public struct NestedCheckoutSearch: Sendable {
             }
         }
         result.checkouts.sort()
+        result.gitFiles.sort()
         return result
     }
 

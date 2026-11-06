@@ -67,11 +67,16 @@ public struct WorktreeInspector: Sendable {
         } ?? []
         state.gitErrors += errors
 
+        // Registered worktrees (of any scanned repo) and `.git` files always block; a plain clone blocks
+        // unless it holds no local work.
         let search = nestedSearch.search(folder)
         let registered = knownWorktrees
             .filter { CanonicalPath.isInside($0.url, directory: folder) }
             .compactMap { CanonicalPath.relativePath(of: $0.url, to: folder) }
-        state.nestedCheckouts = (registered + search.checkouts).uniqued().sorted()
+        let candidates = search.checkouts.filter { !registered.contains($0) && !search.gitFiles.contains($0) }
+        let clean = await NestedCloneCheck(git: git).clonesWithoutLocalWork(candidates, in: folder)
+        state.nestedCheckouts = (registered + search.checkouts.filter { !clean.contains($0) }).uniqued().sorted()
+        state.nestedClones = candidates.filter(clean.contains).sorted()
         state.nestedSearchIncomplete = search.incomplete
         return state
     }

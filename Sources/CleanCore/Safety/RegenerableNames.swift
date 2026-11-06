@@ -5,7 +5,7 @@ public enum RegenerableNames {
     /// Dependency and build-output folders.
     public static let folders: Set<String> = [
         "node_modules", ".next", ".nuxt", ".svelte-kit", ".turbo", ".parcel-cache", ".angular", "coverage",
-        "dist", "dist-test", "build", ".dart_tool", "Pods", ".gradle", "__pycache__", ".pytest_cache",
+        "dist", "dist-test", "build", ".build", ".dart_tool", "Pods", ".gradle", "__pycache__", ".pytest_cache",
         ".mypy_cache", ".ruff_cache", ".venv", "venv", "target", "DerivedData", ".expo",
     ]
 

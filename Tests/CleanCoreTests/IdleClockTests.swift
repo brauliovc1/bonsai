@@ -85,8 +85,8 @@ struct IdleClockTests {
         let (wt, commit, _) = try await agedWorktree(world)
         let worktree = try await world.worktree(wt)
         let fresh = commit.addingTimeInterval(30 * day)
-        for path in ["node_modules/pkg/index.js", "packages/web/.next/cache.bin", "build/out.o", "vendor/repo/x.txt",
-                     ".DS_Store", "src/.DS_Store"] {
+        for path in ["node_modules/pkg/index.js", "packages/web/.next/cache.bin", "build/out.o", ".build/debug/app.o",
+                     "vendor/repo/x.txt", ".DS_Store", "src/.DS_Store"] {
             try world.fixture.setModificationDate(fresh, of: try world.fixture.write("x\n", to: path, in: wt))
         }
         try world.fixture.write("gitdir: elsewhere\n", to: "vendor/repo/.git", in: wt)

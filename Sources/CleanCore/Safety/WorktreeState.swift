@@ -17,9 +17,12 @@ public struct WorktreeState: Sendable, Hashable {
     public var branchStashes: Int
     /// Ignored files and folders that are not regenerable (§4.2), relative to the worktree.
     public var ignoredUserFiles: [String]
-    /// Other git checkouts (registered worktrees or folders with their own `.git`) inside this one.
-    /// `git worktree remove` would delete them along with it.
+    /// Other git checkouts inside this one that may hold work: registered worktrees, `.git` files, and
+    /// clones with local work. `git worktree remove` would delete them along with it.
     public var nestedCheckouts: [String]
+    /// Nested clones with no local work (package managers' checkouts): deleted with the worktree, fetched again
+    /// when needed. Shown, never blocking.
+    public var nestedClones: [String]
     /// Why the nested-checkout search could not look everywhere (entry cap, unreadable folder).
     public var nestedSearchIncomplete: String?
     /// Every git command that failed. Any error blocks removal.
@@ -36,6 +39,7 @@ public struct WorktreeState: Sendable, Hashable {
         branchStashes: Int = 0,
         ignoredUserFiles: [String] = [],
         nestedCheckouts: [String] = [],
+        nestedClones: [String] = [],
         nestedSearchIncomplete: String? = nil,
         gitErrors: [String] = []
     ) {
@@ -49,6 +53,7 @@ public struct WorktreeState: Sendable, Hashable {
         self.branchStashes = branchStashes
         self.ignoredUserFiles = ignoredUserFiles
         self.nestedCheckouts = nestedCheckouts
+        self.nestedClones = nestedClones
         self.nestedSearchIncomplete = nestedSearchIncomplete
         self.gitErrors = gitErrors
     }

@@ -31,20 +31,30 @@ struct SafetyRulesAddedTests {
         #expect(sparseReport.manualAllowed && sparseReport.autoEligible, "\(sparseReport)")
     }
 
-    // Item 3: `pip install -e git+...` clones into .venv/src; the search must look inside §4.2 folders.
+    // Item 3: `pip install -e git+...` clones into .venv/src; the search must look inside §4.2 folders. This
+    // clone has a remote but an unpushed commit, so it is local work.
     @Test func cloneInsideVenvBlocksBoth() async throws {
         let world = try await SafetyWorld.make()
         defer { world.remove() }
         let wt = try await world.sibling("py")
+        let package = try await world.fixture.makeRepo("mypkg", in: world.fixture.url.appending(path: "upstream"))
         let clone = wt.appending(path: ".venv/src/mypkg")
-        try FileManager.default.createDirectory(at: clone, withIntermediateDirectories: true)
-        try await world.fixture.run(["init", "--quiet"], in: clone)
+        try FileManager.default.createDirectory(at: clone.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try await world.fixture.run(["clone", "--quiet", package.path, clone.path], in: world.fixture.url)
         try world.fixture.write("unpushed\n", to: "mod.py", in: clone)
         try await world.fixture.commitAll(in: clone, message: "Local only")
 
         let report = try await world.check(wt)
         #expect(report.blockers == [.nestedCheckouts([".venv/src/mypkg"])], "\(report)")
         #expect(!report.manualAllowed && !report.autoEligible)
+
+        // Without a remote at all (`git init` inside .venv), it blocks too.
+        let bare = wt.appending(path: ".venv/src/scratch")
+        try FileManager.default.createDirectory(at: bare, withIntermediateDirectories: true)
+        try await world.fixture.run(["init", "--quiet"], in: bare)
+        try world.fixture.write("x\n", to: "x.py", in: bare)
+        try await world.fixture.commitAll(in: bare)
+        #expect(try await world.check(wt).blockers == [.nestedCheckouts([".venv/src/mypkg", ".venv/src/scratch"])])
     }
 
     // Item 3: a capped or unreadable search can't promise there is nothing inside.
@@ -76,8 +86,10 @@ struct SafetyRulesAddedTests {
         try fixture.write("x\n", to: "node_modules/a/b/c/inner/.git", in: root)
         try FileManager.default.createSymbolicLink(at: root.appending(path: "link"), withDestinationURL: fixture.home)
         try fixture.write("x\n", to: ".git", in: fixture.home)
+        try fixture.write("gitdir: x\n", to: "vendor/linked/.git", in: root)
         let result = NestedCheckoutSearch().search(root)
-        #expect(result.checkouts == ["node_modules/a/b/c"])
+        #expect(result.checkouts == ["node_modules/a/b/c", "vendor/linked"])
+        #expect(result.gitFiles == ["vendor/linked"])
         #expect(result.incomplete == nil)
     }
 

@@ -134,7 +134,7 @@ struct SafetyEdgeTests {
     }
 
     @Test func regenerableNamesFilterIgnoredEntries() {
-        for harmless in ["node_modules/", "packages/web/.next/", "debug.log", "a/b/x.pyc", ".DS_Store", "next-env.d.ts"] {
+        for harmless in ["node_modules/", "packages/web/.next/", ".build/", "debug.log", "a/b/x.pyc", ".DS_Store", "next-env.d.ts"] {
             #expect(RegenerableNames.isHarmlessIgnoredPath(harmless), "\(harmless)")
         }
         for user in [".env", ".idea/", "secrets/", "build/keys.txt", "node_modules", "notes.txt"] {

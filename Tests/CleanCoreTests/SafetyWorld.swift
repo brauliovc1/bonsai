@@ -3,12 +3,12 @@ import CleanTestSupport
 import Foundation
 
 /// A fixture repo set up for the §4.1 checks: `.gitignore` ignores `.env`, `node_modules/`, `*.log`,
-/// `/.claude/worktrees/` and `.venv/`, and is pushed to `origin/main`.
+/// `/.claude/worktrees/`, `.venv/` and `.build/`, and is pushed to `origin/main`.
 struct SafetyWorld {
     let fixture: GitFixture
     let repo: URL
 
-    static let gitignore = ".env\nnode_modules/\n*.log\n/.claude/worktrees/\n.venv/\n"
+    static let gitignore = ".env\nnode_modules/\n*.log\n/.claude/worktrees/\n.venv/\n.build/\n"
 
     static func make(_ name: String = "alpha") async throws -> SafetyWorld {
         let fixture = try GitFixture()

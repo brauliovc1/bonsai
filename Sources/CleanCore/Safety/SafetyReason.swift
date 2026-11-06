@@ -13,6 +13,8 @@ public enum SafetyReason: Sendable, Hashable, Codable {
     case submodules
     /// Other git checkouts inside the folder; `git worktree remove` would delete them too.
     case nestedCheckouts([String])
+    /// Clones with no local work inside (package managers' checkouts): a note in both modes.
+    case nestedClones([String])
     case nestedSearchIncomplete(String)
     case localOnlyCommits(count: Int, onBranch: Bool)
     case reflogOnlyCommits(count: Int)
@@ -40,6 +42,7 @@ public enum SafetyReason: Sendable, Hashable, Codable {
         case .operationInProgress(let markers): "\(Self.operationName(markers.first ?? "")) in progress"
         case .submodules: "submodules"
         case .nestedCheckouts(let paths): "nested checkouts (\(paths.count))"
+        case .nestedClones(let paths): "package clones (\(paths.count))"
         case .nestedSearchIncomplete: "nested search incomplete"
         case .localOnlyCommits(let count, _): "local-only commits (\(count))"
         case .reflogOnlyCommits(let count): "reflog-only commits (\(count))"
@@ -75,6 +78,9 @@ public enum SafetyReason: Sendable, Hashable, Codable {
         case .operationInProgress(let markers):
             return "A \(Self.operationName(markers.first ?? "")) is in progress (\(markers.joined(separator: ", ")) "
                 + "in its git dir); finish or abort it first."
+        case .nestedClones(let paths):
+            return "Clones with no local work (package checkouts that can be fetched again) are inside and go with it: "
+                + Self.list(paths) + "."
         case .nestedSearchIncomplete(let why):
             return "The search for other checkouts inside could not finish (\(why)), so one could be missed."
         case .reflogOnlyCommits(let count):
