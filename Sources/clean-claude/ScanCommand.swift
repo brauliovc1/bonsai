@@ -5,41 +5,47 @@ import Foundation
 struct ScanCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "scan",
-        abstract: "List every git worktree under the scan roots with its repo, branch, kind and size."
+        abstract: "List every git worktree under the scan roots with its repo, branch, kind, size, idle days "
+            + "and removal status."
     )
 
-    @Option(
-        name: .customLong("root"),
-        help: ArgumentHelp(
-            "A folder to scan (repeatable). Default: $CLEAN_CLAUDE_SCAN_ROOTS, else ~/Documents/GitHub.",
-            valueName: "path"
-        )
-    )
-    var roots: [String] = []
+    @OptionGroup var rootOptions: RootOptions
 
-    @Flag(help: "Print the full scan result as JSON.")
+    @Flag(help: "Print the full scan result and every verdict as JSON.")
     var json = false
 
     @Flag(name: .customLong("no-sizes"), help: "Skip measuring folder sizes (much faster).")
     var noSizes = false
 
-    func run() async throws {
-        let environment = CleanEnvironment.live()
-        let explicitRoots = roots.map { CleanEnvironment.expand($0, home: environment.homeDirectory) }
-        let result = await Scanner(environment: environment).scan(roots: explicitRoots, includeSizes: !noSizes)
+    @Option(help: ArgumentHelp("Only show worktrees with this status.", valueName: "auto-ready|safe|blocked"))
+    var status: StatusFilter?
 
-        for issue in result.issues {
-            StandardError.write("warning: \(issue)")
+    enum StatusFilter: String, ExpressibleByArgument, CaseIterable {
+        case autoReady = "auto-ready"
+        case safe
+        case blocked
+    }
+
+    func run() async throws {
+        let context = try CommandContext.load()
+        let result = try await context.scan(rootOptions, includeSizes: !noSizes)
+
+        var assessments: [WorktreeAssessment] = []
+        if let git = WorktreeAssessor.git(for: context.environment), !result.worktrees.isEmpty {
+            assessments = await context.assessor(git: git).assess(result)
         }
-        if result.roots.isEmpty {
-            throw ExitCode.failure
-        }
+        let shown = assessments.filter { status == nil || $0.status.group == status?.rawValue }
 
         if json {
-            let data = try CleanJSON.encoder().encode(result)
-            print(String(decoding: data, as: UTF8.self))
+            print(try ScanJSON(scan: result, assessments: shown).encoded())
         } else {
-            let table = ScanTable(result: result, homeDirectory: environment.homeDirectory, showSizes: !noSizes)
+            let table = ScanTable(
+                result: result,
+                assessments: shown,
+                allAssessments: assessments,
+                paths: context.paths(for: result),
+                showSizes: !noSizes
+            )
             print(table.render())
         }
     }

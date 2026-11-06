@@ -3,15 +3,24 @@ import Foundation
 /// Roots -> repos -> worktrees -> sizes. Read-only: a scan never changes anything on disk.
 public struct Scanner: Sendable {
     public var environment: CleanEnvironment
+    public var settings: Settings
 
-    public init(environment: CleanEnvironment) {
+    public init(environment: CleanEnvironment, settings: Settings = Settings()) {
         self.environment = environment
+        self.settings = settings
     }
 
-    /// Scan roots: explicit roots, else `$CLEAN_CLAUDE_SCAN_ROOTS`, else `~/Documents/GitHub` if it exists.
-    public static func resolveRoots(explicit: [URL], environment: CleanEnvironment) -> [URL] {
+    /// Scan roots: explicit roots, else `$CLEAN_CLAUDE_SCAN_ROOTS`, else `settings.scanRoots`, else
+    /// `~/Documents/GitHub` if it exists.
+    public static func resolveRoots(
+        explicit: [URL],
+        environment: CleanEnvironment,
+        settings: Settings = Settings()
+    ) -> [URL] {
         if !explicit.isEmpty { return explicit }
         if let override = environment.scanRootsOverride, !override.isEmpty { return override }
+        let saved = settings.scanRootURLs(home: environment.homeDirectory)
+        if !saved.isEmpty { return saved }
         let defaultRoot = environment.homeDirectory.appending(path: "Documents/GitHub", directoryHint: .isDirectory)
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: defaultRoot.path, isDirectory: &isDirectory), isDirectory.boolValue {
@@ -30,7 +39,8 @@ public struct Scanner: Sendable {
         let start = clock.now
         var issues: [ScanIssue] = []
 
-        let roots = Self.resolveRoots(explicit: explicitRoots, environment: environment).map(\.standardized)
+        let roots = Self.resolveRoots(explicit: explicitRoots, environment: environment, settings: settings)
+            .map(\.standardized)
         if roots.isEmpty {
             issues.append(ScanIssue(kind: .noRoots, message: "no scan roots: pass --root or create ~/Documents/GitHub"))
         }

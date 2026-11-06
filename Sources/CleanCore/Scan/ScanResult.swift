@@ -39,6 +39,13 @@ public struct ScanResult: Sendable, Codable, Equatable {
         sizes[worktree.path]
     }
 
+    /// At least one root was an existing folder. A scan where every root is missing found nothing on
+    /// purpose, and scanning commands exit 1 for it.
+    public var hasUsableRoot: Bool {
+        let missing = Set(issues.filter { $0.kind == .rootMissing }.compactMap(\.path))
+        return roots.contains { !missing.contains($0) }
+    }
+
     public func worktrees(inRepo repoPath: String) -> [Worktree] {
         worktrees.filter { $0.repoPath == repoPath }
     }

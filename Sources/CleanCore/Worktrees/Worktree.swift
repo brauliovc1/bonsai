@@ -53,8 +53,20 @@ public struct Worktree: Sendable, Codable, Hashable, Identifiable {
     public var isLocked: Bool { lockedReason != nil }
     public var isPrunable: Bool { prunableReason != nil }
 
-    /// Lexical standardization only: removes `.`, `..` and trailing slashes, never touches the disk.
+    /// Lexical standardization only: removes `.`, `..`, repeated and trailing slashes, never touches the disk.
+    ///
+    /// Works on the string itself, so the characters stay exactly as git printed them. `URL.path` would
+    /// decompose "é" (NFD), and git then fails to match the path against the one it registered.
     public static func standardize(_ path: String) -> String {
-        URL(fileURLWithPath: path).standardized.path
+        guard path.hasPrefix("/") else { return URL(fileURLWithPath: path).standardized.path }
+        var parts: [Substring] = []
+        for part in path.split(separator: "/", omittingEmptySubsequences: true) {
+            switch part {
+            case ".": continue
+            case "..": if !parts.isEmpty { parts.removeLast() }
+            default: parts.append(part)
+            }
+        }
+        return "/" + parts.joined(separator: "/")
     }
 }
