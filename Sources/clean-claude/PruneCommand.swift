@@ -26,19 +26,26 @@ struct PruneCommand: AsyncParsableCommand {
         for repoPath in scan.repos {
             let repo = URL(fileURLWithPath: repoPath, isDirectory: true)
             do {
-                let lines = try await pruner.preview(repo: repo)
-                guard !lines.isEmpty else { continue }
+                let preview = try await pruner.preview(repo: repo)
+                guard !preview.entries.isEmpty else { continue }
+                if !preview.refusals.isEmpty {
+                    print("\(display.string(repo)): refused, nothing pruned (git prunes a whole repo at once)")
+                    preview.refusals.forEach { print("  refused: \($0)") }
+                    preview.entries.forEach { print("  \($0.note)") }
+                    if yes { failed = true }
+                    continue
+                }
                 if yes {
                     let result = try await pruner.prune(repo: repo)
                     total += result.pruned.count
                     print("\(display.string(repo)): pruned \(result.pruned.count)")
-                    result.pruned.forEach { print("  \($0)") }
+                    (result.entry?.notes ?? result.pruned).forEach { print("  \($0)") }
                     result.warnings.forEach { StandardError.write("warning: \($0)") }
                     if !result.warnings.isEmpty { failed = true }
                 } else {
-                    total += lines.count
-                    print("\(display.string(repo)): would prune \(lines.count)")
-                    lines.forEach { print("  \($0)") }
+                    total += preview.entries.count
+                    print("\(display.string(repo)): would prune \(preview.entries.count)")
+                    preview.entries.forEach { print("  \($0.note)") }
                 }
             } catch {
                 StandardError.write("error: \(display.string(repo)): \(error)")

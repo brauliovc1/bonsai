@@ -40,7 +40,8 @@ struct AutoCommand: AsyncParsableCommand {
             print("Auto mode is off in the settings; running once because you asked.")
         }
         let remover = Remover(git: git, settings: settings, environment: context.environment)
-        let outcome = await AutoRunner(remover: remover).run(plan, ignoringReportOnly: true)
+        let outcome = await AutoRunner(remover: remover)
+            .run(plan, ignoringReportOnly: true, knownWorktrees: scan.worktrees)
         print(text.render(outcome))
         saveSummary(outcome.summary(date: context.environment.now()), context: context)
         if !outcome.failed.isEmpty { throw ExitCode.failure }

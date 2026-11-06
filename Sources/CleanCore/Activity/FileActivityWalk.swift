@@ -4,7 +4,8 @@ import Foundation
 ///
 /// Skips `.git`, the regenerable folders of §4.2, symlinked folders, and nested repos or worktrees
 /// (folders with their own `.git`, such as `<repo>/.claude/worktrees/*` inside a main checkout). Only
-/// files count: a folder's mtime also moves when `node_modules` or `dist` appears in it.
+/// files count: a folder's mtime also moves when `node_modules` or `dist` appears in it. `.DS_Store` doesn't
+/// count either: Finder rewrites it when someone merely looks at the folder.
 public struct FileActivityWalk: Sendable {
     public static let defaultMaxEntries = 20_000
 
@@ -45,7 +46,7 @@ public struct FileActivityWalk: Sendable {
             }
             for child in children {
                 let name = child.lastPathComponent
-                if name == ".git" { continue }
+                if name == ".git" || name == ".DS_Store" { continue }
                 result.entries += 1
                 if result.entries > maxEntries {
                     result.capHit = true

@@ -82,20 +82,13 @@ struct SafetyEdgeTests {
         let inside = wt.appending(path: "src")
         try FileManager.default.createDirectory(at: inside, withIntermediateDirectories: true)
 
-        let sleeper = Process()
-        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        sleeper.arguments = ["30"]
-        sleeper.currentDirectoryURL = inside
-        try sleeper.run()
-        defer {
-            sleeper.terminate()
-            sleeper.waitUntilExit()
-        }
-        try await Task.sleep(for: .milliseconds(200))
+        let sleeper = SleepingProcess()
+        defer { sleeper.stop() }
+        try sleeper.start(in: inside)
 
         let index = await ProcessCwdIndex.capture(lsof: world.fixture.environment().tools.lsof)
         try #require(index.isAvailable, "lsof: \(index.failure ?? "")")
-        #expect(index.processes(inside: wt).map(\.pid) == [sleeper.processIdentifier])
+        #expect(index.processes(inside: wt).map(\.pid) == [try #require(sleeper.pid)])
 
         let report = try await world.check(wt, cwdIndex: index)
         #expect(report.blockers.count == 1)

@@ -18,7 +18,7 @@ public enum AutoPlanner {
             }
 
             let days = row.idle.idleDays
-            let idleEnough = days.map { $0 >= settings.idleThresholdDays } ?? false
+            let idleEnough = days.map { $0 >= max(1, settings.idleThresholdDays) } ?? false
             if row.safety.autoEligible && idleEnough {
                 plan.remove.append(row)
                 continue

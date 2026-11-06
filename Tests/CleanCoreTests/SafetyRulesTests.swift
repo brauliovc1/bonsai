@@ -98,7 +98,7 @@ struct SafetyRulesTests {
         try world.fixture.write("work\n", to: "work.txt", in: wt)
         try await world.fixture.commitAll(in: wt)
         let report = try await world.check(wt)
-        #expect(report.blockers == [.localOnlyCommits(count: 1, onBranch: false)])
+        #expect(report.blockers == [.localOnlyCommits(count: 1, onBranch: false), .reflogOnlyCommits(count: 1)])
         #expect(!report.manualAllowed && !report.autoEligible)
     }
 

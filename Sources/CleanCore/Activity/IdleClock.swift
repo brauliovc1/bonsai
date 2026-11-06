@@ -48,24 +48,48 @@ public struct IdleClock: Sendable {
         if let newest = walk.newest { signals[.fileChange] = newest }
         errors += walk.errors
 
-        if let transcript = transcripts.newestTranscriptDate(for: folder) {
-            signals[.claudeTranscript] = transcript
+        switch transcripts.lookup(for: worktree.path) {
+        case .newest(let date): signals[.claudeTranscript] = date
+        case .unreadable(let why): errors.append("Claude transcripts: \(why)")
+        case .absent, .empty: break
         }
 
         return IdleReport.make(signals: signals, capHit: walk.capHit, errors: errors, now: now())
     }
 
-    /// Newest mtime of `index`, `HEAD` and `logs/HEAD` in the worktree's own git dir.
+    /// Newest of: the mtimes of `index` and `HEAD` in the worktree's own git dir, and the time of the last
+    /// entry in its `logs/HEAD`. Not that file's mtime: `git gc` rewrites (or empties) every reflog of a repo.
     private func gitActivity(in folder: URL) async throws -> Date? {
-        let gitDirOutput = try await git.gitString(["rev-parse", "--git-dir"], in: folder)
-        let gitDir = gitDirOutput.hasPrefix("/")
-            ? URL(fileURLWithPath: gitDirOutput, isDirectory: true)
-            : folder.appending(path: gitDirOutput, directoryHint: .isDirectory)
-        let dates = ["index", "HEAD", "logs/HEAD"].compactMap { name -> Date? in
+        let gitDir = URL(fileURLWithPath: try await git.gitString(["rev-parse", "--absolute-git-dir"], in: folder))
+        var dates = ["index", "HEAD"].compactMap { name -> Date? in
             let attributes = try? FileManager.default.attributesOfItem(atPath: gitDir.appending(path: name).path)
             return attributes?[.modificationDate] as? Date
         }
+        if let last = try Self.lastReflogDate(gitDir.appending(path: "logs/HEAD")) { dates.append(last) }
         return dates.max()
+    }
+
+    /// The timestamp of the last entry of a reflog (`<old> <new> <name> <<email>> <seconds> <zone>\t<message>`),
+    /// reading only the end of the file. nil when the file is missing or empty.
+    static func lastReflogDate(_ file: URL) throws -> Date? {
+        let handle: FileHandle
+        do {
+            handle = try FileHandle(forReadingFrom: file)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            return nil
+        }
+        defer { try? handle.close() }
+        let size = try handle.seekToEnd()
+        let tail = min(size, 65_536)
+        try handle.seek(toOffset: size - tail)
+        let data = try handle.read(upToCount: Int(tail)) ?? Data()
+        guard let line = data.split(separator: UInt8(ascii: "\n")).last(where: { !$0.isEmpty }) else { return nil }
+        let header = line.split(separator: UInt8(ascii: "\t"), maxSplits: 1).first ?? line
+        let words = header.split(separator: UInt8(ascii: " "))
+        guard words.count >= 2, let seconds = TimeInterval(String(decoding: words[words.count - 2], as: UTF8.self)) else {
+            throw ParseError(output: String(decoding: line.prefix(200), as: UTF8.self))
+        }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     private struct ParseError: Error, CustomStringConvertible {

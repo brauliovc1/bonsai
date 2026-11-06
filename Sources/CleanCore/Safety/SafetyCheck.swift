@@ -19,16 +19,16 @@ public struct SafetyCheck: Sendable {
         cwdIndex: ProcessCwdIndex,
         knownWorktrees: [Worktree] = []
     ) async -> SafetyReport {
-        let state: WorktreeState
-        if worktree.isMain || worktree.isBare {
-            state = WorktreeState()
-        } else if worktree.isPrunable {
-            // Only whether the folder exists matters; git commands inside it can't be trusted.
-            state = Remover.itemExists(at: worktree.path) ? WorktreeState() : .missing
-        } else {
-            state = await inspector.inspect(worktree, knownWorktrees: knownWorktrees)
-        }
+        let state = await state(of: worktree, knownWorktrees: knownWorktrees)
         return Self.evaluate(worktree: worktree, state: state, idle: idle, settings: settings, cwdIndex: cwdIndex)
+    }
+
+    /// The facts `evaluate` needs. Main checkouts are not inspected (never removed), and for a prunable
+    /// entry only whether the folder exists matters: git commands inside it can't be trusted.
+    public func state(of worktree: Worktree, knownWorktrees: [Worktree] = []) async -> WorktreeState {
+        if worktree.isMain || worktree.isBare { return WorktreeState() }
+        if worktree.isPrunable { return Remover.itemExists(at: worktree.path) ? WorktreeState() : .missing }
+        return await inspector.inspect(worktree, knownWorktrees: knownWorktrees)
     }
 
     /// The rules themselves, over facts already gathered. Pure.
@@ -64,7 +64,9 @@ public struct SafetyCheck: Sendable {
         // Any git error blocks both: the other facts can't be trusted.
         if let error = state.gitErrors.first { blockers.append(.gitError(error)) }
         if let reason = worktree.lockedReason { blockers.append(.locked(reason: reason)) }
+        if !state.operationsInProgress.isEmpty { blockers.append(.operationInProgress(state.operationsInProgress)) }
         if state.changedFiles > 0 { blockers.append(.uncommitted(count: state.changedFiles)) }
+        if !state.hiddenEdits.isEmpty { blockers.append(.hiddenLocalEdits(state.hiddenEdits)) }
         if state.localOnlyCommits > 0 {
             let reason = SafetyReason.localOnlyCommits(count: state.localOnlyCommits, onBranch: !worktree.isDetached)
             if worktree.isDetached {
@@ -74,8 +76,13 @@ public struct SafetyCheck: Sendable {
                 autoOnly.append(reason)
             }
         }
+        if state.reflogOnlyCommits > 0 { blockers.append(.reflogOnlyCommits(count: state.reflogOnlyCommits)) }
         if state.hasSubmodules { blockers.append(.submodules) }
         if !state.nestedCheckouts.isEmpty { blockers.append(.nestedCheckouts(state.nestedCheckouts)) }
+        if let why = state.nestedSearchIncomplete {
+            notes.append(.nestedSearchIncomplete(why))
+            autoOnly.append(.nestedSearchIncomplete(why))
+        }
 
         if cwdIndex.isAvailable {
             let processes = cwdIndex.processes(inside: worktree.url)
@@ -99,7 +106,7 @@ public struct SafetyCheck: Sendable {
         }
 
         if let days = idle.idleDays {
-            if days < settings.idleThresholdDays {
+            if days < max(1, settings.idleThresholdDays) {
                 notes.append(.recentlyActive(days: days))
                 autoOnly.append(.recentlyActive(days: days))
             }

@@ -12,6 +12,8 @@ public struct Remover: Sendable {
     public var now: @Sendable () -> Date
     /// A fresh process index for the re-check (lsof by default).
     public var captureCwdIndex: @Sendable () async -> ProcessCwdIndex
+    /// Test seam: runs after the git and disk checks, before the process index is taken.
+    var afterInspection: @Sendable () async -> Void = {}
     /// Test seam: runs after the re-check, right before `git worktree remove`.
     var beforeGitRemove: @Sendable () async -> Void = {}
 
@@ -25,10 +27,27 @@ public struct Remover: Sendable {
         self.captureCwdIndex = { await ProcessCwdIndex.capture(lsof: lsof) }
     }
 
-    public func remove(_ worktree: Worktree, mode: RemovalMode, estimatedBytes: Int64?) async throws -> RemovalResult {
+    /// `knownWorktrees`: every registered worktree of every scanned repo (the caller's scan). They are
+    /// checked for nesting together with a fresh listing of this worktree's own repo.
+    public func remove(
+        _ worktree: Worktree,
+        mode: RemovalMode,
+        estimatedBytes: Int64?,
+        knownWorktrees: [Worktree] = []
+    ) async throws -> RemovalResult {
         let (fresh, siblings) = try await reread(worktree, mode: mode)
-        let assessment = await assessor.assess(fresh, knownWorktrees: siblings, cwdIndex: await captureCwdIndex())
-        let safety = assessment.safety
+        // The slow checks first; the process index last, right before git runs, so a process that moved
+        // into the folder during the walks is still caught.
+        let idle = fresh.isMain || fresh.isBare ? IdleReport.unknown : await assessor.idleClock.report(for: fresh)
+        let state = await assessor.safetyCheck.state(of: fresh, knownWorktrees: knownWorktrees + siblings)
+        await afterInspection()
+        let safety = SafetyCheck.evaluate(
+            worktree: fresh,
+            state: state,
+            idle: idle,
+            settings: assessor.settings,
+            cwdIndex: await captureCwdIndex()
+        )
         let allowed = mode == .manual ? safety.manualAllowed : safety.autoEligible
         guard allowed else { throw RemovalError.refused(mode: mode, report: safety) }
 
@@ -36,8 +55,9 @@ public struct Remover: Sendable {
         let freeBefore = Self.availableCapacity(at: volumeFolder)
 
         await beforeGitRemove()
+        let (arguments, directory) = Self.removeCommand(for: fresh)
         do {
-            try await git.git(["worktree", "remove", fresh.path], in: fresh.repoURL)
+            try await git.git(arguments, in: directory)
         } catch let error as GitError {
             throw RemovalError.gitFailed(stderr: error.timedOut ? "git timed out" : error.stderr)
         }
@@ -45,6 +65,10 @@ public struct Remover: Sendable {
         var warnings: [String] = []
         if Self.itemExists(at: fresh.path) {
             warnings.append("git reported success but \(fresh.path) still exists")
+        }
+        if let still = try? await WorktreeScanner(git: git, cursorWorktreesDirectory: cursorWorktreesDirectory)
+            .worktrees(in: fresh.repoURL), still.contains(where: { CanonicalPath.same($0.url, fresh.url) }) {
+            warnings.append("git reported success but \(fresh.path) is still registered")
         }
         if let branch = fresh.branch, !(await branchExists(branch, in: fresh.repoURL)) {
             warnings.append("branch \(branch) no longer exists")
@@ -74,6 +98,19 @@ public struct Remover: Sendable {
             entry.notes.append("not logged")
         }
         return RemovalResult(entry: entry, safety: safety, warnings: warnings, logged: logged)
+    }
+
+    /// `git -C <repo> worktree remove <path>` (PLAN §4.1). For a path with non-ASCII characters git runs
+    /// inside the worktree instead and removes `.`: Foundation's `Process` hands arguments to git
+    /// decomposed ("é" as "e" + U+0301), and git can't always turn them back (it gives up on paths with an
+    /// emoji), so it would not find a worktree registered composed. From inside, git takes the path from
+    /// `getcwd`, which returns the folder's name exactly as it is stored. git's own checks (dirty, locked,
+    /// main checkout) are the same either way.
+    static func removeCommand(for worktree: Worktree) -> (arguments: [String], directory: URL) {
+        if worktree.path.utf8.allSatisfy({ $0 < 0x80 }) {
+            return (["worktree", "remove", worktree.path], worktree.repoURL)
+        }
+        return (["worktree", "remove", "."], worktree.url)
     }
 
     /// The worktree's porcelain record as git lists it now, plus the repo's other worktrees.

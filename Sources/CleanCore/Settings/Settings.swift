@@ -60,6 +60,15 @@ public struct Settings: Sendable, Codable, Equatable {
         lastAutoRun = try container.decodeIfPresent(AutoRunSummary.self, forKey: .lastAutoRun)
     }
 
+    /// What makes these settings unusable; empty when they are fine. A threshold below 1 day would make
+    /// every clean worktree auto-ready.
+    public var problems: [String] {
+        var problems: [String] = []
+        if idleThresholdDays < 1 { problems.append("idleThresholdDays must be at least 1 (is \(idleThresholdDays))") }
+        if reportOnlyDays < 0 { problems.append("reportOnlyDays must not be negative (is \(reportOnlyDays))") }
+        return problems
+    }
+
     /// `scanRoots` as absolute URLs, with `~` expanded against `home`.
     public func scanRootURLs(home: URL) -> [URL] {
         scanRoots.filter { !$0.isEmpty }.map { CleanEnvironment.expand($0, home: home) }

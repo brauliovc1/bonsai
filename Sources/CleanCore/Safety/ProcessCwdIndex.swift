@@ -9,13 +9,17 @@ public struct ProcessCwdIndex: Sendable, Hashable {
     public struct Entry: Sendable, Hashable, Codable, CustomStringConvertible {
         public var pid: Int32
         public var command: String
-        /// The process's working folder as lsof prints it (symlinks resolved by the kernel).
+        /// The process's working folder, lsof's escapes decoded (symlinks resolved by the kernel).
         public var cwd: String
+        /// Other readings of an ambiguous lsof name: `^A` is how lsof prints byte 0x01, but also a literal
+        /// `^A`. Matching tries `cwd` and each of these.
+        public var alternativeCwds: [String]
 
-        public init(pid: Int32, command: String, cwd: String) {
+        public init(pid: Int32, command: String, cwd: String, alternativeCwds: [String] = []) {
             self.pid = pid
             self.command = command
             self.cwd = cwd
+            self.alternativeCwds = alternativeCwds
         }
 
         public var description: String { "\(command) (pid \(pid))" }
@@ -71,9 +75,11 @@ public struct ProcessCwdIndex: Sendable, Hashable {
                 pid = Int32(value)
                 command = ""
             case "c":
-                command = value
+                command = LsofEscapes.decode(value).first ?? value
             case "n":
-                if let pid { entries.append(Entry(pid: pid, command: command, cwd: value)) }
+                guard let pid else { break }
+                let readings = LsofEscapes.decode(value)
+                entries.append(Entry(pid: pid, command: command, cwd: readings[0], alternativeCwds: Array(readings.dropFirst())))
             default:
                 break
             }
@@ -83,11 +89,20 @@ public struct ProcessCwdIndex: Sendable, Hashable {
 
     /// Processes whose working folder is `folder` or inside it. Empty when the index is unavailable;
     /// check `isAvailable` first.
+    ///
+    /// Compared byte for byte after NFC normalization, so "é" matches whether it was stored composed or not.
     public func processes(inside folder: URL) -> [Entry] {
         guard let entries else { return [] }
-        let bases = Set([CanonicalPath.resolve(folder), folder.standardized.path])
+        let bases = Set([CanonicalPath.resolve(folder), folder.standardized.path].map(Self.comparable))
         return entries.filter { entry in
-            bases.contains { base in entry.cwd == base || entry.cwd.hasPrefix(base == "/" ? "/" : base + "/") }
+            ([entry.cwd] + entry.alternativeCwds).map(Self.comparable).contains { cwd in
+                bases.contains { base in cwd == base || cwd.starts(with: base == [0x2F] ? [0x2F] : base + [0x2F]) }
+            }
         }
+    }
+
+    /// NFC UTF-8 bytes: Swift's `String ==` ignores normalization, but byte prefixes are exact.
+    private static func comparable(_ path: String) -> [UInt8] {
+        Array(path.precomposedStringWithCanonicalMapping.utf8)
     }
 }

@@ -72,12 +72,12 @@ public struct Restorer: Sendable {
         if let branch = entry.branch {
             let check = try await git.result(["rev-parse", "--verify", "--quiet", "refs/heads/\(branch)"], in: repo)
             guard check.succeeded else { throw RestoreError.branchMissing(branch) }
-            return Plan(entry: entry, arguments: ["worktree", "add", entry.path, branch])
+            return Plan(entry: entry, arguments: Git.unicodeOptions(forPath: entry.path) + ["worktree", "add", entry.path, branch])
         }
         guard let sha = entry.headSha else { throw RestoreError.noRef }
         let check = try await git.result(["cat-file", "-e", "\(sha)^{commit}"], in: repo)
         guard check.succeeded else { throw RestoreError.commitMissing(sha) }
-        return Plan(entry: entry, arguments: ["worktree", "add", "--detach", entry.path, sha])
+        return Plan(entry: entry, arguments: Git.unicodeOptions(forPath: entry.path) + ["worktree", "add", "--detach", entry.path, sha])
     }
 
     public func restore(entryID: UUID) async throws -> Result {

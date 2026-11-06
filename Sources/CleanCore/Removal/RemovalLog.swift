@@ -5,10 +5,18 @@ import Foundation
 /// Appending is one `write` of one line followed by `fsync`. A crash mid-write can leave a partial last
 /// line; reading skips it, and the next append starts on a fresh line. The only rewrite is marking an
 /// entry restored, done atomically and keeping every other line byte for byte.
+///
+/// The app and the CLI both write it, so every append and every rewrite holds an exclusive `flock` on
+/// `removals.jsonl.lock` (a rewrite must not drop a line appended between its read and its replace).
 public struct RemovalLog: Sendable {
     public static let fileName = "removals.jsonl"
+    public static let lockFileName = "removals.jsonl.lock"
 
     public var directory: URL
+    /// How long to wait for another process's lock before giving up.
+    public var lockTimeout: Duration = .seconds(10)
+    /// Test seam: runs inside `markRestored` between reading the file and replacing it, lock held.
+    var duringRewrite: (@Sendable () -> Void)?
 
     public init(directory: URL) {
         self.directory = directory
@@ -19,6 +27,7 @@ public struct RemovalLog: Sendable {
     }
 
     public var fileURL: URL { directory.appending(path: Self.fileName) }
+    public var lockURL: URL { directory.appending(path: Self.lockFileName) }
 
     public struct LogError: Error, Sendable, CustomStringConvertible {
         public var description: String
@@ -36,6 +45,10 @@ public struct RemovalLog: Sendable {
     /// Appends one entry.
     public func append(_ entry: RemovalLogEntry) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try withLock { try appendLocked(entry) }
+    }
+
+    private func appendLocked(_ entry: RemovalLogEntry) throws {
         var line = try Self.encode(entry)
         if try !endsWithNewline() { line.insert(UInt8(ascii: "\n"), at: line.startIndex) }
 
@@ -51,6 +64,10 @@ public struct RemovalLog: Sendable {
 
     /// Sets `restoredAt` on one entry and rewrites the file atomically.
     public func markRestored(id: UUID, at date: Date) throws {
+        try withLock { try markRestoredLocked(id: id, at: date) }
+    }
+
+    private func markRestoredLocked(id: UUID, at date: Date) throws {
         var found = false
         var output = Data()
         for line in try lines() {
@@ -64,7 +81,30 @@ public struct RemovalLog: Sendable {
             }
         }
         guard found else { throw LogError(description: "no log entry \(id.uuidString)") }
+        duringRewrite?()
         try output.write(to: fileURL, options: .atomic)
+    }
+
+    // MARK: - Lock
+
+    /// Runs `body` holding an exclusive `flock` on the lock file, waiting up to `lockTimeout` for it.
+    private func withLock<T>(_ body: () throws -> T) throws -> T {
+        let descriptor = open(lockURL.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
+        guard descriptor >= 0 else { throw LogError(description: "cannot open \(lockURL.path): \(Self.errnoText())") }
+        defer { close(descriptor) }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: lockTimeout)
+        while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+            guard errno == EWOULDBLOCK || errno == EINTR else {
+                throw LogError(description: "cannot lock \(lockURL.path): \(Self.errnoText())")
+            }
+            guard clock.now < deadline else {
+                throw LogError(description: "\(lockURL.path) is locked by another process")
+            }
+            usleep(20_000)
+        }
+        defer { flock(descriptor, LOCK_UN) }
+        return try body()
     }
 
     // MARK: - Lines

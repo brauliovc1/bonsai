@@ -145,4 +145,49 @@ struct SettingsAndLogTests {
         #expect(text.split(separator: "\n").count == 3)
         #expect(throws: RemovalLog.LogError.self) { try log.markRestored(id: UUID(), at: restoredAt) }
     }
+
+    // Item 12: a threshold of 0 days would make every clean worktree auto-ready.
+    @Test func outOfRangeSettingsAreErrors() throws {
+        let folder = try TemporaryDirectory()
+        defer { folder.remove() }
+        let store = SettingsStore(directory: folder.url)
+        for bad in [#"{"idleThresholdDays": 0}"#, #"{"idleThresholdDays": -3}"#, #"{"reportOnlyDays": -1}"#] {
+            try Data(bad.utf8).write(to: store.fileURL)
+            #expect(throws: SettingsStore.LoadError.self, "\(bad)") { try store.load() }
+        }
+        try Data(#"{"idleThresholdDays": 1, "reportOnlyDays": 0}"#.utf8).write(to: store.fileURL)
+        #expect(try store.load().idleThresholdDays == 1)
+
+        try FileManager.default.removeItem(at: store.fileURL)
+        #expect(throws: SettingsStore.LoadError.self) { try store.save(Settings(idleThresholdDays: 0)) }
+        #expect(!FileManager.default.fileExists(atPath: store.fileURL.path))
+    }
+
+    // Item 10: an append from another writer while markRestored rewrites the file must not be lost.
+    @Test func appendDuringARewriteIsKept() throws {
+        let folder = try TemporaryDirectory()
+        defer { folder.remove() }
+        let log = RemovalLog(directory: folder.url)
+        let first = entry("/a")
+        let second = entry("/b")
+        try log.append(first)
+
+        let appended = DispatchSemaphore(value: 0)
+        var rewriting = log
+        rewriting.duringRewrite = {
+            DispatchQueue.global().async {
+                try? log.append(second)
+                appended.signal()
+            }
+            // Without the lock the append lands here and the rewrite then drops it.
+            _ = appended.wait(timeout: .now() + 0.5)
+        }
+        try rewriting.markRestored(id: first.id, at: Date(timeIntervalSince1970: 1_800_100_000))
+        _ = appended.wait(timeout: .now() + 5)
+
+        let entries = try log.entries()
+        #expect(entries.map(\.id) == [first.id, second.id])
+        #expect(entries.first?.restoredAt != nil)
+        #expect(FileManager.default.fileExists(atPath: log.lockURL.path))
+    }
 }

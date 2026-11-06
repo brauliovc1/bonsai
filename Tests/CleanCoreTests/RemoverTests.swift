@@ -153,4 +153,50 @@ struct RemoverTests {
         }
         #expect(FileManager.default.fileExists(atPath: world.repo.appending(path: "README.md").path))
     }
+
+    // Item 11: the process index is taken last, so a shell opened during the slow walks is still seen.
+    @Test func processThatEntersDuringTheChecksIsCaught() async throws {
+        let world = try await SafetyWorld.make()
+        defer { world.remove() }
+        let wt = try await world.sibling("late-shell")
+        let worktree = try await world.worktree(wt)
+        let shell = SleepingProcess()
+        defer { shell.stop() }
+        var remover = remover(world)
+        remover.afterInspection = { try? shell.start(in: wt) }
+
+        await #expect {
+            try await remover.remove(worktree, mode: .manual, estimatedBytes: nil)
+        } throws: { error in
+            guard case RemovalError.refused(.manual, let report) = error else { return false }
+            return report.status == .inUse
+        }
+        #expect(FileManager.default.fileExists(atPath: wt.appending(path: "README.md").path))
+    }
+
+    // Item 3: a registered worktree of another repo inside, hidden from the disk walk by an unreadable folder.
+    @Test func registeredWorktreesOfOtherReposAreChecked() async throws {
+        let world = try await SafetyWorld.make()
+        defer { world.remove() }
+        let beta = try await world.fixture.makeRepo("beta")
+        let outer = try await world.sibling("outer")
+        let hidden = outer.appending(path: "node_modules/cache")
+        try await world.fixture.addWorktree(to: beta, at: hidden.appending(path: "inner"), branch: "inner")
+        let scanner = WorktreeScanner(git: world.fixture.git, cursorWorktreesDirectory: world.fixture.url)
+        let known = try await scanner.worktrees(in: world.repo) + scanner.worktrees(in: beta)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: hidden.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hidden.path) }
+        let worktree = try await world.worktree(outer)
+
+        // Only this repo's worktrees: the walk can't see inside, so it is just a note for manual.
+        #expect(try await world.check(outer).manualAllowed)
+
+        await #expect {
+            try await remover(world).remove(worktree, mode: .manual, estimatedBytes: nil, knownWorktrees: known)
+        } throws: { error in
+            guard case RemovalError.refused(.manual, let report) = error else { return false }
+            return report.blockers == [.nestedCheckouts(["node_modules/cache/inner"])]
+        }
+        #expect(FileManager.default.fileExists(atPath: outer.appending(path: "README.md").path))
+    }
 }

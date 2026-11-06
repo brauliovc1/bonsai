@@ -2,13 +2,13 @@
 import CleanTestSupport
 import Foundation
 
-/// A fixture repo set up for the §4.1 checks: `.gitignore` ignores `.env`, `node_modules/`, `*.log` and
-/// `/.claude/worktrees/`, and is pushed to `origin/main`.
+/// A fixture repo set up for the §4.1 checks: `.gitignore` ignores `.env`, `node_modules/`, `*.log`,
+/// `/.claude/worktrees/` and `.venv/`, and is pushed to `origin/main`.
 struct SafetyWorld {
     let fixture: GitFixture
     let repo: URL
 
-    static let gitignore = ".env\nnode_modules/\n*.log\n/.claude/worktrees/\n"
+    static let gitignore = ".env\nnode_modules/\n*.log\n/.claude/worktrees/\n.venv/\n"
 
     static func make(_ name: String = "alpha") async throws -> SafetyWorld {
         let fixture = try GitFixture()
@@ -39,7 +39,8 @@ struct SafetyWorld {
         idle: IdleReport = .idle(days: 40),
         settings: Settings = Settings(),
         cwdIndex: ProcessCwdIndex = ProcessCwdIndex(entries: []),
-        knownWorktrees: [Worktree]? = nil
+        knownWorktrees: [Worktree]? = nil,
+        nestedSearch: NestedCheckoutSearch = NestedCheckoutSearch()
     ) async throws -> SafetyReport {
         let repo = repo ?? self.repo
         let worktree = try await worktree(path, in: repo)
@@ -50,7 +51,8 @@ struct SafetyWorld {
                 cursorWorktreesDirectory: fixture.environment().cursorWorktreesDirectory
             ).worktrees(in: repo)
         }
-        return await SafetyCheck(git: fixture.git)
-            .check(worktree, idle: idle, settings: settings, cwdIndex: cwdIndex, knownWorktrees: known)
+        var safetyCheck = SafetyCheck(git: fixture.git)
+        safetyCheck.inspector.nestedSearch = nestedSearch
+        return await safetyCheck.check(worktree, idle: idle, settings: settings, cwdIndex: cwdIndex, knownWorktrees: known)
     }
 }

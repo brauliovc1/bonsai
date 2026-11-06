@@ -1,6 +1,7 @@
 import Foundation
 
-/// Looks inside ignored folders on disk, never descending into regenerable folders (§4.2) or symlinks.
+/// Looks inside collapsed ignored folders on disk, never descending into regenerable folders (§4.2) or
+/// symlinks. (Nested checkouts are found separately, everywhere: `NestedCheckoutSearch`.)
 ///
 /// git collapses a folder that holds only ignored content into one entry (`packages/` for
 /// `packages/app/node_modules/`), so the name alone can't say whether it is build output or user files.
@@ -30,33 +31,6 @@ struct IgnoredFolderSearch: Sendable {
             }
         }
         return false
-    }
-
-    /// Folders under `root` (or `root` itself) that contain a `.git` entry: other checkouts.
-    func checkouts(in root: URL) -> [URL] {
-        let fileManager = FileManager.default
-        var found: [URL] = []
-        var pending = [root]
-        var visited = 0
-        while let folder = pending.popLast(), visited < limit {
-            if fileManager.fileExists(atPath: folder.appending(path: ".git").path) {
-                found.append(folder)
-                continue
-            }
-            let children = (try? fileManager.contentsOfDirectory(
-                at: folder,
-                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]
-            )) ?? []
-            for child in children {
-                visited += 1
-                let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                guard values?.isDirectory == true, values?.isSymbolicLink != true,
-                      !RegenerableNames.isRegenerableFolder(child.lastPathComponent)
-                else { continue }
-                pending.append(child)
-            }
-        }
-        return found
     }
 
     /// Drops entries inside another listed folder entry (`packages/app/` when `packages/` is listed).

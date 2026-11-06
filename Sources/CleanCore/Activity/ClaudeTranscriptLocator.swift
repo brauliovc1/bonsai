@@ -14,23 +14,26 @@ public struct ClaudeTranscriptLocator: Sendable {
         claudeConfigDirectory.appending(path: "projects", directoryHint: .isDirectory)
     }
 
-    /// The absolute path with every character outside `[A-Za-z0-9]` replaced by `-`.
-    public static func encode(_ path: String) -> String {
-        String(path.unicodeScalars.map { scalar -> Character in
-            switch scalar {
-            case "A"..."Z", "a"..."z", "0"..."9": Character(scalar)
-            default: "-"
-            }
-        })
+    /// What was found for one folder.
+    public enum Lookup: Sendable, Equatable {
+        /// No transcript folder: the signal is absent, not an error.
+        case absent
+        /// Transcript folders exist but hold no `*.jsonl`.
+        case empty
+        case newest(Date)
+        /// A transcript folder exists but can't be read: idle unknown.
+        case unreadable(String)
     }
 
-    /// Transcript folders that exist for `folder`. Both the path as given and its symlink-resolved form
-    /// are tried (`/var/...` vs `/private/var/...`).
-    public func transcriptFolders(for folder: URL) -> [URL] {
-        let spellings = [folder.standardized.path, CanonicalPath.resolve(folder)]
+    /// Transcript folders that exist for `path`. The path as git printed it and its symlink-resolved form
+    /// (`/var/...` vs `/private/var/...`) are tried, each composed and decomposed, since the encoding works on
+    /// UTF-16 code units and "é" is one unit composed but two decomposed.
+    public func transcriptFolders(for path: String) -> [URL] {
+        let resolved = CanonicalPath.resolve(path)
+        let spellings = [path, resolved].flatMap { [$0, $0.precomposedStringWithCanonicalMapping, $0.decomposedStringWithCanonicalMapping] }
         var seen: Set<String> = []
         return spellings.compactMap { path in
-            let encoded = Self.encode(path)
+            let encoded = TranscriptFolderEncoding.encode(path)
             guard seen.insert(encoded).inserted else { return nil }
             let candidate = projectsDirectory.appending(path: encoded, directoryHint: .isDirectory)
             var isDirectory: ObjCBool = false
@@ -41,14 +44,21 @@ public struct ClaudeTranscriptLocator: Sendable {
         }
     }
 
-    /// The newest modification date of a `*.jsonl` file directly inside the transcript folder(s), or nil.
-    public func newestTranscriptDate(for folder: URL) -> Date? {
+    /// The newest `*.jsonl` modification date directly inside the transcript folder(s) for `path`.
+    public func lookup(for path: String) -> Lookup {
+        let folders = transcriptFolders(for: path)
+        guard !folders.isEmpty else { return .absent }
         var newest: Date?
-        for directory in transcriptFolders(for: folder) {
-            let files = (try? FileManager.default.contentsOfDirectory(
-                at: directory,
-                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey]
-            )) ?? []
+        for directory in folders {
+            let files: [URL]
+            do {
+                files = try FileManager.default.contentsOfDirectory(
+                    at: directory,
+                    includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey]
+                )
+            } catch {
+                return .unreadable("cannot read \(directory.path)")
+            }
             for file in files where file.pathExtension == "jsonl" {
                 guard let values = try? file.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
                       values.isRegularFile == true,
@@ -57,6 +67,12 @@ public struct ClaudeTranscriptLocator: Sendable {
                 if newest.map({ date > $0 }) ?? true { newest = date }
             }
         }
-        return newest
+        return newest.map(Lookup.newest) ?? .empty
+    }
+
+    /// The newest transcript date, or nil (absent, empty or unreadable).
+    public func newestTranscriptDate(for path: String) -> Date? {
+        if case .newest(let date) = lookup(for: path) { return date }
+        return nil
     }
 }

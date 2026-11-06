@@ -37,8 +37,9 @@ public struct AutoRunner: Sendable {
     }
 
     /// Removes the plan's `remove` list. In report-only mode it removes nothing, unless
-    /// `ignoringReportOnly` (a person asked for this run).
-    public func run(_ plan: AutoPlan, ignoringReportOnly: Bool = false) async -> Outcome {
+    /// `ignoringReportOnly` (a person asked for this run). `knownWorktrees`: every worktree of the scan the
+    /// plan came from, for the nested-checkout re-check.
+    public func run(_ plan: AutoPlan, ignoringReportOnly: Bool = false, knownWorktrees: [Worktree] = []) async -> Outcome {
         var outcome = Outcome(removed: [], failed: [], freedBytes: 0, notified: plan.notifyLocalWork, reportOnly: false)
         if plan.reportOnly && !ignoringReportOnly {
             outcome.reportOnly = true
@@ -46,7 +47,12 @@ public struct AutoRunner: Sendable {
         }
         for row in plan.remove {
             do {
-                let result = try await remover.remove(row.worktree, mode: .auto, estimatedBytes: row.estimatedBytes)
+                let result = try await remover.remove(
+                    row.worktree,
+                    mode: .auto,
+                    estimatedBytes: row.estimatedBytes,
+                    knownWorktrees: knownWorktrees
+                )
                 outcome.removed.append(result)
                 outcome.freedBytes += result.freedBytes ?? 0
             } catch {

@@ -98,12 +98,15 @@ struct RestorerTests {
         let pruner = Pruner(git: world.fixture.git, environment: world.fixture.environment())
 
         let preview = try await pruner.preview(repo: world.repo)
-        #expect(preview.count == 1)
-        #expect(preview.first?.hasPrefix("worktrees/") == true)
+        #expect(preview.refusals.isEmpty)
+        let entry = try #require(preview.entries.first)
+        #expect(preview.entries.count == 1)
+        #expect(entry.branch == "gone" && entry.head == nil)
+        #expect(entry.path.map { CanonicalPath.same(URL(fileURLWithPath: $0), gone) } == true)
         #expect(try await world.fixture.worktree(at: gone, in: world.repo).isPrunable)
 
         let result = try await pruner.prune(repo: world.repo)
-        #expect(result.pruned == preview)
+        #expect(result.pruned.count == 1 && result.pruned.first?.hasPrefix("worktrees/\(entry.name):") == true)
         let paths = try await WorktreeScanner(git: world.fixture.git, cursorWorktreesDirectory: world.fixture.url)
             .worktrees(in: world.repo).map(\.path)
         #expect(paths.count == 2)
@@ -111,11 +114,55 @@ struct RestorerTests {
 
         let entries = try RemovalLog(environment: world.fixture.environment()).entries()
         #expect(entries.map(\.action) == [.worktreePrune])
-        #expect(entries.first?.notes == preview)
+        #expect(entries.first?.notes == [entry.note])
+        #expect(entry.note.contains("branch gone") && entry.note.contains("path "))
         #expect(entries.first?.repoPath == world.repo.path)
 
         let again = try await pruner.prune(repo: world.repo)
         #expect(again.pruned.isEmpty && again.entry == nil)
         #expect(try RemovalLog(environment: world.fixture.environment()).entries().count == 1)
+    }
+
+    // Item 5: a detached entry whose HEAD no ref reaches would lose that commit's last record.
+    @Test func pruneIsRefusedForADetachedUnreachableHead() async throws {
+        let world = try await SafetyWorld.make()
+        defer { world.remove() }
+        let detached = try await world.fixture.addWorktree(to: world.repo, at: world.fixture.url.appending(path: "det"), detached: true)
+        try world.fixture.write("work\n", to: "work.txt", in: detached)
+        try await world.fixture.commitAll(in: detached)
+        let sha = try await world.fixture.run(["rev-parse", "HEAD"], in: detached)
+        let gone = try await world.sibling("gone")
+        try world.fixture.deleteFolder(detached)
+        try world.fixture.deleteFolder(gone)
+        let pruner = Pruner(git: world.fixture.git, environment: world.fixture.environment())
+
+        let preview = try await pruner.preview(repo: world.repo)
+        #expect(preview.entries.count == 2)
+        #expect(preview.entries.contains { $0.head == sha && $0.branch == nil })
+        #expect(preview.refusals.count == 1 && preview.refusals[0].contains(sha))
+        await #expect(throws: Pruner.Refused.self) { try await pruner.prune(repo: world.repo) }
+        // Nothing pruned, not even the harmless entry: git can't prune one at a time.
+        #expect(try await world.fixture.worktree(at: gone, in: world.repo).isPrunable)
+        #expect(!FileManager.default.fileExists(atPath: RemovalLog(environment: world.fixture.environment()).fileURL.path))
+    }
+
+    // Item 5: a worktree on an unplugged drive looks deleted; its repo's prune is refused.
+    @Test func pruneIsRefusedForAnEntryUnderVolumes() async throws {
+        let world = try await SafetyWorld.make()
+        defer { world.remove() }
+        let away = try await world.sibling("away")
+        let name = try #require(try await world.fixture.run(["rev-parse", "--absolute-git-dir"], in: away)
+            .split(separator: "/").last.map(String.init))
+        // Point the registration at a drive that isn't mounted (only the fixture's own admin file changes).
+        let gitdirFile = world.repo.appending(path: ".git/worktrees/\(name)/gitdir")
+        let unplugged = "/Volumes/clean-claude-fixture-\(UUID().uuidString)/away"
+        try Data("\(unplugged)/.git\n".utf8).write(to: gitdirFile)
+        let pruner = Pruner(git: world.fixture.git, environment: world.fixture.environment())
+
+        let preview = try await pruner.preview(repo: world.repo)
+        #expect(preview.entries.map(\.path) == [unplugged])
+        #expect(preview.refusals.count == 1 && preview.refusals[0].contains("/Volumes/"))
+        await #expect(throws: Pruner.Refused.self) { try await pruner.prune(repo: world.repo) }
+        #expect(FileManager.default.fileExists(atPath: gitdirFile.path))
     }
 }

@@ -43,7 +43,7 @@ struct RemoveCommand: AsyncParsableCommand {
         if yes {
             let remover = Remover(git: git, settings: context.settings, environment: context.environment)
             for assessment in assessments {
-                if !(await removeOne(assessment, remover: remover, display: display)) { failed = true }
+                if !(await removeOne(assessment, remover: remover, known: scan.worktrees, display: display)) { failed = true }
             }
         } else {
             for assessment in assessments {
@@ -57,14 +57,24 @@ struct RemoveCommand: AsyncParsableCommand {
     }
 
     /// Removes one worktree through `Remover` in manual mode; prints what happened.
-    private func removeOne(_ assessment: WorktreeAssessment, remover: Remover, display: PathDisplay) async -> Bool {
+    private func removeOne(
+        _ assessment: WorktreeAssessment,
+        remover: Remover,
+        known: [Worktree],
+        display: PathDisplay
+    ) async -> Bool {
         let worktree = assessment.worktree
         let name = display.string(worktree.url)
         if worktree.kind == .claude {
             print("warning: \(SafetyReason.claudeSessionWarning)")
         }
         do {
-            let result = try await remover.remove(worktree, mode: .manual, estimatedBytes: assessment.estimatedBytes)
+            let result = try await remover.remove(
+                worktree,
+                mode: .manual,
+                estimatedBytes: assessment.estimatedBytes,
+                knownWorktrees: known
+            )
             let freed = result.freedBytes.map(ByteFormatting.string) ?? "unknown"
             let estimate = result.entry.estimatedBytes.map { " (estimate \(ByteFormatting.string($0)))" } ?? ""
             let kept = worktree.branch.map { "branch \($0) kept" } ?? "commit \(worktree.head?.prefix(12) ?? "?") kept"
