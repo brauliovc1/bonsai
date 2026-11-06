@@ -1,10 +1,15 @@
 name: Release
 
 # Pushing a tag like v1.2.3 tests the code, builds Bonsai-1.2.3.dmg and clean-claude-1.2.3-macos.zip with a
-# SHA256SUMS file, and attaches them to a new GitHub release.
+# SHA256SUMS file, and attaches them to a new GitHub release. A tag with a "-" in it (v1.2.3-rc.1) is marked
+# as a pre-release.
+#
+# Run manually (Actions > Release > Run workflow), it is a dry run: the same tests and the same make dist,
+# built as 0.0.0-dispatch.<run number>, with the files uploaded to the run as an artifact. No release is made.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,6 +18,9 @@ jobs:
   release:
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      # What make dist builds: the tag (the "v" is dropped below), or a throwaway version for a manual run.
+      RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && format('0.0.0-dispatch.{0}', github.run_number) || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,7 +43,7 @@ jobs:
       # Both slices (arm64 and x86_64), ad-hoc signed: the app is not notarized, so people open it with
       # "Open Anyway" on first launch (see the README).
       - name: Build the release files
-        run: make dist VERSION="${GITHUB_REF_NAME#v}"
+        run: make dist VERSION="${RELEASE_VERSION#v}"
 
       # Developer ID signing and notarization would go here, before "Create the release", once there is an
       # Apple Developer account. Secrets to add to the repository (names are only suggestions):
@@ -62,7 +70,7 @@ jobs:
       #   env:
       #     SIGN_IDENTITY: Developer ID Application: <your name> (<team id>)
       #   run: |
-      #     make dist VERSION="${GITHUB_REF_NAME#v}" SIGN_IDENTITY="$SIGN_IDENTITY" \
+      #     make dist VERSION="${RELEASE_VERSION#v}" SIGN_IDENTITY="$SIGN_IDENTITY" \
       #       CODESIGN_FLAGS="--options runtime --timestamp"
       #
       # - name: Sign and notarize the dmg
@@ -72,7 +80,7 @@ jobs:
       #     APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       #     APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       #   run: |
-      #     dmg="dist/Bonsai-${GITHUB_REF_NAME#v}.dmg"
+      #     dmg="dist/Bonsai-${RELEASE_VERSION#v}.dmg"
       #     codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg"
       #     xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
       #       --password "$APPLE_APP_PASSWORD" --wait
@@ -80,7 +88,22 @@ jobs:
       #     # Signing and stapling changed the dmg, so write SHA256SUMS again.
       #     (cd dist && shasum -a 256 *.dmg *.zip > SHA256SUMS)
 
+      - name: Upload the files (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files-${{ github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Create the release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+        run: |
+          flags=(--generate-notes)
+          case "$GITHUB_REF_NAME" in
+            *-*) flags+=(--prerelease) ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" dist/* "${flags[@]}"

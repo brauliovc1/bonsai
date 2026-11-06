@@ -164,4 +164,4 @@ That removes the app, the command, and the settings, log and size cache. If you 
 
 ## License
 
-[MIT](LICENSE)
+Bonsai is [MIT](LICENSE) licensed. The command-line tool includes [swift-argument-parser](https://github.com/apple/swift-argument-parser) (Apache 2.0); its license text is in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), which also comes with the release downloads.

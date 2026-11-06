@@ -17,6 +17,9 @@ CODESIGN = codesign --force $(CODESIGN_FLAGS) --sign "$(SIGN_IDENTITY)"
 ROOT := $(shell cd -- "$(dir $(lastword $(MAKEFILE_LIST)))" 2>/dev/null && pwd -P)
 BUNDLE = $(ROOT)/build/$(APP_NAME).app
 DIST = $(ROOT)/dist
+# swift-argument-parser is linked into the CLI only (the app binary has none of it), so this file goes
+# next to clean-claude in the zip and, as a courtesy, next to the app in the dmg.
+NOTICES = $(ROOT)/THIRD_PARTY_NOTICES
 
 # Written into the assembled bundle's Info.plist, never into Resources/Info.plist. A release passes VERSION
 # (the tag without its "v"); otherwise it comes from git. `version-check` stops anything unusable.
@@ -130,7 +133,7 @@ universal: root version-check
 	$(CODESIGN) "$(UNIVERSAL_CLI)"; \
 	has_archs "$(UNIVERSAL_CLI)"
 
-# The disk image people drag the app out of: the app plus a link to /Applications. hdiutil sometimes fails
+# The disk image people drag the app out of: the app, a link to /Applications and the notices. hdiutil sometimes fails
 # with "Resource busy" on CI runners, so it gets three tries.
 dmg: universal
 	@set -e; \
@@ -139,6 +142,7 @@ dmg: universal
 	mkdir -p "$$stage" "$(DIST)"; \
 	ditto "$(BUNDLE)" "$$stage/$(APP_NAME).app"; \
 	ln -s /Applications "$$stage/Applications"; \
+	cp "$(NOTICES)" "$$stage/THIRD_PARTY_NOTICES"; \
 	rm -f "$(DMG)"; \
 	for try in 1 2 3; do \
 		hdiutil create -volname "$(APP_NAME)" -srcfolder "$$stage" -ov -format UDZO "$(DMG)" && break; \
@@ -149,11 +153,13 @@ dmg: universal
 	hdiutil verify -quiet "$(DMG)"; \
 	rm -rf "$$stage"
 
+# The CLI and THIRD_PARTY_NOTICES, side by side at the top of the zip.
 cli-zip: universal
 	@set -e; \
 	mkdir -p "$(DIST)"; \
 	rm -f "$(CLI_ZIP)"; \
-	cd "$(ROOT)/build/cli" && zip -q -X "$(CLI_ZIP)" "$(CLI)"
+	cp "$(NOTICES)" "$(ROOT)/build/cli/THIRD_PARTY_NOTICES"; \
+	cd "$(ROOT)/build/cli" && zip -q -X "$(CLI_ZIP)" "$(CLI)" THIRD_PARTY_NOTICES
 
 # Names the files by their bare names, so `shasum -a 256 -c SHA256SUMS` works from inside dist/.
 checksums: dmg cli-zip

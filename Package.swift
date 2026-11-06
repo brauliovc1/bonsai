@@ -26,7 +26,7 @@ let package = Package(
             name: "CleanAppModel",
             dependencies: ["CleanCore"]
         ),
-        // SwiftUI + AppKit views; `make app` wraps the binary in "Clean Claude.app".
+        // SwiftUI + AppKit views; `make app` wraps the binary in "Bonsai.app".
         .executableTarget(
             name: "CleanClaudeApp",
             dependencies: ["CleanAppModel"]
