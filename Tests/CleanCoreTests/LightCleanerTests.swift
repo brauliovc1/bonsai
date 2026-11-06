@@ -92,6 +92,22 @@ struct LightCleanerTests {
         #expect(world.exists("node_modules/keep.js", in: outside))
     }
 
+    @Test func aCandidateReplacedByASymlinkSinceTheFindIsRefused() async throws {
+        let world = try await LightCleanWorld.make()
+        defer { world.remove() }
+        let (wt, worktree, findings) = try await threeFolders(world)
+        // The link points at another ignored folder of the same worktree, so every git check would pass.
+        let link = wt.appending(path: "node_modules")
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "packages/b/node_modules")
+
+        let result = try await world.cleaner().clean(worktree, candidates: findings.candidates)
+
+        #expect(result.refused == [LightCleanSkip(relativePath: "node_modules", name: "node_modules", reason: .symlink)])
+        #expect(result.deleted.map(\.relativePath) == ["packages/a/node_modules", "packages/b/node_modules"])
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) == "packages/b/node_modules")
+    }
+
     @Test func symlinksInsideAreDeletedNotFollowed() async throws {
         let world = try await LightCleanWorld.make()
         defer { world.remove() }
