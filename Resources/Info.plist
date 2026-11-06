@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.brauliovc1.clean-claude</string>
+	<string>io.github.brauliovc1.bonsai</string>
 	<key>CFBundleName</key>
-	<string>Clean Claude</string>
+	<string>Bonsai</string>
 	<key>CFBundleDisplayName</key>
-	<string>Clean Claude</string>
+	<string>Bonsai</string>
 	<key>CFBundleExecutable</key>
-	<string>CleanClaude</string>
+	<string>Bonsai</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>
