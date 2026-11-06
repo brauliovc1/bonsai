@@ -41,6 +41,17 @@ public struct Git: Sendable {
         return result.stdout
     }
 
+    /// Runs `git -C <directory> <args>` and returns the whole result; a non-zero exit is not an error here.
+    /// For commands that report on stderr (`worktree prune --verbose`) or whose exit code is the answer.
+    public func result(_ args: [String], in directory: URL) async throws -> ProcessResult {
+        try await ProcessRunner.run(
+            executable: executable,
+            arguments: leadingArguments + ["-C", directory.path] + args,
+            environmentAdditions: environmentAdditions,
+            timeout: timeout
+        )
+    }
+
     /// Like `git(_:in:)`, decoded as UTF-8 with surrounding whitespace trimmed.
     public func gitString(_ args: [String], in directory: URL) async throws -> String {
         let data = try await git(args, in: directory)

@@ -1,16 +1,20 @@
 import CleanCore
 import Foundation
 
-/// The `scan` table: REPO, BRANCH, KIND, SIZE, PATH, then a one-line summary.
+/// The `scan` table: REPO, BRANCH, KIND, SIZE, IDLE, STATUS, PATH, then a one-line summary.
 struct ScanTable {
     let result: ScanResult
-    let homeDirectory: URL
+    /// The rows to show (filtered by `--status`).
+    let assessments: [WorktreeAssessment]
+    /// Every row, for the summary counts.
+    let allAssessments: [WorktreeAssessment]
+    let paths: PathDisplay
     let showSizes: Bool
 
     func render() -> String {
-        let roots = result.roots.map { URL(fileURLWithPath: $0, isDirectory: true) }
         var rows: [[String]] = [header]
-        for worktree in result.worktrees {
+        for assessment in assessments {
+            let worktree = assessment.worktree
             var row = [
                 worktree.repoURL.lastPathComponent,
                 worktree.branch ?? (worktree.isBare ? "(bare)" : "(detached)"),
@@ -19,40 +23,25 @@ struct ScanTable {
             if showSizes {
                 row.append(result.size(of: worktree).map(ByteFormatting.string) ?? "-")
             }
-            row.append(displayPath(worktree, roots: roots))
+            row.append(Self.idleCell(assessment))
+            row.append(assessment.status.label)
+            row.append(paths.string(worktree.url))
             rows.append(row)
         }
-        return (alignedLines(rows) + [summary]).joined(separator: "\n")
+        let rightAligned: Set<Int> = showSizes ? [3, 4] : [3]
+        return (TextTable.lines(rows, rightAligned: rightAligned) + [summary]).joined(separator: "\n")
     }
 
     private var header: [String] {
-        showSizes ? ["REPO", "BRANCH", "KIND", "SIZE", "PATH"] : ["REPO", "BRANCH", "KIND", "PATH"]
+        showSizes
+            ? ["REPO", "BRANCH", "KIND", "SIZE", "IDLE", "STATUS", "PATH"]
+            : ["REPO", "BRANCH", "KIND", "IDLE", "STATUS", "PATH"]
     }
 
-    /// Pads every column but the last; SIZE is right-aligned.
-    private func alignedLines(_ rows: [[String]]) -> [String] {
-        let columnCount = header.count
-        let widths = (0..<columnCount).map { column in rows.map { $0[column].count }.max() ?? 0 }
-        let sizeColumn = showSizes ? 3 : nil
-        return rows.map { row in
-            row.enumerated().map { column, cell in
-                if column == columnCount - 1 { return cell }
-                let padding = String(repeating: " ", count: widths[column] - cell.count)
-                return column == sizeColumn ? padding + cell : cell + padding
-            }.joined(separator: "  ")
-        }
-    }
-
-    /// Relative to the most specific root that contains it; otherwise absolute, with `~` for the home folder.
-    private func displayPath(_ worktree: Worktree, roots: [URL]) -> String {
-        let relative = roots
-            .compactMap { CanonicalPath.relativePath(of: worktree.url, to: $0) }
-            .min { $0.count < $1.count }
-        if let relative { return relative }
-        if let underHome = CanonicalPath.relativePath(of: worktree.url, to: homeDirectory), underHome != "." {
-            return "~/" + underHome
-        }
-        return worktree.path
+    /// Days, `?` when unknown, `-` for main checkouts (never removed, so not measured).
+    static func idleCell(_ assessment: WorktreeAssessment) -> String {
+        if assessment.worktree.isMain || assessment.worktree.isBare { return "-" }
+        return assessment.idle.idleDays.map { "\($0)d" } ?? "?"
     }
 
     private var summary: String {
@@ -61,6 +50,13 @@ struct ScanTable {
         if showSizes {
             let total = result.sizes.values.reduce(0, +)
             line += ", \(ByteFormatting.string(total)) total (estimate)"
+        }
+        let groups = Dictionary(grouping: allAssessments.filter { !$0.worktree.isMain }, by: \.status.group)
+            .mapValues(\.count)
+        line += "; linked: \(groups["auto-ready", default: 0]) auto-ready, \(groups["safe", default: 0]) safe, "
+            + "\(groups["blocked", default: 0]) blocked"
+        if assessments.count != allAssessments.count {
+            line += "; showing \(assessments.count)"
         }
         line += String(format: ", %.1f s", result.duration)
         return line
