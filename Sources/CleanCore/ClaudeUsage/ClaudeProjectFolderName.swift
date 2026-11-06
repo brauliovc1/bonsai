@@ -1,15 +1,11 @@
 import Foundation
 
-/// How Claude names the folders under `<claude config>/projects` (PLAN §4.3): the working folder's
-/// absolute path with every character outside `[A-Za-z0-9]` replaced by `-`.
-///
-/// The rule was verified on a real Mac for `/` and `.`; it is not a documented format. It is applied per
-/// UTF-16 code unit, like the JavaScript replace Claude uses, so an emoji becomes two dashes.
+/// How Claude names the folders under `<claude config>/projects` (PLAN §4.3), for the usage report:
+/// encoding is `TranscriptFolderEncoding` (the one implementation, shared with the idle clock); this adds
+/// the reverse lookup.
 public enum ClaudeProjectFolderName {
     public static func encode(_ path: String) -> String {
-        let dash: UInt16 = 0x2D
-        let units = path.utf16.map { isAlphanumeric($0) ? $0 : dash }
-        return String(decoding: units, as: UTF16.self)
+        TranscriptFolderEncoding.encode(path)
     }
 
     /// Folder name -> path, for every candidate path that encodes to it. A name that two different
@@ -23,9 +19,5 @@ public enum ClaudeProjectFolderName {
         return pathsByName.compactMapValues { paths in
             paths.count == 1 ? paths.first : nil
         }
-    }
-
-    private static func isAlphanumeric(_ unit: UInt16) -> Bool {
-        (0x30...0x39).contains(unit) || (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit)
     }
 }

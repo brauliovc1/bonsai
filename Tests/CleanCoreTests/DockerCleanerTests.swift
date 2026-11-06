@@ -8,12 +8,23 @@ struct DockerCleanerTests {
     /// A path that does not exist: even a runner mistake could not start a real docker.
     private static let docker = URL(fileURLWithPath: "/fake/bin/docker")
     private static let desktop = DockerReport(state: .running, daemonOperatingSystem: "Docker Desktop")
+    /// Each test's own log folder, removed with the test.
+    private let logFolder: TemporaryDirectory
+
+    init() throws {
+        logFolder = try TemporaryDirectory(prefix: "clean-claude-docker-log")
+    }
 
     private func cleaner(
         _ runner: ScriptedCommandRunner,
         freeSpace: [Int64?] = [1, 1]
     ) -> DockerCleaner {
-        DockerCleaner(docker: Self.docker, runner: runner.runner, freeSpace: ScriptedFreeSpace(freeSpace).probe)
+        DockerCleaner(
+            docker: Self.docker,
+            runner: runner.runner,
+            freeSpace: ScriptedFreeSpace(freeSpace).probe,
+            log: RemovalLog(directory: logFolder.url)
+        )
     }
 
     @Test func pruneArgumentsAreExactlySystemPruneF() {

@@ -29,10 +29,10 @@ struct CommandContext {
     }
 
     /// Scans, prints every issue as a warning, and exits 1 when no root is an existing folder.
-    func scan(_ options: RootOptions, includeSizes: Bool) async throws -> ScanResult {
+    func scan(_ options: RootOptions, includeSizes: Bool, includeDependencies: Bool = false) async throws -> ScanResult {
         let explicit = options.roots.map { CleanEnvironment.expand($0, home: environment.homeDirectory) }
         let result = await Scanner(environment: environment, settings: settings)
-            .scan(roots: explicit, includeSizes: includeSizes)
+            .scan(roots: explicit, includeSizes: includeSizes, includeDependencies: includeDependencies)
         for issue in result.issues {
             StandardError.write("warning: \(issue)")
         }

@@ -7,9 +7,20 @@ import Testing
 struct SimulatorCleanerTests {
     /// A path that does not exist: even a runner mistake could not start a real xcrun.
     private static let xcrun = URL(fileURLWithPath: "/fake/bin/xcrun")
+    /// Each test's own log folder, removed with the test.
+    private let logFolder: TemporaryDirectory
+
+    init() throws {
+        logFolder = try TemporaryDirectory(prefix: "clean-claude-simulator-log")
+    }
 
     private func cleaner(_ runner: ScriptedCommandRunner, freeSpace: [Int64?] = [1, 1]) -> SimulatorCleaner {
-        SimulatorCleaner(xcrun: Self.xcrun, runner: runner.runner, freeSpace: ScriptedFreeSpace(freeSpace).probe)
+        SimulatorCleaner(
+            xcrun: Self.xcrun,
+            runner: runner.runner,
+            freeSpace: ScriptedFreeSpace(freeSpace).probe,
+            log: RemovalLog(directory: logFolder.url)
+        )
     }
 
     @Test func deleteArgumentsAreExactlySimctlDeleteUnavailable() {

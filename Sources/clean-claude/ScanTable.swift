@@ -1,7 +1,8 @@
 import CleanCore
 import Foundation
 
-/// The `scan` table: REPO, BRANCH, KIND, SIZE, IDLE, STATUS, PATH, then a one-line summary.
+/// The `scan` table: REPO, BRANCH, KIND, SIZE, DEPS (with `--deps`), IDLE, STATUS, PATH, then a one-line
+/// summary.
 struct ScanTable {
     let result: ScanResult
     /// The rows to show (filtered by `--status`).
@@ -10,6 +11,7 @@ struct ScanTable {
     let allAssessments: [WorktreeAssessment]
     let paths: PathDisplay
     let showSizes: Bool
+    var showDependencies = false
 
     func render() -> String {
         var rows: [[String]] = [header]
@@ -23,19 +25,23 @@ struct ScanTable {
             if showSizes {
                 row.append(result.size(of: worktree).map(ByteFormatting.string) ?? "-")
             }
+            if showDependencies {
+                row.append(result.dependencyBytes(of: worktree).map(ByteFormatting.string) ?? "-")
+            }
             row.append(Self.idleCell(assessment))
             row.append(assessment.status.label)
             row.append(paths.string(worktree.url))
             rows.append(row)
         }
-        let rightAligned: Set<Int> = showSizes ? [3, 4] : [3]
+        // SIZE, DEPS and IDLE are numbers: right-aligned.
+        let numberColumns = (showSizes ? 1 : 0) + (showDependencies ? 1 : 0) + 1
+        let rightAligned = Set(3..<(3 + numberColumns))
         return (TextTable.lines(rows, rightAligned: rightAligned) + [summary]).joined(separator: "\n")
     }
 
     private var header: [String] {
-        showSizes
-            ? ["REPO", "BRANCH", "KIND", "SIZE", "IDLE", "STATUS", "PATH"]
-            : ["REPO", "BRANCH", "KIND", "IDLE", "STATUS", "PATH"]
+        ["REPO", "BRANCH", "KIND"] + (showSizes ? ["SIZE"] : []) + (showDependencies ? ["DEPS"] : [])
+            + ["IDLE", "STATUS", "PATH"]
     }
 
     /// Days, `?` when unknown, `-` for main checkouts (never removed, so not measured).
@@ -50,6 +56,10 @@ struct ScanTable {
         if showSizes {
             let total = result.sizes.values.reduce(0, +)
             line += ", \(ByteFormatting.string(total)) total (estimate)"
+        }
+        if showDependencies {
+            let total = result.dependencyBytes?.values.reduce(0, +) ?? 0
+            line += ", \(ByteFormatting.string(total)) light-cleanable (estimate)"
         }
         let groups = Dictionary(grouping: allAssessments.filter { !$0.worktree.isMain }, by: \.status.group)
             .mapValues(\.count)

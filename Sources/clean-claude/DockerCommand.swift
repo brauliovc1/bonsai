@@ -60,6 +60,9 @@ struct DockerCommand: AsyncParsableCommand {
         if let freed = result.freedBytes {
             print("Freed on disk so far (measured): \(ByteFormatting.string(freed)).")
         }
+        if let logError = result.logError {
+            StandardError.write("warning: \(logError)")
+        }
         guard result.succeeded else {
             throw ExitCode(result.exitCode == 0 ? 1 : result.exitCode)
         }

@@ -2,7 +2,8 @@
 /// signal 4): the absolute path with every UTF-16 code unit outside `[A-Za-z0-9]` replaced by `-`. Claude
 /// Code uses a JavaScript regex without the `u` flag, so an emoji (two code units) becomes `--`.
 ///
-/// P3's `ClaudeProjectFolderName` encodes the same thing for its usage scanner; P4 merges the two.
+/// The rule was verified on a real Mac for `/` and `.`; it is not a documented format. This is the only
+/// implementation: `ClaudeProjectFolderName` (the usage report's reverse lookup) calls it.
 public enum TranscriptFolderEncoding {
     public static func encode(_ path: String) -> String {
         String(path.utf16.map { unit -> Character in
