@@ -1,0 +1,118 @@
+import Foundation
+
+/// Runs external tools. Never through a shell: an absolute executable plus an argument array, so paths
+/// with spaces and quotes are passed through untouched.
+public enum ProcessRunner {
+    /// Added to every child's environment (on top of the inherited one).
+    public static let addedEnvironment: [String: String] = [
+        "LC_ALL": "C",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+    ]
+
+    /// How long a process gets to exit after SIGTERM before it is sent SIGKILL.
+    static let killGracePeriod: Duration = .seconds(2)
+
+    /// Runs `executable` and waits for it. stdout and stderr are read concurrently, so a child that fills
+    /// one pipe cannot deadlock. On timeout the child gets SIGTERM, then SIGKILL after 2 s, and the result
+    /// has `timedOut == true`. Cancelling the calling task terminates the child.
+    ///
+    /// Throws only when the process cannot be started; a non-zero exit is a normal result.
+    public static func run(
+        executable: URL,
+        arguments: [String],
+        directory: URL? = nil,
+        environmentAdditions: [String: String] = [:],
+        timeout: Duration = .seconds(60)
+    ) async throws -> ProcessResult {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = arguments
+        if let directory {
+            process.currentDirectoryURL = directory
+        }
+        process.environment = ProcessInfo.processInfo.environment
+            .merging(addedEnvironment) { _, added in added }
+            .merging(environmentAdditions) { _, added in added }
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+        process.standardInput = FileHandle.nullDevice
+
+        let (exits, exitContinuation) = AsyncStream.makeStream(of: Int32.self)
+        process.terminationHandler = { finished in
+            exitContinuation.yield(finished.terminationStatus)
+            exitContinuation.finish()
+        }
+
+        try process.run()
+        let child = ChildProcess(process)
+
+        return await withTaskCancellationHandler {
+            async let stdout = readToEnd(stdoutPipe.fileHandleForReading)
+            async let stderr = readToEnd(stderrPipe.fileHandleForReading)
+
+            let watchdog = Task {
+                do {
+                    try await Task.sleep(for: timeout)
+                } catch {
+                    return false
+                }
+                guard child.isRunning else { return false }
+                child.terminate()
+                try? await Task.sleep(for: killGracePeriod)
+                if child.isRunning { child.kill() }
+                return true
+            }
+
+            var exitCode: Int32 = -1
+            for await status in exits {
+                exitCode = status
+            }
+            watchdog.cancel()
+            let timedOut = await watchdog.value
+
+            return ProcessResult(
+                exitCode: exitCode,
+                stdout: await stdout,
+                stderr: String(decoding: await stderr, as: UTF8.self),
+                timedOut: timedOut
+            )
+        } onCancel: {
+            child.terminate()
+        }
+    }
+
+    /// Reads a pipe to EOF on a GCD thread, so the blocking read never ties up the cooperative pool.
+    private static func readToEnd(_ handle: FileHandle) async -> Data {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let data = (try? handle.readToEnd()) ?? Data()
+                try? handle.close()
+                continuation.resume(returning: data)
+            }
+        }
+    }
+}
+
+/// A started `Process`, shared with the watchdog and the cancellation handler. Only the thread-safe parts
+/// of `Process` are used after launch.
+private final class ChildProcess: @unchecked Sendable {
+    private let process: Process
+
+    init(_ process: Process) {
+        self.process = process
+    }
+
+    var isRunning: Bool { process.isRunning }
+
+    func terminate() {
+        if process.isRunning { process.terminate() }
+    }
+
+    func kill() {
+        if process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
+    }
+}
