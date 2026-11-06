@@ -152,6 +152,58 @@ struct ClaudeUsageScannerTests {
         #expect(report.totalBytes == report.transcripts.totalBytes + 12 * 1024 + 36 * 1024 + 200 * 1024)
     }
 
+    /// Every file and folder under `root` with its size and modification date.
+    private func snapshot(of root: URL) -> [String: String] {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
+        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys) else {
+            return [:]
+        }
+        var entries: [String: String] = [:]
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            let stamp = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+            entries[url.path] = "\(values?.isDirectory == true ? "d" : "f") \(values?.fileSize ?? -1) \(stamp)"
+        }
+        return entries
+    }
+
+    @Test func scanningLeavesEveryFileAndFolderUntouched() async throws {
+        let home = try FakeHome()
+        defer { home.remove() }
+        let repo = try home.addFolder("Documents/GitHub/app")
+        try home.addFile(".claude/projects/\(ClaudeProjectFolderName.encode(repo.path))/t.jsonl", kibibytes: 16)
+        try home.addFile(".claude/projects/-other/t.jsonl", kibibytes: 8)
+        try home.addFile(".claude/file-history/s1/a", kibibytes: 4)
+        try home.addFile(".local/share/claude/versions/2.1.9", kibibytes: 8)
+        try home.addFile("Library/Application Support/Claude/vm_bundles/img", kibibytes: 32)
+        let before = snapshot(of: home.url)
+        try #require(before.count > 10)
+
+        let scan = scanResult(repos: [repo], worktrees: [repo], roots: [repo.deletingLastPathComponent()])
+        let report = await ClaudeUsageScanner(environment: home.environment()).scan(using: scan)
+
+        #expect(report.transcripts.projectCount == 2, "the scan really ran")
+        #expect(snapshot(of: home.url) == before)
+    }
+
+    @Test func aSymlinkedProjectFolderIsMeasuredAsItsTarget() async throws {
+        let home = try FakeHome()
+        defer { home.remove() }
+        let target = try home.addFolder("elsewhere/-linked")
+        try home.addFile("elsewhere/-linked/t.jsonl", kibibytes: 40)
+        try home.addFile(".claude/projects/-plain/t.jsonl", kibibytes: 8)
+        try FileManager.default.createSymbolicLink(
+            at: home.url.appending(path: ".claude/projects/-linked"),
+            withDestinationURL: target
+        )
+
+        let report = await ClaudeUsageScanner(environment: home.environment()).scan()
+
+        #expect(report.transcripts.largest.map(\.folderName) == ["-linked", "-plain"])
+        #expect(report.transcripts.largest.first?.bytes == Int64(40 * 1024), "du alone reports a symlink as 0")
+        #expect(report.transcripts.totalBytes == Int64(48 * 1024))
+    }
+
     @Test func missingFoldersAreZerosNotErrors() async throws {
         let home = try FakeHome()
         defer { home.remove() }

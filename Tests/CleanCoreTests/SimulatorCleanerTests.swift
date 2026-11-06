@@ -5,28 +5,42 @@ import Testing
 
 @Suite("SimulatorCleaner")
 struct SimulatorCleanerTests {
-    private static let xcrun = URL(fileURLWithPath: "/usr/bin/xcrun")
+    /// A path that does not exist: even a runner mistake could not start a real xcrun.
+    private static let xcrun = URL(fileURLWithPath: "/fake/bin/xcrun")
+
+    private func cleaner(_ runner: ScriptedCommandRunner, freeSpace: [Int64?] = [1, 1]) -> SimulatorCleaner {
+        SimulatorCleaner(xcrun: Self.xcrun, runner: runner.runner, freeSpace: ScriptedFreeSpace(freeSpace).probe)
+    }
 
     @Test func deleteArgumentsAreExactlySimctlDeleteUnavailable() {
         #expect(SimulatorCleaner.deleteUnavailableArguments == ["simctl", "delete", "unavailable"])
     }
 
     @Test func commandLineGoesThroughXcrun() {
-        let cleaner = SimulatorCleaner(xcrun: Self.xcrun, freeSpace: ScriptedFreeSpace([nil]).probe)
-        #expect(cleaner.commandLine == "/usr/bin/xcrun simctl delete unavailable")
+        let runner = ScriptedCommandRunner { _ in ScriptedCommandRunner.result() }
+        #expect(cleaner(runner).commandLine == "/fake/bin/xcrun simctl delete unavailable")
     }
 
-    @Test func runsExactlyTheDeleteThroughXcrunAndMeasuresFreedSpace() async throws {
+    @Test func withoutConfirmationNothingRuns() async throws {
+        let runner = ScriptedCommandRunner { _ in ScriptedCommandRunner.result() }
+
+        let result = try await cleaner(runner).run(ifConfirmed: false)
+
+        #expect(result == nil)
+        #expect(runner.calls.isEmpty)
+    }
+
+    @Test func confirmedRunsExactlyTheDeleteThroughXcrunAndMeasuresFreedSpace() async throws {
         let runner = ScriptedCommandRunner { _ in ScriptedCommandRunner.result(stdout: "", stderr: "") }
-        let space = ScriptedFreeSpace([10_000_000, 14_500_000])
-        let cleaner = SimulatorCleaner(xcrun: Self.xcrun, runner: runner.runner, freeSpace: space.probe)
 
-        let result = try await cleaner.run()
+        let outcome = try await cleaner(runner, freeSpace: [10_000_000, 14_500_000]).run(ifConfirmed: true)
 
+        let result = try #require(outcome)
+        let call = try #require(runner.calls.first)
         #expect(runner.calls.count == 1)
-        #expect(runner.calls[0].executable == Self.xcrun)
-        #expect(runner.calls[0].arguments == ["simctl", "delete", "unavailable"])
-        #expect(runner.calls[0].timeout == .seconds(600))
+        #expect(call.executable == Self.xcrun)
+        #expect(call.arguments == ["simctl", "delete", "unavailable"])
+        #expect(call.timeout == .seconds(600))
         #expect(result.succeeded)
         #expect(result.output.isEmpty)
         #expect(result.freedBytes == 4_500_000)
@@ -37,10 +51,10 @@ struct SimulatorCleanerTests {
         let runner = ScriptedCommandRunner { _ in
             ScriptedCommandRunner.result(exitCode: 1, stderr: "An error was encountered processing the command")
         }
-        let cleaner = SimulatorCleaner(xcrun: Self.xcrun, runner: runner.runner, freeSpace: ScriptedFreeSpace([5, 5]).probe)
 
-        let result = try await cleaner.run()
+        let outcome = try await cleaner(runner, freeSpace: [5, 5]).run(ifConfirmed: true)
 
+        let result = try #require(outcome)
         #expect(!result.succeeded && result.exitCode == 1)
         #expect(result.output == "An error was encountered processing the command")
         #expect(result.freedBytes == 0)
@@ -48,10 +62,9 @@ struct SimulatorCleanerTests {
 
     @Test func aBinaryThatCannotStartThrows() async {
         let runner = ScriptedCommandRunner { _ in throw ScriptedCommandRunner.StartFailure() }
-        let cleaner = SimulatorCleaner(xcrun: Self.xcrun, runner: runner.runner, freeSpace: ScriptedFreeSpace([1]).probe)
 
         await #expect(throws: ScriptedCommandRunner.StartFailure.self) {
-            _ = try await cleaner.run()
+            _ = try await cleaner(runner).run(ifConfirmed: true)
         }
     }
 
@@ -61,9 +74,9 @@ struct SimulatorCleanerTests {
 
         #expect(SimulatorCleaner(environment: home.environment(xcrun: Self.xcrun, developerToolsInstalled: false)) == nil)
         #expect(SimulatorCleaner(environment: home.environment(xcrun: nil, developerToolsInstalled: true)) == nil)
-        let cleaner = try #require(
+        let built = try #require(
             SimulatorCleaner(environment: home.environment(xcrun: Self.xcrun, developerToolsInstalled: true))
         )
-        #expect(cleaner.xcrun == Self.xcrun)
+        #expect(built.xcrun == Self.xcrun)
     }
 }

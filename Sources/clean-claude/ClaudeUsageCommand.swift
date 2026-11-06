@@ -8,13 +8,24 @@ struct ClaudeUsageCommand: AsyncParsableCommand {
         abstract: "Show how much disk space Claude's transcripts, versions and desktop app data take. Read-only."
     )
 
+    @Option(
+        name: .customLong("root"),
+        help: ArgumentHelp(
+            "A folder to scan for the repos whose transcript folders get named (repeatable). "
+                + "Default: $CLEAN_CLAUDE_SCAN_ROOTS, else ~/Documents/GitHub.",
+            valueName: "path"
+        )
+    )
+    var roots: [String] = []
+
     @Flag(help: "Print the report as JSON.")
     var json = false
 
     func run() async throws {
         let environment = CleanEnvironment.live()
+        let explicitRoots = roots.map { CleanEnvironment.expand($0, home: environment.homeDirectory) }
         // Only repos, worktrees and roots are needed to name transcript folders, not their sizes.
-        let scan = await Scanner(environment: environment).scan(includeSizes: false)
+        let scan = await Scanner(environment: environment).scan(roots: explicitRoots, includeSizes: false)
         let report = await ClaudeUsageScanner(environment: environment).scan(using: scan)
 
         for issue in scan.issues {

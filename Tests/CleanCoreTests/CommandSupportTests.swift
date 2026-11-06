@@ -64,6 +64,28 @@ struct DirectorySizerItemsTests {
         #expect(many.issues.isEmpty)
     }
 
+    @Test func symlinksAreMeasuredAsTheirTargetsAndBrokenOnesAreMissing() async throws {
+        let home = try FakeHome()
+        defer { home.remove() }
+        let file = try home.addFile("real/one.bin", kibibytes: 12)
+        let folder = try home.addFolder("real/dir")
+        try home.addFile("real/dir/a.bin", kibibytes: 8)
+        let fileLink = home.url.appending(path: "file-link")
+        let folderLink = home.url.appending(path: "folder-link")
+        let brokenLink = home.url.appending(path: "broken-link")
+        try FileManager.default.createSymbolicLink(at: fileLink, withDestinationURL: file)
+        try FileManager.default.createSymbolicLink(at: folderLink, withDestinationURL: folder)
+        try FileManager.default.createSymbolicLink(at: brokenLink, withDestinationURL: home.url.appending(path: "nowhere"))
+
+        #expect(try await sizer.allocatedSize(ofItem: fileLink) == Int64(12 * 1024))
+        #expect(try await sizer.allocatedSize(ofItem: folderLink) == Int64(8 * 1024))
+        #expect(try await sizer.allocatedSize(ofItem: brokenLink) == nil)
+
+        let many = await sizer.allocatedSizes(ofItems: [fileLink, folderLink, brokenLink])
+        #expect(many.sizes == [fileLink.path: Int64(12 * 1024), folderLink.path: Int64(8 * 1024)], "keyed by the path asked for")
+        #expect(many.issues.isEmpty)
+    }
+
     @Test func aSparseFileCountsForWhatItAllocates() async throws {
         let home = try FakeHome()
         defer { home.remove() }

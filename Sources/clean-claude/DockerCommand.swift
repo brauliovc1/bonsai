@@ -29,32 +29,36 @@ struct DockerCommand: AsyncParsableCommand {
         print(DockerReportText(report: report, homeDirectory: environment.homeDirectory).render())
         guard prune else { return }
 
+        print("")
+        if let blocker = report.pruneBlocker {
+            StandardError.write("error: \(blocker)")
+            throw ExitCode.failure
+        }
         guard let cleaner = DockerCleaner(environment: environment) else {
             StandardError.write("error: docker is not installed, so there is nothing to prune.")
             throw ExitCode.failure
         }
-        print("")
-        guard yes else {
+
+        if yes {
+            print("Running: \(cleaner.commandLine)")
+        }
+        // Without --yes this returns nil and starts nothing.
+        guard let result = try await cleaner.run(ifConfirmed: yes, report: report) else {
             print("Would run: \(cleaner.commandLine)")
             print(Self.estimate(of: report))
             print("Nothing was changed. Add --yes to run it.")
             return
         }
-        guard report.state == .running else {
-            StandardError.write("error: Docker is not running. Start Docker Desktop, then run this again.")
-            throw ExitCode.failure
-        }
 
-        print("Running: \(cleaner.commandLine)")
-        let result = try await cleaner.run()
         if !result.output.isEmpty {
             print(result.output)
         }
         if result.timedOut {
-            StandardError.write("error: docker did not finish in time and was stopped.")
+            StandardError.write("error: the docker command did not finish in time and was stopped. "
+                + "The Docker daemon may still be working, so the freed-space figure below can be incomplete.")
         }
         if let freed = result.freedBytes {
-            print("Freed on disk (measured): \(ByteFormatting.string(freed)).")
+            print("Freed on disk so far (measured): \(ByteFormatting.string(freed)).")
         }
         guard result.succeeded else {
             throw ExitCode(result.exitCode == 0 ? 1 : result.exitCode)
@@ -63,11 +67,9 @@ struct DockerCommand: AsyncParsableCommand {
     }
 
     private static func estimate(of report: DockerReport) -> String {
-        guard report.state == .running else {
-            return "Docker is not running, so there is no estimate and --yes would fail. Start Docker first."
-        }
-        return "docker system df lists \(ByteFormatting.string(report.reclaimableBytes)) as reclaimable; "
-            + "this prune frees at most \(ByteFormatting.string(report.pruneCeilingBytes)) of it "
-            + "(it keeps tagged images and volumes)."
+        "docker system df lists \(ByteFormatting.string(report.reclaimableBytes)) as reclaimable. "
+            + "This prune removes all stopped containers, unused networks, dangling images and unused build cache, "
+            + "and frees at most \(ByteFormatting.string(report.pruneCeilingBytes)) of that. "
+            + "It keeps tagged images and volumes."
     }
 }

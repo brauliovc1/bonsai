@@ -135,6 +135,7 @@ struct SimctlParserTests {
             "F0F0F0F0-0000-0000-0000-000000000000",
         ])
 
+        try #require(runtimes.count == 4)
         let first = runtimes[0]
         #expect(first.runtimeIdentifier == "com.apple.CoreSimulator.SimRuntime.iOS-27-0")
         #expect(first.version == "27.0")

@@ -4,8 +4,10 @@ import Foundation
 /// `Docker.raw`, the Claude Code version binaries and the desktop app's loose files need: `du` reports
 /// the blocks a file really occupies, so a sparse 400 GB disk image counts for what it allocates.
 extension DirectorySizer {
-    /// Allocated bytes of a folder or a single file, or nil when it does not exist.
-    public func allocatedSize(ofItem item: URL) async throws -> Int64? {
+    /// Allocated bytes of a folder or a single file, or nil when it does not exist. A symlink is measured
+    /// as the folder or file it points to (`du` alone would report the link itself as 0).
+    public func allocatedSize(ofItem link: URL) async throws -> Int64? {
+        let item = URL(fileURLWithPath: CanonicalPath.resolve(link))
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory) else { return nil }
         if isDirectory.boolValue {

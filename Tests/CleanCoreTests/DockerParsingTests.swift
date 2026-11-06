@@ -46,7 +46,7 @@ struct DockerParsingTests {
         ])
     }
 
-    @Test func aLineWithoutATypeOrWithOddCountsIsHandledPerField() {
+    @Test func aLineWithoutATypeOrWithOddCountsIsHandledPerField() throws {
         let output = """
             {"Reclaimable":"1GB","Size":"2GB","TotalCount":"1","Active":"1"}
             {"Active":"x","Reclaimable":"1GB (50%)","Size":"2GB","TotalCount":"","Type":"Images"}
@@ -55,6 +55,7 @@ struct DockerParsingTests {
         let parsed = DockerUsageRow.parse(output)
         #expect(parsed.skippedLines == 1)
         #expect(parsed.rows.map(\.type) == ["Images", "Containers"])
+        try #require(parsed.rows.count == 2)
         #expect(parsed.rows[0].total == 0 && parsed.rows[0].active == 0)
         #expect(parsed.rows[1].total == 3 && parsed.rows[1].active == 2)
     }

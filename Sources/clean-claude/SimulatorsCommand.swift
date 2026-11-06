@@ -32,12 +32,17 @@ struct SimulatorsCommand: AsyncParsableCommand {
         print(SimulatorReportText(report: report, now: environment.now()).render())
         guard deleteUnavailable else { return }
 
+        print("")
         guard let cleaner = SimulatorCleaner(environment: environment) else {
             StandardError.write("error: Xcode is not set up (xcode-select -p fails), so there is nothing to delete.")
             throw ExitCode.failure
         }
-        print("")
-        guard yes else {
+
+        if yes {
+            print("Running: \(cleaner.commandLine)")
+        }
+        // Without --yes this returns nil and starts nothing.
+        guard let result = try await cleaner.run(ifConfirmed: yes) else {
             print("Would run: \(cleaner.commandLine)")
             let count = report.unavailableDevices.count
             print("It would remove \(count) unavailable device(s), about \(ByteFormatting.string(report.unavailableDevicesBytes)).")
@@ -45,16 +50,14 @@ struct SimulatorsCommand: AsyncParsableCommand {
             return
         }
 
-        print("Running: \(cleaner.commandLine)")
-        let result = try await cleaner.run()
         if !result.output.isEmpty {
             print(result.output)
         }
         if result.timedOut {
-            StandardError.write("error: simctl did not finish in time and was stopped.")
+            StandardError.write("error: simctl did not finish in time and was stopped; some devices may be left.")
         }
         if let freed = result.freedBytes {
-            print("Freed on disk (measured): \(ByteFormatting.string(freed)).")
+            print("Freed on disk so far (measured): \(ByteFormatting.string(freed)).")
         }
         if !result.succeeded {
             throw ExitCode(result.exitCode == 0 ? 1 : result.exitCode)

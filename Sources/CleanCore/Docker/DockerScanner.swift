@@ -22,6 +22,7 @@ public struct DockerScanner: Sendable {
     }
 
     static let infoArguments = ["info", "--format", "{{.ServerVersion}}"]
+    static let systemArguments = ["info", "--format", "{{.OperatingSystem}}"]
     static let usageArguments = ["system", "df", "--format", "{{json .}}"]
 
     public func scan() async -> DockerReport {
@@ -32,9 +33,16 @@ public struct DockerScanner: Sendable {
             return DockerReport(state: .notInstalled, diskImage: diskImage, warnings: warnings)
         }
 
-        guard let serverVersion = await serverVersion(docker: docker, warnings: &warnings) else {
-            return DockerReport(state: .notRunning, diskImage: diskImage, warnings: warnings)
+        let answer = await probeServerVersion(docker: docker, warnings: &warnings)
+        guard let serverVersion = answer.version else {
+            return DockerReport(
+                state: .notRunning,
+                notRunningReason: answer.failure,
+                diskImage: diskImage,
+                warnings: warnings
+            )
         }
+        let operatingSystem = await daemonOperatingSystem(docker: docker, warnings: &warnings)
 
         var usage: [DockerUsageRow] = []
         do {
@@ -54,24 +62,48 @@ public struct DockerScanner: Sendable {
         return DockerReport(
             state: .running,
             serverVersion: serverVersion,
+            daemonOperatingSystem: operatingSystem,
             diskImage: diskImage,
             usage: usage,
             warnings: warnings
         )
     }
 
-    /// The daemon's version when `docker info` succeeds within the timeout and prints one; nil otherwise.
-    private func serverVersion(docker: URL, warnings: inout [String]) async -> String? {
+    /// The daemon's version when `docker info` succeeds within the timeout and prints one; otherwise why not.
+    private func probeServerVersion(
+        docker: URL,
+        warnings: inout [String]
+    ) async -> (version: String?, failure: String?) {
         let result: ProcessResult
         do {
             result = try await runner.run(docker, Self.infoArguments, timeout: infoTimeout)
         } catch {
             warnings.append("docker could not start: \(error)")
-            return nil
+            return (nil, "docker could not be started")
         }
-        guard result.succeeded else { return nil }
+        if result.timedOut {
+            return (nil, "docker info did not answer within \(infoTimeout.components.seconds) s")
+        }
+        guard result.succeeded else {
+            let message = result.stderr.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+            return (nil, "docker info failed (exit \(result.exitCode))" + (message.isEmpty ? "" : ": \(message)"))
+        }
         let version = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
-        return version.isEmpty ? nil : version
+        return version.isEmpty ? (nil, "docker info printed no server version") : (version, nil)
+    }
+
+    /// What the daemon says it runs on. nil (with a warning) when it cannot say, which counts as "not
+    /// Docker Desktop" for the prune check.
+    private func daemonOperatingSystem(docker: URL, warnings: inout [String]) async -> String? {
+        do {
+            let result = try await runner.run(docker, Self.systemArguments, timeout: infoTimeout)
+            let text = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+            if result.succeeded, !text.isEmpty { return text }
+            warnings.append("docker info could not tell which daemon this is; pruning stays blocked")
+        } catch {
+            warnings.append("docker info (daemon identity): \(error)")
+        }
+        return nil
     }
 
     private static func failure(_ result: ProcessResult) -> String {
@@ -87,7 +119,15 @@ public struct DockerScanner: Sendable {
     private func findDiskImage(warnings: inout [String]) async -> DockerReport.DiskImage? {
         let vms = environment.homeDirectory
             .appending(path: "Library/Containers/com.docker.docker/Data/vms", directoryHint: .isDirectory)
-        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: vms.path) else { return nil }
+        guard FileManager.default.fileExists(atPath: vms.path) else { return nil }
+        let entries: [String]
+        do {
+            entries = try FileManager.default.contentsOfDirectory(atPath: vms.path)
+        } catch {
+            // Usually macOS privacy (no access to ~/Library/Containers), not a missing disk image.
+            warnings.append("could not read \(vms.path): \(error.localizedDescription)")
+            return nil
+        }
 
         let images = entries.sorted()
             .map { vms.appending(path: $0).appending(path: "data/Docker.raw") }

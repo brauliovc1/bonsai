@@ -3,7 +3,7 @@ import Foundation
 /// Runs `xcrun simctl delete unavailable`: the only simulator command in the codebase that changes
 /// anything. It removes devices whose runtime is gone; installed runtimes are never touched.
 ///
-/// Callers decide when to run it; nothing here is started by a scan.
+/// Nothing here is started by a scan, and the only public way to run it is `run(ifConfirmed:)`.
 public struct SimulatorCleaner: Sendable {
     /// Run through `xcrun`.
     public static let deleteUnavailableArguments = ["simctl", "delete", "unavailable"]
@@ -13,9 +13,10 @@ public struct SimulatorCleaner: Sendable {
     public var freeSpace: FreeSpaceProbe
     public var timeout: Duration
 
+    /// `runner` has no default on purpose: a test that forgets it must not reach the real xcrun.
     public init(
         xcrun: URL,
-        runner: CommandRunner = .live,
+        runner: CommandRunner,
         freeSpace: FreeSpaceProbe,
         timeout: Duration = .seconds(600)
     ) {
@@ -41,8 +42,15 @@ public struct SimulatorCleaner: Sendable {
         CommandLineDisplay.string(executable: xcrun.path, arguments: Self.deleteUnavailableArguments)
     }
 
-    /// Runs the delete and measures what it freed. Throws only when xcrun cannot be started.
-    public func run() async throws -> CleanupCommandResult {
+    /// Deletes only when `confirmed` is true; otherwise returns nil and runs nothing. Throws only when
+    /// xcrun cannot be started.
+    public func run(ifConfirmed confirmed: Bool) async throws -> CleanupCommandResult? {
+        guard confirmed else { return nil }
+        return try await run()
+    }
+
+    /// Starts the delete and measures what it freed. No checks: callers go through `run(ifConfirmed:)`.
+    func run() async throws -> CleanupCommandResult {
         try await CleanupCommandResult.measuredRun(
             executable: xcrun,
             arguments: Self.deleteUnavailableArguments,

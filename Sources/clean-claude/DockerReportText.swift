@@ -12,10 +12,17 @@ struct DockerReportText {
         case .notInstalled:
             lines.append("Docker: not installed (no docker binary in the usual places).")
         case .notRunning:
-            lines.append("Docker Desktop: not running. Start Docker to clean it.")
+            let reason = report.notRunningReason.map { " (\($0))" } ?? ""
+            lines.append("Docker Desktop: not running\(reason). Start Docker to clean it.")
         case .running:
             let version = report.serverVersion.map { " (server \($0))" } ?? ""
-            lines.append("Docker Desktop: running\(version)")
+            if report.isDockerDesktop {
+                lines.append("Docker Desktop: running\(version)")
+            } else {
+                let found = report.daemonOperatingSystem.map { "\"\($0)\"" } ?? "unknown"
+                lines.append("Docker: running\(version), but the daemon reports \(found), not Docker Desktop. "
+                    + "clean-claude will not prune it.")
+            }
         }
 
         if let image = report.diskImage {
@@ -45,6 +52,10 @@ struct DockerReportText {
             ])
         }
         return AlignedColumns.lines(rows, rightAligned: [1, 2, 3, 4])
-            + ["", "Reclaimable in total: \(ByteFormatting.string(report.reclaimableBytes)) (as docker system df counts it)."]
+            + [
+                "",
+                "Reclaimable in total: \(ByteFormatting.string(report.reclaimableBytes)) (as docker system df counts it).",
+                "Sizes are 1024-based like the rest of clean-claude; docker system df prints 1000-based sizes, which look larger.",
+            ]
     }
 }

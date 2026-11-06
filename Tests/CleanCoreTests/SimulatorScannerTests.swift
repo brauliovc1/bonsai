@@ -99,7 +99,7 @@ struct SimulatorScannerTests {
         #expect(report.unavailableDevices.isEmpty)
         #expect(report.runtimes.count == 4)
         #expect(report.warnings.count == 1)
-        #expect(report.warnings[0].contains("simctl: no service"))
+        #expect(report.warnings.first?.contains("simctl: no service") == true)
     }
 
     @Test func unreadableOrTimedOutOutputBecomesWarnings() async throws {
