@@ -13,6 +13,9 @@ struct CleanClaudeCommand: AsyncParsableCommand {
             AutoCommand.self,
             LogCommand.self,
             SettingsCommand.self,
+            DockerCommand.self,
+            SimulatorsCommand.self,
+            ClaudeUsageCommand.self,
         ]
     )
 }
