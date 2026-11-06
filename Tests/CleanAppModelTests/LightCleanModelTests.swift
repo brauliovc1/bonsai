@@ -85,8 +85,9 @@ struct LightCleanModelTests {
             Issue.record("expected a nested checkout, got \(skip.reason)")
             return
         }
-        #expect(python.leftAloneReason == "No dependency or build folders to delete.")
+        #expect(python.leftAloneReason == "Every folder found here is left alone.")
         #expect(byName["atlas-archive"]?.isCleanable == false)
+        #expect(byName["atlas-archive"]?.leftAloneReason == "No dependency or build folders to delete.")
 
         #expect(Set(confirmation.cleanable.map { $0.worktree.url.lastPathComponent }) == ["cobalt-web", "cobalt-swift", "cobalt"])
         #expect(Set(confirmation.others.map { $0.worktree.url.lastPathComponent }) == ["cobalt-py", "atlas-archive"])

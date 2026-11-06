@@ -48,9 +48,11 @@ struct DerivedDataModelTests {
         #expect(world.model.allRows.filter(\.isSelectable).map(\.name) == ["Gone-aaa"])
         for row in world.model.allRows where !row.isSelectable {
             #expect(row.reason.hasSuffix("Read-only."), "\(row.name): \(row.reason)")
-            #expect(!row.reason.contains("\n"))
+            #expect(row.shortReason.hasSuffix("Read-only."), "\(row.name): \(row.shortReason)")
+            #expect(!row.reason.contains("\n") && !row.shortReason.contains("\n"))
         }
         #expect(rows["Drive-ccc"]?.reason.contains("drive that isn't connected") == true)
+        #expect(rows["Drive-ccc"]?.shortReason == "On a drive that isn't connected. Read-only.")
         #expect(rows["Gone-aaa"]?.reason.contains(goneWorkspace("Gone")) == true)
         #expect(rows["Gone-aaa"]?.sizeText != "–")
         #expect(world.model.orphanBytes == rows["Gone-aaa"]?.bytes)

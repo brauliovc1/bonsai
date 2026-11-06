@@ -37,6 +37,18 @@ public struct DerivedDataRow: Identifiable, Hashable, Sendable {
         }
     }
 
+    /// The same, short enough for the table cell (the full sentence is the tooltip).
+    public var shortReason: String {
+        switch entry.state {
+        case .orphaned: "Its project is gone."
+        case .live: "Its project still exists. Read-only."
+        case .xcodeInternal: "Xcode's own temporary workspace. Read-only."
+        case .volumeMissing: "On a drive that isn't connected. Read-only."
+        case .noInfoPlist: "Xcode's shared cache. Read-only."
+        case .unreadable: "Can't tell what it belongs to. Read-only."
+        }
+    }
+
     /// One line: why this folder stays (or, for an orphan, why it can go).
     public var reason: String {
         switch entry.state {

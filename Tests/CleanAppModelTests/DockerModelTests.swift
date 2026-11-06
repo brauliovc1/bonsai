@@ -4,34 +4,13 @@ import CleanTestSupport
 import Foundation
 import Testing
 
-@Suite("Docker & Simulators model")
+@Suite("Docker model")
 @MainActor
-struct DockerSimulatorsModelTests {
-    private struct World {
-        let home: FakeHome
-        let toolchain: FakeToolchain
-        let app: AppModel
-        let model: DockerSimulatorsModel
-    }
-
-    private func makeWorld(
-        docker: Bool = true,
-        xcrun: Bool = true,
-        developerTools: Bool = true,
-        configure: (inout CleanEnvironment) -> Void = { _ in }
-    ) throws -> World {
-        let home = try FakeHome()
-        let toolchain = FakeToolchain()
-        var environment = home.environment().withFakeTools(docker: docker, xcrun: xcrun, developerTools: developerTools)
-        configure(&environment)
-        let app = AppModel(environment: environment)
-        return World(home: home, toolchain: toolchain, app: app, model: DockerSimulatorsModel(app: app, runner: toolchain.runner))
-    }
-
+struct DockerModelTests {
     // MARK: - Docker states
 
     @Test func dockerNotInstalled() async throws {
-        let world = try makeWorld(docker: false)
+        let world = try DockerSimulatorsWorld(docker: false)
         defer { world.home.remove() }
         await world.model.refresh()
 
@@ -45,7 +24,7 @@ struct DockerSimulatorsModelTests {
     }
 
     @Test func dockerNotRunningShowsTheDiskImageAndStartDocker() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         world.toolchain.dockerRunning = false
         try world.home.addFile("Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw", kibibytes: 64)
@@ -63,7 +42,7 @@ struct DockerSimulatorsModelTests {
     }
 
     @Test func dockerRunningShowsTheDfTableAndWhatPruneCanFree() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         await world.model.refresh()
 
@@ -81,7 +60,7 @@ struct DockerSimulatorsModelTests {
     }
 
     @Test func pruneIsDisabledWithTheReasonWhenTheDaemonIsNotDockerDesktop() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         world.toolchain.daemonOS = "Colima"
         await world.model.refresh()
@@ -106,7 +85,7 @@ struct DockerSimulatorsModelTests {
     // MARK: - Docker prune
 
     @Test func theSheetCarriesTheExactCommandAndRunsOnlyThat() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         await world.model.refresh()
 
@@ -146,7 +125,7 @@ struct DockerSimulatorsModelTests {
     }
 
     @Test func aDaemonThatStoppedAfterTheSheetOpenedIsNotPruned() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         await world.model.beginDockerPrune()
         let confirmation = try #require(world.model.dockerConfirmation)
@@ -162,7 +141,7 @@ struct DockerSimulatorsModelTests {
     }
 
     @Test func aDaemonThatBecameAnotherEngineAfterTheSheetOpenedIsNotPruned() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         await world.model.beginDockerPrune()
         let confirmation = try #require(world.model.dockerConfirmation)
@@ -177,7 +156,7 @@ struct DockerSimulatorsModelTests {
     @Test func aLogWriteFailureIsShownNotSwallowed() async throws {
         // The settings folder sits below a file, so the log can't be created.
         var blocker: URL?
-        let world = try makeWorld { environment in
+        let world = try DockerSimulatorsWorld { environment in
             let file = environment.homeDirectory.appending(path: "blocker")
             blocker = file
             environment.settingsDirectory = file.appending(path: "settings", directoryHint: .isDirectory)
@@ -196,120 +175,8 @@ struct DockerSimulatorsModelTests {
         #expect(world.app.logEntries.isEmpty)
     }
 
-    // MARK: - Simulators
-
-    @Test func simulatorsWithoutXcode() async throws {
-        let world = try makeWorld(developerTools: false)
-        defer { world.home.remove() }
-        await world.model.refresh()
-
-        #expect(world.model.noXcode)
-        #expect(!world.model.simulatorsAvailable)
-        #expect(!world.model.canDeleteUnavailable)
-        #expect(world.model.unavailableDevices.isEmpty)
-        #expect(world.model.unavailableBytes == nil)
-        #expect(world.toolchain.calls.filter { $0.executable == FakeToolchain.xcrun }.isEmpty)
-    }
-
-    @Test func simulatorsShowSizesUnavailableDevicesAndReadOnlyRuntimes() async throws {
-        let world = try makeWorld()
-        defer { world.home.remove() }
-        try world.home.addFile("Library/Developer/CoreSimulator/Devices/AAAA/data/a.bin", kibibytes: 40)
-        try world.home.addFile("Library/Developer/CoreSimulator/Caches/dyld/c.bin", kibibytes: 8)
-        await world.model.refresh()
-
-        #expect(world.model.simulatorsAvailable)
-        #expect(world.model.devicesBytes == Int64(40 * 1024))
-        #expect(world.model.cachesBytes == Int64(8 * 1024))
-        #expect(world.model.unavailableDevices.map(\.udid) == ["CCCC", "BBBB"], "biggest first")
-        #expect(world.model.unavailableBytes == 323_456)
-        #expect(world.model.runtimeLines.map(\.name) == ["iOS 27.0 (24A434)"])
-        #expect(DockerSimulatorsModel.runtimesHint == "Remove runtimes in Xcode > Settings > Components.")
-        #expect(world.model.canDeleteUnavailable)
-        #expect(world.toolchain.deleteCalls.isEmpty)
-    }
-
-    @Test func theSimulatorsSheetCarriesTheExactCommandAndRunsOnlyThat() async throws {
-        let world = try makeWorld()
-        defer { world.home.remove() }
-        await world.model.refresh()
-
-        await world.model.beginSimulatorsDelete()
-        let confirmation = try #require(world.model.simulatorsConfirmation)
-        #expect(SimulatorsConfirmation.command == "xcrun simctl delete unavailable")
-        #expect(confirmation.commandLine == "/fake/bin/xcrun simctl delete unavailable")
-        #expect(confirmation.devices.map(\.udid) == ["CCCC", "BBBB"])
-        #expect(confirmation.estimatedBytes == 323_456)
-        #expect(confirmation.isAllowed)
-        #expect(world.toolchain.deleteCalls.isEmpty, "opening the sheet changes nothing")
-
-        let report = await world.model.confirmSimulatorsDelete(confirmation)
-
-        let call = try #require(world.toolchain.deleteCalls.first)
-        #expect(world.toolchain.deleteCalls.count == 1)
-        #expect(call.executable == FakeToolchain.xcrun)
-        #expect(call.arguments == ["simctl", "delete", "unavailable"])
-        #expect(report.didRun && report.succeeded)
-        #expect(report.logError == nil)
-        let entry = try #require(world.app.logEntries.first)
-        #expect(world.app.logEntries.count == 1)
-        #expect(entry.action == .simulatorsDeleteUnavailable)
-        #expect(entry.estimatedBytes == 323_456)
-    }
-
-    @Test func aDeviceThatBecameUnavailableAfterTheSheetOpenedStopsTheDelete() async throws {
-        let world = try makeWorld()
-        defer { world.home.remove() }
-        await world.model.beginSimulatorsDelete()
-        let confirmation = try #require(world.model.simulatorsConfirmation)
-        #expect(confirmation.devices.count == 2)
-
-        // simctl delete unavailable would now also delete a third device the sheet never listed.
-        world.toolchain.unavailable.append(("DDDD", "iPad Pro", 1_000))
-        let report = await world.model.confirmSimulatorsDelete(confirmation)
-
-        #expect(!report.didRun)
-        #expect(report.error?.contains("changed since you confirmed") == true, "\(report.error ?? "")")
-        #expect(world.toolchain.deleteCalls.isEmpty)
-        #expect(world.app.logEntries.isEmpty)
-        #expect(world.model.unavailableDevices.count == 3, "the screen shows the new list")
-    }
-
-    @Test func noUnavailableDevicesMeansNothingToDelete() async throws {
-        let world = try makeWorld()
-        defer { world.home.remove() }
-        world.toolchain.unavailable = []
-        await world.model.refresh()
-        #expect(!world.model.canDeleteUnavailable)
-
-        await world.model.beginSimulatorsDelete()
-        let confirmation = try #require(world.model.simulatorsConfirmation)
-        #expect(!confirmation.isAllowed)
-        #expect(confirmation.blocker?.contains("nothing to delete") == true)
-        let report = await world.model.confirmSimulatorsDelete(confirmation)
-        #expect(!report.didRun)
-        #expect(world.toolchain.deleteCalls.isEmpty)
-    }
-
-    @Test func xcodeGoneAfterTheSheetOpenedStopsTheDelete() async throws {
-        let world = try makeWorld()
-        defer { world.home.remove() }
-        await world.model.beginSimulatorsDelete()
-        let confirmation = try #require(world.model.simulatorsConfirmation)
-
-        // The same confirmation, handed to a model whose environment has no Xcode.
-        let other = DockerSimulatorsModel(
-            app: AppModel(environment: world.home.environment().withFakeTools(developerTools: false)),
-            runner: world.toolchain.runner
-        )
-        let report = await other.confirmSimulatorsDelete(confirmation)
-
-        #expect(!report.didRun)
-        #expect(world.toolchain.deleteCalls.isEmpty)
-    }
-
     @Test func oneCleanupAtATime() async throws {
-        let world = try makeWorld()
+        let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
         await world.model.beginDockerPrune()
         let confirmation = try #require(world.model.dockerConfirmation)

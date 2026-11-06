@@ -43,7 +43,8 @@ public struct LightCleanConfirmation: Identifiable, Sendable {
         public var leftAloneReason: String? {
             if let blocker { return blocker }
             if let problem = findings?.problem { return "Can't be looked at: \(problem)." }
-            return candidates.isEmpty ? "No dependency or build folders to delete." : nil
+            guard candidates.isEmpty else { return nil }
+            return skipped.isEmpty ? "No dependency or build folders to delete." : "Every folder found here is left alone."
         }
     }
 

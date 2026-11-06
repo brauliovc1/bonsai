@@ -166,7 +166,7 @@ private struct SimulatorsSection: View {
                 Button("Delete unavailable…") { Task { await model.beginSimulatorsDelete() } }
                     .disabled(!model.canDeleteUnavailable)
                     .help("Run \(SimulatorsConfirmation.command) after you confirm")
-                Text("Up to \(DisplayText.bytes(model.unavailableBytes))")
+                Text(model.unavailableDevices.isEmpty ? "Nothing to delete." : "Up to \(DisplayText.bytes(model.unavailableBytes))")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

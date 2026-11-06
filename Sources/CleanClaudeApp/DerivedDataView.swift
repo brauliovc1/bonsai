@@ -32,18 +32,18 @@ struct DerivedDataView: View {
                     .truncationMode(.middle)
                     .help(row.id)
             }
-            .width(min: 140, ideal: 230)
+            .width(min: 120, ideal: 190)
             TableColumn("Project", value: \.projectPath) { row in
                 Text(row.projectPath)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(row.projectPath)
             }
-            .width(min: 140, ideal: 250)
+            .width(min: 120, ideal: 210)
             TableColumn("State") { row in
                 DerivedDataStateCell(row: row)
             }
-            .width(min: 180, ideal: 330)
+            .width(min: 200, ideal: 360)
             TableColumn("Size", value: \.sizeSortKey) { row in
                 Text(row.sizeText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -129,7 +129,7 @@ private struct DerivedDataStateCell: View {
     var body: some View {
         HStack(spacing: 6) {
             Badge(text: row.stateText, color: color)
-            Text(row.reason)
+            Text(row.shortReason)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)

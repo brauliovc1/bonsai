@@ -85,10 +85,7 @@ struct ClaudeUsageView: View {
                         Text(row.title)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .help(row.project.folderName)
-                        if let note = row.note {
-                            Text(note).font(.caption).foregroundStyle(.secondary)
-                        }
+                            .help([row.project.folderName, row.note].compactMap { $0 }.joined(separator: "\n"))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if row.folderGone {
