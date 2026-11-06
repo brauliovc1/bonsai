@@ -18,11 +18,17 @@ public enum ProcessRunner {
     /// has `timedOut == true`. Cancelling the calling task terminates the child.
     ///
     /// Throws only when the process cannot be started; a non-zero exit is a normal result.
+    ///
+    /// `removingInherited`: inherited variables whose names start with one of these prefixes are dropped
+    /// before `addedEnvironment` and `environmentAdditions` are applied. `inheritedEnvironment` replaces
+    /// this process's environment as the inherited one (tests).
     public static func run(
         executable: URL,
         arguments: [String],
         directory: URL? = nil,
         environmentAdditions: [String: String] = [:],
+        removingInherited prefixes: [String] = [],
+        inheritedEnvironment: [String: String]? = nil,
         timeout: Duration = .seconds(60)
     ) async throws -> ProcessResult {
         let process = Process()
@@ -31,7 +37,8 @@ public enum ProcessRunner {
         if let directory {
             process.currentDirectoryURL = directory
         }
-        process.environment = ProcessInfo.processInfo.environment
+        process.environment = (inheritedEnvironment ?? ProcessInfo.processInfo.environment)
+            .filter { name, _ in !prefixes.contains { name.hasPrefix($0) } }
             .merging(addedEnvironment) { _, added in added }
             .merging(environmentAdditions) { _, added in added }
 

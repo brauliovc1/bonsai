@@ -16,29 +16,40 @@ public struct DockerCleaner: Sendable {
     public var docker: URL
     public var runner: CommandRunner
     public var freeSpace: FreeSpaceProbe
+    /// Every prune that ran is logged here (`dockerPrune`).
+    public var log: RemovalLog
     /// A prune with a big build cache can take minutes.
     public var timeout: Duration
+    public var now: @Sendable () -> Date
 
-    /// `runner` has no default on purpose: a test that forgets it must not reach the real docker.
+    /// `runner` and `log` have no default on purpose: a test that forgets them must not reach the real
+    /// docker or the real log.
     public init(
         docker: URL,
         runner: CommandRunner,
         freeSpace: FreeSpaceProbe,
-        timeout: Duration = .seconds(900)
+        log: RemovalLog,
+        timeout: Duration = .seconds(900),
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.docker = docker
         self.runner = runner
         self.freeSpace = freeSpace
+        self.log = log
         self.timeout = timeout
+        self.now = now
     }
 
-    /// nil when docker is not installed. Free space is read from the volume of the home folder.
+    /// nil when docker is not installed. Free space is read from the volume of the home folder; the log
+    /// is the environment's.
     public init?(environment: CleanEnvironment, runner: CommandRunner = .live) {
         guard let docker = environment.tools.docker else { return nil }
         self.init(
             docker: docker,
             runner: runner,
-            freeSpace: .volume(containing: environment.homeDirectory)
+            freeSpace: .volume(containing: environment.homeDirectory),
+            log: RemovalLog(environment: environment),
+            now: environment.now
         )
     }
 
@@ -49,23 +60,26 @@ public struct DockerCleaner: Sendable {
 
     /// Prunes only when `confirmed` is true and `report` says the daemon is Docker Desktop and running.
     /// Returns nil, running nothing, when not confirmed; throws `Refused` when confirmed but blocked.
-    /// Throws other errors only when docker cannot be started.
+    /// Throws other errors only when docker cannot be started. A prune that ran is logged, with
+    /// `report.pruneCeilingBytes` as the estimate; `logError` says when the entry could not be written.
     public func run(ifConfirmed confirmed: Bool, report: DockerReport) async throws -> CleanupCommandResult? {
         guard confirmed else { return nil }
         if let reason = report.pruneBlocker {
             throw Refused(description: reason)
         }
-        return try await run()
+        return try await run(estimatedBytes: report.pruneCeilingBytes)
     }
 
-    /// Starts the prune and measures what it freed. No checks: callers go through `run(ifConfirmed:report:)`.
-    func run() async throws -> CleanupCommandResult {
+    /// Starts the prune, measures what it freed and logs it. No checks: callers go through
+    /// `run(ifConfirmed:report:)`.
+    func run(estimatedBytes: Int64?) async throws -> CleanupCommandResult {
         try await CleanupCommandResult.measuredRun(
             executable: docker,
             arguments: Self.pruneArguments,
             timeout: timeout,
             runner: runner,
             freeSpace: freeSpace,
+            logging: CleanupLogging(log: log, action: .dockerPrune, estimatedBytes: estimatedBytes, now: now),
             reportedBytes: Self.reclaimedSpace
         )
     }

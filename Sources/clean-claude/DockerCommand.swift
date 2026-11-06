@@ -60,10 +60,15 @@ struct DockerCommand: AsyncParsableCommand {
         if let freed = result.freedBytes {
             print("Freed on disk so far (measured): \(ByteFormatting.string(freed)).")
         }
-        guard result.succeeded else {
-            throw ExitCode(result.exitCode == 0 ? 1 : result.exitCode)
+        if let logError = result.logError {
+            StandardError.write("error: \(logError)")
         }
-        print("Docker Desktop hands the space back to macOS later, so this can be near zero right after a prune.")
+        if result.succeeded {
+            print("Docker Desktop hands the space back to macOS later, so this can be near zero right after a prune.")
+        }
+        if result.exitStatus != 0 {
+            throw ExitCode(result.exitStatus)
+        }
     }
 
     private static func estimate(of report: DockerReport) -> String {

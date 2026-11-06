@@ -42,7 +42,7 @@ struct SimulatorsCommand: AsyncParsableCommand {
             print("Running: \(cleaner.commandLine)")
         }
         // Without --yes this returns nil and starts nothing.
-        guard let result = try await cleaner.run(ifConfirmed: yes) else {
+        guard let result = try await cleaner.run(ifConfirmed: yes, estimatedBytes: report.unavailableDevicesBytes) else {
             print("Would run: \(cleaner.commandLine)")
             let count = report.unavailableDevices.count
             print("It would remove \(count) unavailable device(s), about \(ByteFormatting.string(report.unavailableDevicesBytes)).")
@@ -59,8 +59,11 @@ struct SimulatorsCommand: AsyncParsableCommand {
         if let freed = result.freedBytes {
             print("Freed on disk so far (measured): \(ByteFormatting.string(freed)).")
         }
-        if !result.succeeded {
-            throw ExitCode(result.exitCode == 0 ? 1 : result.exitCode)
+        if let logError = result.logError {
+            StandardError.write("error: \(logError)")
+        }
+        if result.exitStatus != 0 {
+            throw ExitCode(result.exitStatus)
         }
     }
 }

@@ -29,9 +29,12 @@ public struct Scanner: Sendable {
         return []
     }
 
+    /// `includeDependencies` also finds every worktree's light-clean folders and sums their sizes
+    /// (`ScanResult.dependencyBytes`); it is slow, so it is off unless asked for.
     public func scan(
         roots explicitRoots: [URL] = [],
         includeSizes: Bool = true,
+        includeDependencies: Bool = false,
         progress: @escaping @Sendable (ScanProgress) -> Void = { _ in }
     ) async -> ScanResult {
         let startedAt = environment.now()
@@ -50,7 +53,8 @@ public struct Scanner: Sendable {
         issues += discovery.issues
 
         var worktrees: [Worktree] = []
-        if let git = await usableGit(issues: &issues) {
+        let git = await usableGit(issues: &issues)
+        if let git {
             let scanner = WorktreeScanner(git: git, cursorWorktreesDirectory: environment.cursorWorktreesDirectory)
             let listing = await scanner.scan(repos: discovery.repos) { completed, total in
                 progress(.listingWorktrees(completed: completed, total: total))
@@ -72,6 +76,15 @@ public struct Scanner: Sendable {
             }
         }
 
+        var dependencyBytes: [String: Int64]?
+        if includeDependencies, let git, !worktrees.isEmpty {
+            if let du = environment.tools.du {
+                dependencyBytes = await LightCleanFinder(git: git, du: du).dependencyBytes(of: worktrees)
+            } else if !issues.contains(where: { $0.kind == .duMissing }) {
+                issues.append(ScanIssue(kind: .duMissing, message: "/usr/bin/du not found; dependency sizes skipped"))
+            }
+        }
+
         progress(.finished)
         return ScanResult(
             roots: roots.map(\.path),
@@ -80,7 +93,8 @@ public struct Scanner: Sendable {
             sizes: sizes,
             issues: issues,
             startedAt: startedAt,
-            duration: start.duration(to: clock.now) / .seconds(1)
+            duration: start.duration(to: clock.now) / .seconds(1),
+            dependencyBytes: dependencyBytes
         )
     }
 

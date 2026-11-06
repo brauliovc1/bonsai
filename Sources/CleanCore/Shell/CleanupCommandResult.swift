@@ -12,30 +12,50 @@ public struct CleanupCommandResult: Sendable, Equatable {
     public var freedBytes: Int64?
     /// The number the tool printed itself (docker's "Total reclaimed space"), when it prints one.
     public var reportedBytes: Int64?
+    /// The `removals.jsonl` entry written after the command ran.
+    public var logEntry: RemovalLogEntry?
+    /// Why `logEntry` could not be written; nil when it was.
+    public var logError: String?
 
     public init(
         exitCode: Int32,
         output: String,
         timedOut: Bool = false,
         freedBytes: Int64? = nil,
-        reportedBytes: Int64? = nil
+        reportedBytes: Int64? = nil,
+        logEntry: RemovalLogEntry? = nil,
+        logError: String? = nil
     ) {
         self.exitCode = exitCode
         self.output = output
         self.timedOut = timedOut
         self.freedBytes = freedBytes
         self.reportedBytes = reportedBytes
+        self.logEntry = logEntry
+        self.logError = logError
     }
 
     public var succeeded: Bool { exitCode == 0 && !timedOut }
 
-    /// Runs one cleanup command and measures free space around it.
+    /// The entry is in the log.
+    public var logged: Bool { logEntry != nil && logError == nil }
+
+    /// What a command-line caller exits with: the tool's own failure first (its exit code, or 1 for a
+    /// timeout), then 1 when the log entry could not be written, else 0.
+    public var exitStatus: Int32 {
+        if !succeeded { return exitCode == 0 ? 1 : exitCode }
+        return logged ? 0 : 1
+    }
+
+    /// Runs one cleanup command, measures free space around it, then logs it. Nothing is logged when the
+    /// command could not be started (it throws).
     static func measuredRun(
         executable: URL,
         arguments: [String],
         timeout: Duration,
         runner: CommandRunner,
         freeSpace: FreeSpaceProbe,
+        logging: CleanupLogging,
         reportedBytes: (String) -> Int64? = { _ in nil }
     ) async throws -> CleanupCommandResult {
         let before = freeSpace.availableBytes()
@@ -49,12 +69,14 @@ public struct CleanupCommandResult: Sendable, Equatable {
         let stdout = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
         let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         let output = [stdout, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
-        return CleanupCommandResult(
+        var cleanup = CleanupCommandResult(
             exitCode: result.exitCode,
             output: output,
             timedOut: result.timedOut,
             freedBytes: freed,
             reportedBytes: reportedBytes(output)
         )
+        logging.record(&cleanup, executable: executable, arguments: arguments)
+        return cleanup
     }
 }

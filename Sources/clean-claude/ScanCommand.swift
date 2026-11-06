@@ -17,6 +17,9 @@ struct ScanCommand: AsyncParsableCommand {
     @Flag(name: .customLong("no-sizes"), help: "Skip measuring folder sizes (much faster).")
     var noSizes = false
 
+    @Flag(help: "Also find each worktree's light-clean folders and show their total size in a DEPS column (slow).")
+    var deps = false
+
     @Option(help: ArgumentHelp("Only show worktrees with this status.", valueName: "auto-ready|safe|blocked"))
     var status: StatusFilter?
 
@@ -28,7 +31,7 @@ struct ScanCommand: AsyncParsableCommand {
 
     func run() async throws {
         let context = try CommandContext.load()
-        let result = try await context.scan(rootOptions, includeSizes: !noSizes)
+        let result = try await context.scan(rootOptions, includeSizes: !noSizes, includeDependencies: deps)
 
         var assessments: [WorktreeAssessment] = []
         if let git = WorktreeAssessor.git(for: context.environment), !result.worktrees.isEmpty {
@@ -44,7 +47,8 @@ struct ScanCommand: AsyncParsableCommand {
                 assessments: shown,
                 allAssessments: assessments,
                 paths: context.paths(for: result),
-                showSizes: !noSizes
+                showSizes: !noSizes,
+                showDependencies: deps
             )
             print(table.render())
         }
