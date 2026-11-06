@@ -9,12 +9,14 @@ import Observation
 @MainActor
 @Observable
 public final class SettingsModel {
-    public static let idleThresholdRange = 7...365
+    public static let idleThresholdRange = Settings.idleThresholdRange
     public static let lowSpaceRange = 1...1000
     public static let emptyRootsText = "No folders added: ~/Documents/GitHub is scanned."
 
     public let app: AppModel
     public private(set) var scanRoots: [String] = []
+    /// Roots in the file that are skipped (the rule: only a folder inside home or on an external volume).
+    public private(set) var refusedRoots: [ScanRootRule.Refusal] = []
     public private(set) var idleThresholdDays = Settings().idleThresholdDays
     public private(set) var lowSpaceWarningGB = Settings().lowSpaceWarningGB
     /// Why settings couldn't be read or saved; the controls then change nothing.
@@ -49,8 +51,9 @@ public final class SettingsModel {
 
     // MARK: - Scan roots
 
-    /// Adds a folder (folders only; one already in the list is ignored), then scans again. Returns false
-    /// when it was not added.
+    /// Adds a folder, saved with its symlinks resolved, then scans again. Folders only, and only what
+    /// `ScanRootRule` accepts (inside home or on an external volume); one already in the list is ignored.
+    /// Returns false when it was not added.
     @discardableResult
     public func addRoot(_ url: URL) async -> Bool {
         let folder = url.standardizedFileURL
@@ -60,10 +63,25 @@ public final class SettingsModel {
             return false
         }
         let home = app.environment.homeDirectory
-        guard !scanRoots.contains(where: { CleanEnvironment.expand($0, home: home).path == folder.path }) else { return false }
-        guard update({ $0.scanRoots.append(folder.path) }) else { return false }
+        let rule = ScanRootRule(home: home)
+        let canonical: URL
+        switch rule.accept(folder) {
+        case .success(let accepted): canonical = accepted
+        case .failure(let refusal):
+            error = "\(refusal.path) can't be a scan root: \(refusal.reason)."
+            return false
+        }
+        guard !scanRoots.contains(where: { rule.canonical(CleanEnvironment.expand($0, home: home))?.path == canonical.path })
+        else { return false }
+        guard update({ $0.scanRoots.append(canonical.path) }) else { return false }
         await app.refresh()
         return true
+    }
+
+    /// Why a root in the list is skipped by scans, or nil when it is used.
+    public func skippedReason(of root: String) -> String? {
+        let path = CleanEnvironment.expand(root, home: app.environment.homeDirectory).path
+        return refusedRoots.first { $0.path == path }?.reason
     }
 
     /// Removes a folder from the list (the folder itself is untouched), then scans again.
@@ -109,6 +127,7 @@ public final class SettingsModel {
 
     private func apply(_ settings: Settings) {
         scanRoots = settings.scanRoots
+        refusedRoots = settings.refusedScanRoots(home: app.environment.homeDirectory)
         idleThresholdDays = settings.idleThresholdDays
         lowSpaceWarningGB = settings.lowSpaceWarningGB
     }

@@ -69,7 +69,7 @@ struct SettingsAndLogTests {
         var environment = fixture.environment()
         let settings = Settings(scanRoots: ["~/code"])
         #expect(Scanner.resolveRoots(explicit: [], environment: environment, settings: settings).map(\.path)
-            == [fixture.home.appending(path: "code").path])
+            == [CanonicalPath.resolve(fixture.home.appending(path: "code"))], "saved roots are canonical")
         environment.scanRootsOverride = [URL(fileURLWithPath: "/override")]
         #expect(Scanner.resolveRoots(explicit: [], environment: environment, settings: settings).map(\.path) == ["/override"])
     }
@@ -146,21 +146,42 @@ struct SettingsAndLogTests {
         #expect(throws: RemovalLog.LogError.self) { try log.markRestored(id: UUID(), at: restoredAt) }
     }
 
-    // Item 12: a threshold of 0 days would make every clean worktree auto-ready.
+    // Item 12, then wave 4: a threshold below 7 days would make a worktree used last week auto-ready.
     @Test func outOfRangeSettingsAreErrors() throws {
         let folder = try TemporaryDirectory()
         defer { folder.remove() }
         let store = SettingsStore(directory: folder.url)
-        for bad in [#"{"idleThresholdDays": 0}"#, #"{"idleThresholdDays": -3}"#, #"{"reportOnlyDays": -1}"#] {
-            try Data(bad.utf8).write(to: store.fileURL)
-            #expect(throws: SettingsStore.LoadError.self, "\(bad)") { try store.load() }
+        #expect(Settings.idleThresholdRange == 7...365)
+        let bad = [
+            #"{"idleThresholdDays": 0}"#, #"{"idleThresholdDays": -3}"#, #"{"idleThresholdDays": 1}"#,
+            #"{"idleThresholdDays": 6}"#, #"{"idleThresholdDays": 366}"#, #"{"reportOnlyDays": -1}"#,
+        ]
+        for text in bad {
+            try Data(text.utf8).write(to: store.fileURL)
+            #expect(throws: SettingsStore.LoadError.self, "\(text)") { try store.load() }
         }
-        try Data(#"{"idleThresholdDays": 1, "reportOnlyDays": 0}"#.utf8).write(to: store.fileURL)
-        #expect(try store.load().idleThresholdDays == 1)
+        for days in [7, 365] {
+            try Data(#"{"idleThresholdDays": \#(days), "reportOnlyDays": 0}"#.utf8).write(to: store.fileURL)
+            #expect(try store.load().idleThresholdDays == days)
+        }
 
         try FileManager.default.removeItem(at: store.fileURL)
-        #expect(throws: SettingsStore.LoadError.self) { try store.save(Settings(idleThresholdDays: 0)) }
+        for days in [0, 1, 6, 366] {
+            #expect(throws: SettingsStore.LoadError.self, "\(days)") { try store.save(Settings(idleThresholdDays: days)) }
+        }
         #expect(!FileManager.default.fileExists(atPath: store.fileURL.path))
+    }
+
+    /// Settings built in code are held to the lowest allowed threshold too.
+    @Test func theRulesNeverApplyAThresholdBelowTheRange() {
+        #expect(Settings(idleThresholdDays: 1).effectiveIdleThresholdDays == 7)
+        #expect(Settings(idleThresholdDays: 45).effectiveIdleThresholdDays == 45)
+        let worktree = Worktree(path: "/tmp/w", repoPath: "/tmp/r", head: "abc", branch: "b", isMain: false, kind: .sibling)
+        let safety = SafetyCheck.evaluate(
+            worktree: worktree, state: WorktreeState(), idle: .idle(days: 1), settings: Settings(idleThresholdDays: 1),
+            cwdIndex: ProcessCwdIndex(entries: [])
+        )
+        #expect(!safety.autoEligible, "one day idle is not idle enough, whatever the setting says")
     }
 
     // Item 10: an append from another writer while markRestored rewrites the file must not be lost.

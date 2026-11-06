@@ -10,8 +10,8 @@ public struct Scanner: Sendable {
         self.settings = settings
     }
 
-    /// Scan roots: explicit roots, else `$CLEAN_CLAUDE_SCAN_ROOTS`, else `settings.scanRoots`, else
-    /// `~/Documents/GitHub` if it exists.
+    /// Scan roots: explicit roots, else `$CLEAN_CLAUDE_SCAN_ROOTS`, else `settings.scanRoots` (only the ones
+    /// `ScanRootRule` accepts, canonical), else `~/Documents/GitHub` if it exists.
     public static func resolveRoots(
         explicit: [URL],
         environment: CleanEnvironment,
@@ -44,6 +44,12 @@ public struct Scanner: Sendable {
 
         let roots = Self.resolveRoots(explicit: explicitRoots, environment: environment, settings: settings)
             .map(\.standardized)
+        // Saved roots that are refused are skipped; say so whenever the saved list is what decides.
+        if explicitRoots.isEmpty, environment.scanRootsOverride?.isEmpty ?? true {
+            issues += settings.refusedScanRoots(home: environment.homeDirectory).map {
+                ScanIssue(kind: .rootRefused, path: $0.path, message: "scan root skipped: \($0.reason)")
+            }
+        }
         if roots.isEmpty {
             issues.append(ScanIssue(kind: .noRoots, message: "no scan roots: pass --root or create ~/Documents/GitHub"))
         }

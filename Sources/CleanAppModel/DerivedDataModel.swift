@@ -3,9 +3,10 @@ import Foundation
 import Observation
 
 /// The Xcode DerivedData screen: the folders of the located root with their state, and "Delete orphaned…".
-/// Only orphaned folders can be selected. The root is the one `DerivedDataLocator` finds; the app has no
-/// custom-location input. Deleting goes only through `DerivedDataCleaner`, after a fresh scan, and only
-/// for the orphans the sheet listed (`DerivedDataModel+Delete`).
+/// Any row can be selected (arrow keys move through read-only rows like through the others), but only
+/// orphaned ones count toward "Delete orphaned…". The root is the one `DerivedDataLocator` finds; the app
+/// has no custom-location input. Deleting goes only through `DerivedDataCleaner`, after a fresh scan, and
+/// only for the orphans the sheet listed (`DerivedDataModel+Delete`).
 @MainActor
 @Observable
 public final class DerivedDataModel {
@@ -18,13 +19,8 @@ public final class DerivedDataModel {
     public private(set) var isScanning = false
     public private(set) var lastScanAt: Date?
     public var sortOrder = [KeyPathComparator(\DerivedDataRow.sizeSortKey, order: .reverse)]
-    /// Orphaned rows only: anything else is dropped as soon as it is set.
-    public var selection: Set<DerivedDataRow.ID> = [] {
-        didSet {
-            let allowed = selection.intersection(selectableIDs)
-            if allowed != selection { selection = allowed }
-        }
-    }
+    /// The selected rows, read-only ones included; see `selectedOrphans`.
+    public var selection: Set<DerivedDataRow.ID> = []
 
     // Delete sheet (DerivedDataModel+Delete).
     public var isShowingDeleteSheet = false
@@ -55,6 +51,8 @@ public final class DerivedDataModel {
     }
 
     public var selectedRows: [DerivedDataRow] { rows.filter { selection.contains($0.id) } }
+    /// The selected rows "Delete orphaned…" is about: the orphaned ones.
+    public var selectedOrphans: [DerivedDataRow] { selectedRows.filter(\.isSelectable) }
 
     public var orphanRows: [DerivedDataRow] { allRows.filter(\.isSelectable) }
     public var orphanBytes: Int64 { orphanRows.compactMap(\.bytes).reduce(0, +) }
@@ -67,8 +65,8 @@ public final class DerivedDataModel {
     public var warnings: [String] { report?.warnings ?? [] }
     /// Xcode has no DerivedData folder yet (or it is gone).
     public var rootMissing: Bool { report.map { !$0.rootExists && $0.refusal == nil } ?? false }
-    /// "Delete orphaned…" is offered when the root is accepted and something is selected.
-    public var canDelete: Bool { refusal == nil && !selection.isEmpty && !app.isCleaningUp }
+    /// "Delete orphaned…" is offered when the root is accepted and an orphaned row is selected.
+    public var canDelete: Bool { refusal == nil && !selectedOrphans.isEmpty && !app.isCleaningUp }
 
     // MARK: - Scanning
 
@@ -77,7 +75,7 @@ public final class DerivedDataModel {
         await loop.run { [self] in
             isScanning = true
             report = await DerivedDataScanner.scan(environment: app.environment, runner: runner)
-            selection.formIntersection(selectableIDs)
+            selection.formIntersection(allRows.map(\.id))
             lastScanAt = app.environment.now()
             isScanning = false
         }

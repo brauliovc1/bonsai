@@ -57,12 +57,46 @@ struct DerivedDataModelTests {
         #expect(rows["Gone-aaa"]?.sizeText != "–")
         #expect(world.model.orphanBytes == rows["Gone-aaa"]?.bytes)
 
+        // Wave 4: the arrow keys move the selection onto any row, read-only ones too; only orphans count.
         world.model.selection = Set(world.model.allRows.map(\.id))
-        #expect(world.model.selection == [rows["Gone-aaa"]!.id], "selecting a read-only row selects nothing")
+        #expect(world.model.selection.count == world.model.allRows.count, "keyboard focus is not taken away")
+        #expect(world.model.selectedOrphans.map(\.name) == ["Gone-aaa"])
         #expect(world.model.canDelete)
         world.model.selection = [rows["Live-bbb"]!.id]
-        #expect(world.model.selection.isEmpty)
-        #expect(!world.model.canDelete)
+        #expect(world.model.selection == [rows["Live-bbb"]!.id], "moving onto a read-only row keeps the selection")
+        #expect(world.model.selectedOrphans.isEmpty)
+        #expect(!world.model.canDelete, "but nothing orphaned is selected")
+        world.model.selection = [rows["Live-bbb"]!.id, rows["Gone-aaa"]!.id]
+        #expect(world.model.canDelete)
+    }
+
+    /// Wave 4: the arrow keys walk the table: orphan, read-only row, orphan again. The selection follows
+    /// them, and "Delete orphaned…" is about the orphans only, from a fresh scan.
+    @Test func walkingTheSelectionOverReadOnlyRowsStillDeletesOnlyFreshOrphans() async throws {
+        let world = try makeWorld()
+        defer { world.home.remove() }
+        let orphan = try world.home.derivedDataEntry("Gone-aaa", workspace: goneWorkspace("Gone"))
+        let live = try world.home.derivedDataEntry("Live-bbb", workspace: "/usr/bin")
+        let other = try world.home.derivedDataEntry("Gone-ccc", workspace: goneWorkspace("Other"))
+        await world.model.refresh()
+        let ids = Dictionary(uniqueKeysWithValues: world.model.allRows.map { ($0.name, $0.id) })
+
+        for step in [["Gone-aaa"], ["Live-bbb"], ["Gone-ccc"]] {
+            world.model.selection = Set(step.compactMap { ids[$0] })
+            #expect(world.model.selection.count == 1, "\(step)")
+        }
+        world.model.selection = Set(ids.values)
+        await world.model.beginDelete()
+        let confirmation = try #require(world.model.confirmation)
+
+        #expect(confirmation.items.map(\.name).sorted() == ["Gone-aaa", "Gone-ccc"], "the read-only row is not in the sheet")
+        // One orphan's project comes back before the confirm: the fresh scan refuses it.
+        try world.home.rewritePlist(of: other, workspace: "/usr/bin")
+        let report = await world.model.confirmDelete(confirmation)
+        #expect(report.deletedCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: orphan.path))
+        #expect(FileManager.default.fileExists(atPath: live.path))
+        #expect(FileManager.default.fileExists(atPath: other.path))
     }
 
     @Test func deleteGivesTheCleanerOnlyTheOrphans() async throws {
@@ -177,7 +211,7 @@ struct DerivedDataModelTests {
         #expect(world.model.allRows.isEmpty, "nothing in a refused root is listed")
         #expect(!world.model.canDelete)
         world.model.selection = ["anything"]
-        #expect(world.model.selection.isEmpty)
+        #expect(!world.model.canDelete, "nothing is deletable under a refused root")
 
         // Even asked for a folder, the sheet lists nothing as deletable.
         let confirmation = await world.model.prepareDelete([world.home.derivedDataRoot.appending(path: "Gone-aaa").path])

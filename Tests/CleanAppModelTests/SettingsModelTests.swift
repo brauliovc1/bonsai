@@ -7,11 +7,16 @@ import Testing
 @Suite("Settings model")
 @MainActor
 struct SettingsModelTests {
-    /// A fixture with one repo, an app model that reads its roots from settings (no environment override),
-    /// and the settings model.
+    /// The folder a scan root may be: inside the fixture's home.
+    static func code(_ fixture: GitFixture) -> URL {
+        fixture.home.appending(path: "code", directoryHint: .isDirectory)
+    }
+
+    /// A fixture with one repo in `<home>/code`, an app model that reads its roots from settings (no
+    /// environment override), and the settings model.
     private func makeWorld() async throws -> (GitFixture, AppModel, SettingsModel) {
         let fixture = try GitFixture()
-        try await fixture.makeRepo("solo")
+        try await fixture.makeRepo("solo", in: Self.code(fixture))
         let app = AppModel(environment: fixture.environment(), git: fixture.git)
         return (fixture, app, SettingsModel(app: app))
     }
@@ -36,15 +41,16 @@ struct SettingsModelTests {
         defer { fixture.remove() }
         let scans = app.scanCount
 
-        #expect(await model.addRoot(fixture.scanRoot))
-        #expect(model.scanRoots == [fixture.scanRoot.standardizedFileURL.path])
+        let code = Self.code(fixture)
+        #expect(await model.addRoot(code))
+        #expect(model.scanRoots == [CanonicalPath.resolve(code)], "saved canonical")
         #expect(try saved(app).scanRoots == model.scanRoots, "persisted")
         #expect(app.scanCount == scans + 1, "changing the roots scanned again")
         #expect(app.roots.map(\.path) == model.scanRoots)
         #expect(app.assessments.count == 1, "the new root's repo was found")
 
         // A folder already in the list is not added twice, and doesn't scan again.
-        #expect(await model.addRoot(fixture.scanRoot) == false)
+        #expect(await model.addRoot(code) == false)
         #expect(model.scanRoots.count == 1)
         #expect(app.scanCount == scans + 1)
 
@@ -53,7 +59,7 @@ struct SettingsModelTests {
         #expect(try saved(app).scanRoots.isEmpty)
         #expect(app.scanCount == scans + 2)
         #expect(app.assessments.isEmpty, "an empty list scans ~/Documents/GitHub, which the fake home doesn't have")
-        #expect(FileManager.default.fileExists(atPath: fixture.scanRoot.path), "removing a root leaves the folder alone")
+        #expect(FileManager.default.fileExists(atPath: code.path), "removing a root leaves the folder alone")
     }
 
     @Test func onlyFoldersCanBeAdded() async throws {
@@ -93,9 +99,12 @@ struct SettingsModelTests {
     @Test func theThresholdSetsTheStatusesAfterTheRescan() async throws {
         let demo = try await DemoWorld.build()
         defer { demo.remove() }
-        let app = AppModel(environment: demo.fixture.environment(scanRoots: nil), git: demo.fixture.git)
+        // The demo's folders sit next to the fixture's home; a scan root must be inside home.
+        var environment = demo.fixture.environment(scanRoots: nil)
+        environment.homeDirectory = demo.folder
+        let app = AppModel(environment: environment, git: demo.fixture.git)
         let model = SettingsModel(app: app)
-        await model.addRoot(demo.folder.appending(path: "root"))
+        #expect(await model.addRoot(demo.folder.appending(path: "root")))
         let archive = demo.folder.appending(path: "root/atlas-archive")
         func status() -> String? {
             app.assessments.first { CanonicalPath.same($0.worktree.url, archive) }?.status.label
@@ -150,7 +159,7 @@ struct SettingsModelTests {
         #expect(model.error?.contains(SettingsStore.fileName) == true)
         await model.setIdleThreshold(45)
         model.setLowSpaceWarning(20)
-        #expect(await model.addRoot(fixture.scanRoot) == false)
+        #expect(await model.addRoot(Self.code(fixture)) == false)
 
         #expect(try String(contentsOf: store.fileURL, encoding: .utf8) == "{ not json", "left exactly as it was")
         #expect(model.error != nil)

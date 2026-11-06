@@ -34,8 +34,8 @@ struct CleanClaudeApp: App {
 }
 
 enum AppInfo {
-    /// From Info.plist, so renaming the app (PLAN D1) needs no code change. "Clean Claude" when run
+    /// From Info.plist, so renaming the app (PLAN D1) needs no code change. "Bonsai" when run
     /// outside the bundle (`swift run`).
-    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Clean Claude"
+    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Bonsai"
     static let mainWindowID = "main"
 }

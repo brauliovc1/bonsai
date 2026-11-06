@@ -45,6 +45,7 @@ public struct DockerScanner: Sendable {
         let operatingSystem = await daemonOperatingSystem(docker: docker, warnings: &warnings)
 
         var usage: [DockerUsageRow] = []
+        var usageFailure: String?
         do {
             let result = try await runner.run(docker, Self.usageArguments, timeout: usageTimeout)
             if result.succeeded {
@@ -53,11 +54,14 @@ public struct DockerScanner: Sendable {
                 if parsed.skippedLines > 0 {
                     warnings.append("docker system df: skipped \(parsed.skippedLines) line(s) it could not read")
                 }
+                if usage.isEmpty { usageFailure = "docker system df printed nothing that could be read" }
             } else {
-                warnings.append("docker system df \(Self.failure(result))")
+                usageFailure = "docker system df \(Self.failure(result))"
+                warnings.append(usageFailure ?? "")
             }
         } catch {
-            warnings.append("docker system df could not start: \(error)")
+            usageFailure = "docker system df could not start: \(error)"
+            warnings.append(usageFailure ?? "")
         }
         return DockerReport(
             state: .running,
@@ -65,7 +69,8 @@ public struct DockerScanner: Sendable {
             daemonOperatingSystem: operatingSystem,
             diskImage: diskImage,
             usage: usage,
-            warnings: warnings
+            warnings: warnings,
+            usageFailure: usageFailure
         )
     }
 

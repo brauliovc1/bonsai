@@ -31,6 +31,17 @@ public struct SafetyCheck: Sendable {
         return await inspector.inspect(worktree, knownWorktrees: knownWorktrees)
     }
 
+    /// The blocker that says the folder at `worktree.path` is not this repo's worktree (any more): a stale
+    /// record, or a `.git` git can't read. nil when it is (main checkouts included). The same read as the
+    /// first step of `state(of:)`, for callers that need only that (light clean).
+    public func identityBlocker(of worktree: Worktree) async -> SafetyReason? {
+        switch await inspector.identity(of: worktree) {
+        case .this: nil
+        case .staleRecord(let leadsTo): .staleRecord(leadsTo: leadsTo)
+        case .unreadable(let message): .gitError(message)
+        }
+    }
+
     /// The rules themselves, over facts already gathered. Pure.
     public static func evaluate(
         worktree: Worktree,
@@ -108,7 +119,7 @@ public struct SafetyCheck: Sendable {
         }
 
         if let days = idle.idleDays {
-            if days < max(1, settings.idleThresholdDays) {
+            if days < settings.effectiveIdleThresholdDays {
                 notes.append(.recentlyActive(days: days))
                 autoOnly.append(.recentlyActive(days: days))
             }

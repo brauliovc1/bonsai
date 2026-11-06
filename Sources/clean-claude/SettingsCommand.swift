@@ -28,6 +28,9 @@ struct SettingsCommand: AsyncParsableCommand {
         rows.append(["file", store.fileURL.path + (exists ? "" : " (not created yet: defaults)")])
         rows.append(["scanRoots", settings.scanRoots.isEmpty ? "(default)" : settings.scanRoots.joined(separator: ", ")])
         rows.append(["  in effect", roots.isEmpty ? "(none)" : roots.map(\.path).joined(separator: ", ")])
+        for refusal in settings.refusedScanRoots(home: context.environment.homeDirectory) {
+            rows.append(["  skipped", "\(refusal.path): \(refusal.reason)"])
+        }
         rows.append(["idleThresholdDays", "\(settings.idleThresholdDays)"])
         rows.append(["lowSpaceWarningGB", "\(settings.lowSpaceWarningGB)"])
         rows.append(["autoEnabled", "\(settings.autoEnabled)"])

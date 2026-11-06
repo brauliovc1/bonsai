@@ -60,6 +60,67 @@ public struct SimulatorCleaner: Sendable {
         return try await run(estimatedBytes: estimatedBytes)
     }
 
+    /// Why `run(ifConfirmed:estimatedBytes:onlyDeleting:)` ran nothing.
+    public enum Refusal: Error, Sendable, Hashable, CustomStringConvertible {
+        /// `simctl list devices` failed, so what the delete would remove is unknown.
+        case listFailed(String)
+        /// The unavailable devices are not exactly the confirmed ones (UDIDs that appeared, UDIDs that are gone).
+        case listChanged(added: [String], gone: [String])
+
+        public var description: String {
+            switch self {
+            case .listFailed(let why):
+                return "xcrun could not list the devices (\(why)), so nothing was deleted."
+            case .listChanged(let added, let gone):
+                var parts: [String] = []
+                if !added.isEmpty { parts.append("\(added.count) more would be deleted now") }
+                if !gone.isEmpty { parts.append("\(gone.count) listed are no longer unavailable") }
+                return "The list of unavailable devices changed since you confirmed it (\(parts.joined(separator: ", "))), "
+                    + "so nothing was deleted; review it again."
+            }
+        }
+    }
+
+    /// Like `run(ifConfirmed:estimatedBytes:)`, but `simctl delete unavailable` takes no argument that
+    /// limits it, so the unavailable devices are listed again right before it starts (`simctl list
+    /// devices`, nothing else: no sizes) and it runs only when they are exactly `expected`. Throws
+    /// `Refusal` otherwise, with nothing run.
+    public func run(
+        ifConfirmed confirmed: Bool,
+        estimatedBytes: Int64? = nil,
+        onlyDeleting expected: [SimulatorDevice]
+    ) async throws -> CleanupCommandResult? {
+        guard confirmed else { return nil }
+        let current = try await unavailableUDIDs()
+        let confirmedUDIDs = Set(expected.map(\.udid))
+        guard current == confirmedUDIDs else {
+            throw Refusal.listChanged(
+                added: current.subtracting(confirmedUDIDs).sorted(),
+                gone: confirmedUDIDs.subtracting(current).sorted()
+            )
+        }
+        // Nothing runs between the comparison above and the start of the delete.
+        return try await run(estimatedBytes: estimatedBytes)
+    }
+
+    private func unavailableUDIDs() async throws -> Set<String> {
+        let result: ProcessResult
+        do {
+            result = try await runner.run(xcrun, SimulatorScanner.devicesArguments, timeout: .seconds(30))
+        } catch {
+            throw Refusal.listFailed("\(error)")
+        }
+        guard result.succeeded else {
+            let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw Refusal.listFailed(result.timedOut ? "timed out" : "exit \(result.exitCode)" + (message.isEmpty ? "" : ": \(message)"))
+        }
+        do {
+            return Set(try SimctlParser.unavailableDevices(from: result.stdout).map(\.udid))
+        } catch {
+            throw Refusal.listFailed("\(error)")
+        }
+    }
+
     /// Starts the delete, measures what it freed and logs it. No checks: callers go through
     /// `run(ifConfirmed:)`.
     func run(estimatedBytes: Int64?) async throws -> CleanupCommandResult {

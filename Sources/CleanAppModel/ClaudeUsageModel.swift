@@ -10,7 +10,7 @@ import Observation
 public final class ClaudeUsageModel {
     /// Fixed copy of the screen.
     public static let note = "Clean these from Claude > Settings > This computer > Storage. "
-        + "Clean Claude never deletes Claude's data."
+        + "Bonsai never deletes Claude's data."
 
     public let app: AppModel
     @ObservationIgnored private let loop = ScanLoop()

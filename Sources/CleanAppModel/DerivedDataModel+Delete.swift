@@ -24,9 +24,10 @@ extension DerivedDataModel {
         return DerivedDataConfirmation(root: fresh.root, refusal: fresh.refusal, items: items)
     }
 
-    /// Opens the sheet for `ids` (default: the selection) and fills it once the scan is done.
+    /// Opens the sheet for the orphaned rows among `ids` (default: the selection; read-only rows don't count)
+    /// and fills it once the scan is done.
     public func beginDelete(_ ids: Set<DerivedDataRow.ID>? = nil) async {
-        let ids = ids ?? selection
+        let ids = (ids ?? selection).intersection(selectableIDs)
         deleteSheetToken += 1
         let token = deleteSheetToken
         cleanupReport = nil

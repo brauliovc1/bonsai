@@ -2,6 +2,7 @@ import CleanAppModel
 import CleanCore
 import CleanTestSupport
 import Foundation
+import Testing
 
 /// A scripted docker, xcrun and `defaults`: answers what the scanners ask, records every call, and can change
 /// its answers between calls (a daemon that stops, a runtime that goes away). No test ever starts a real
@@ -51,6 +52,12 @@ final class FakeToolchain: @unchecked Sendable {
             ("BBBB", "iPhone 15", 123_456), ("CCCC", "iPad Air", 200_000),
         ]
         var customDerivedDataLocation: String?
+        /// stderr of a failing `docker system df`; nil = it works.
+        var dfFailure: String?
+        /// stderr of a failing `simctl list devices`; nil = it works.
+        var devicesFailure: String?
+        /// Runs inside every call, before it is answered (a test can block the call here).
+        var onCall: (@Sendable (ScriptedCommandRunner.Call) -> Void)?
     }
 
     private let lock = NSLock()
@@ -91,8 +98,24 @@ final class FakeToolchain: @unchecked Sendable {
         set { lock.withLock { state.customDerivedDataLocation = newValue } }
     }
 
+    var dfFailure: String? {
+        get { lock.withLock { state.dfFailure } }
+        set { lock.withLock { state.dfFailure = newValue } }
+    }
+
+    var devicesFailure: String? {
+        get { lock.withLock { state.devicesFailure } }
+        set { lock.withLock { state.devicesFailure = newValue } }
+    }
+
+    var onCall: (@Sendable (ScriptedCommandRunner.Call) -> Void)? {
+        get { lock.withLock { state.onCall } }
+        set { lock.withLock { state.onCall = newValue } }
+    }
+
     private func answer(_ call: ScriptedCommandRunner.Call) throws -> ProcessResult {
         let state = lock.withLock { self.state }
+        state.onCall?(call)
         switch (call.executable, call.arguments) {
         case (Self.docker, ["info", "--format", "{{.ServerVersion}}"]):
             return state.dockerRunning
@@ -101,11 +124,13 @@ final class FakeToolchain: @unchecked Sendable {
         case (Self.docker, ["info", "--format", "{{.OperatingSystem}}"]):
             return ScriptedCommandRunner.result(stdout: state.daemonOS + "\n")
         case (Self.docker, ["system", "df", "--format", "{{json .}}"]):
-            return ScriptedCommandRunner.result(stdout: Self.dfOutput)
+            return state.dfFailure.map { ScriptedCommandRunner.result(exitCode: 1, stderr: $0) }
+                ?? ScriptedCommandRunner.result(stdout: Self.dfOutput)
         case (Self.docker, ["system", "prune", "-f"]):
             return ScriptedCommandRunner.result(stdout: "Deleted Containers:\nabc123\nTotal reclaimed space: 1.5GB\n")
         case (Self.xcrun, ["simctl", "list", "devices", "-j"]):
-            return ScriptedCommandRunner.result(stdout: Self.devices(unavailable: state.unavailable))
+            return state.devicesFailure.map { ScriptedCommandRunner.result(exitCode: 1, stderr: $0) }
+                ?? ScriptedCommandRunner.result(stdout: Self.devices(unavailable: state.unavailable))
         case (Self.xcrun, ["simctl", "runtime", "list", "-j"]):
             return ScriptedCommandRunner.result(stdout: Self.runtimesJSON)
         case (Self.xcrun, ["simctl", "delete", "unavailable"]):
@@ -173,4 +198,34 @@ extension FakeHome {
 /// folder is orphaned.
 func goneWorkspace(_ name: String) -> String {
     "/Users/clean-claude-no-such-user/\(name)/\(name).xcodeproj"
+}
+
+/// Holds one call of the fake toolchain until the test lets it go: `toolchain.onCall = gate.hold { … }`
+/// blocks the matching call on its own thread, `waitUntilReached` waits for it without blocking the main
+/// actor, and `release` lets it answer.
+final class CallGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reachedFlag = false
+    private let released = DispatchSemaphore(value: 0)
+
+    var isReached: Bool { lock.withLock { reachedFlag } }
+
+    func hold(when matches: @escaping @Sendable (ScriptedCommandRunner.Call) -> Bool) -> @Sendable (ScriptedCommandRunner.Call) -> Void {
+        { [self] call in
+            guard matches(call) else { return }
+            lock.withLock { reachedFlag = true }
+            released.wait()
+        }
+    }
+
+    func waitUntilReached() async throws {
+        for _ in 0..<2_000 where !isReached {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(isReached, "the held call was never made")
+    }
+
+    func release() {
+        released.signal()
+    }
 }

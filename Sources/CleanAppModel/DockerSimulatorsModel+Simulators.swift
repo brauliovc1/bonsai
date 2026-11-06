@@ -36,17 +36,22 @@ extension DockerSimulatorsModel {
         simulatorsReport = nil
     }
 
-    /// Runs `xcrun simctl delete unavailable` through `SimulatorCleaner.run(ifConfirmed:estimatedBytes:)`.
-    /// The command takes no argument that limits it, so a scan made right before must find exactly the
-    /// devices the sheet listed; if the list changed, nothing runs. CleanCore writes the log entry; if that
-    /// fails the report says so. Then the screen scans again.
+    /// Runs `xcrun simctl delete unavailable` through `SimulatorCleaner`. The command takes no argument that
+    /// limits it, so `SimulatorCleaner` lists the devices again right before it starts (devices only, no
+    /// sizes) and runs only when the unavailable ones are exactly the devices the sheet listed; if the list
+    /// changed, nothing runs. CleanCore writes the log entry; if that fails the report says so. Then the
+    /// screen scans again. A second confirm while the delete runs is rejected in the return value only: the
+    /// running delete's progress stays.
     @discardableResult
     public func confirmSimulatorsDelete(_ confirmation: SimulatorsConfirmation) async -> CleanupCommandReport {
-        guard confirmation.isAllowed, !isDeletingDevices else {
-            return show(Self.simulatorsReport(error: confirmation.blocker ?? "A delete is already running.", result: nil))
+        guard !isDeletingDevices else { return Self.simulatorsReport(error: "A delete is already running.", result: nil) }
+        guard confirmation.isAllowed else {
+            return show(Self.simulatorsReport(error: confirmation.blocker ?? "The delete is not allowed.", result: nil))
         }
         isDeletingDevices = true
-        let finished = await app.cleaningUp { await runDelete(confirmed: confirmation.devices) }
+        let finished = await app.cleaningUp {
+            await runDelete(confirmed: confirmation.devices, estimatedBytes: confirmation.estimatedBytes)
+        }
         let report = finished ?? Self.simulatorsReport(error: "Another cleanup is still running.", result: nil)
         isDeletingDevices = false
         _ = show(report)
@@ -57,27 +62,17 @@ extension DockerSimulatorsModel {
         return report
     }
 
-    private func runDelete(confirmed: [SimulatorDevice]) async -> CleanupCommandReport {
-        let current = await SimulatorScanner(environment: app.environment, runner: runner).scan()
-        simulators = current
-        guard current.state == .available else {
-            return Self.simulatorsReport(error: "Xcode isn't installed any more.", result: nil)
-        }
-        guard Set(current.unavailableDevices.map(\.udid)) == Set(confirmed.map(\.udid)) else {
-            return Self.simulatorsReport(
-                error: "The list of unavailable devices changed since you confirmed it, so nothing was deleted; "
-                    + "review it again.",
-                result: nil
-            )
-        }
+    private func runDelete(confirmed: [SimulatorDevice], estimatedBytes: Int64) async -> CleanupCommandReport {
         guard let cleaner = SimulatorCleaner(environment: app.environment, runner: runner) else {
             return Self.simulatorsReport(error: "There is no Xcode (xcrun) to run it with.", result: nil)
         }
         do {
-            guard let result = try await cleaner.run(ifConfirmed: true, estimatedBytes: current.unavailableDevicesBytes) else {
+            guard let result = try await cleaner.run(ifConfirmed: true, estimatedBytes: estimatedBytes, onlyDeleting: confirmed) else {
                 return Self.simulatorsReport(error: "The delete was not confirmed.", result: nil)
             }
             return Self.simulatorsReport(error: nil, result: result)
+        } catch let refusal as SimulatorCleaner.Refusal {
+            return Self.simulatorsReport(error: refusal.description, result: nil)
         } catch {
             return Self.simulatorsReport(error: "xcrun could not be started: \(error)", result: nil)
         }

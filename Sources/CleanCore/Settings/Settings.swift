@@ -5,7 +5,12 @@ import Foundation
 /// Every key is optional when decoding: a file with only some keys gets defaults for the rest, and keys
 /// this version does not know are ignored.
 public struct Settings: Sendable, Codable, Equatable {
-    /// Folders to scan; empty = the default root (`~/Documents/GitHub`). `~` is expanded.
+    /// The days `idleThresholdDays` may be (PLAN §3). Below it, a worktree touched last week would be
+    /// auto-ready.
+    public static let idleThresholdRange = 7...365
+
+    /// Folders to scan; empty = the default root (`~/Documents/GitHub`). `~` is expanded. Only folders
+    /// `ScanRootRule` accepts are used; the others are reported (`refusedScanRoots`) and skipped.
     public var scanRoots: [String]
     /// A worktree counts as idle for auto mode after this many days without activity (PLAN §4.3).
     public var idleThresholdDays: Int
@@ -60,17 +65,37 @@ public struct Settings: Sendable, Codable, Equatable {
         lastAutoRun = try container.decodeIfPresent(AutoRunSummary.self, forKey: .lastAutoRun)
     }
 
-    /// What makes these settings unusable; empty when they are fine. A threshold below 1 day would make
-    /// every clean worktree auto-ready.
+    /// What makes these settings unusable; empty when they are fine. A threshold below 7 days would make
+    /// a worktree used last week auto-ready.
     public var problems: [String] {
         var problems: [String] = []
-        if idleThresholdDays < 1 { problems.append("idleThresholdDays must be at least 1 (is \(idleThresholdDays))") }
+        let range = Self.idleThresholdRange
+        if !range.contains(idleThresholdDays) {
+            problems.append("idleThresholdDays must be \(range.lowerBound) to \(range.upperBound) (is \(idleThresholdDays))")
+        }
         if reportOnlyDays < 0 { problems.append("reportOnlyDays must not be negative (is \(reportOnlyDays))") }
         return problems
     }
 
-    /// `scanRoots` as absolute URLs, with `~` expanded against `home`.
+    /// The threshold the rules apply: never below the lowest allowed, whatever was set in code.
+    public var effectiveIdleThresholdDays: Int { max(Self.idleThresholdRange.lowerBound, idleThresholdDays) }
+
+    /// `scanRoots` as canonical folders (`~` expanded against `home`, symlinks resolved), without the ones
+    /// `ScanRootRule` refuses.
     public func scanRootURLs(home: URL) -> [URL] {
+        let rule = ScanRootRule(home: home)
+        return writtenScanRoots(home: home).compactMap { rule.canonical($0) }.uniqued()
+    }
+
+    /// The saved roots that are skipped, with why.
+    public func refusedScanRoots(home: URL) -> [ScanRootRule.Refusal] {
+        let rule = ScanRootRule(home: home)
+        return writtenScanRoots(home: home).compactMap { root in
+            if case .failure(let refusal) = rule.accept(root) { refusal } else { nil }
+        }
+    }
+
+    private func writtenScanRoots(home: URL) -> [URL] {
         scanRoots.filter { !$0.isEmpty }.map { CleanEnvironment.expand($0, home: home) }
     }
 

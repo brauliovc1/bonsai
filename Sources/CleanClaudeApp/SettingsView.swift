@@ -67,14 +67,28 @@ struct GeneralSettingsView: View {
                 Text(SettingsModel.emptyRootsText).foregroundStyle(.secondary)
             }
             ForEach(model.scanRoots, id: \.self) { root in
-                Text(root)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(root)
-                    .tag(root)
+                rootRow(root)
             }
         }
         .frame(minHeight: 90, maxHeight: 140)
+    }
+
+    @ViewBuilder
+    private func rootRow(_ root: String) -> some View {
+        let refusal = model.skippedReason(of: root)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(root)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(root)
+                .strikethrough(refusal != nil)
+            if let refusal {
+                Text("Skipped: \(refusal)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .tag(root)
     }
 
     private var idleBinding: Binding<Int> {

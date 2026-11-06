@@ -117,6 +117,20 @@ struct SimulatorScannerTests {
         #expect(report.warnings.count == 2)
         #expect(report.warnings.contains { $0.contains("timed out") })
         #expect(report.warnings.contains { $0.contains("unexpected output") })
+        // Wave 4: no devices because the list couldn't be read is not "no unavailable devices".
+        #expect(report.deviceListFailure?.contains("unexpected output") == true, "\(report.deviceListFailure ?? "nil")")
+    }
+
+    @Test func aFailedRuntimeListIsNotADeviceListFailure() async throws {
+        let home = try FakeHome()
+        defer { home.remove() }
+        let runner = script(runtimes: ScriptedCommandRunner.result(exitCode: 1, stderr: "no runtimes"))
+
+        let report = await SimulatorScanner(environment: environment(home), runner: runner.runner).scan()
+
+        #expect(report.warnings.count == 1)
+        #expect(report.deviceListFailure == nil)
+        #expect(report.unavailableDevices.count == 2)
     }
 
     @Test func aBinaryThatCannotStartBecomesWarnings() async throws {

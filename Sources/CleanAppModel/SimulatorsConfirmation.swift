@@ -27,6 +27,9 @@ public struct SimulatorsConfirmation: Identifiable, Sendable {
         guard report.state == .available else {
             return "Xcode isn't installed (xcode-select -p fails), so simulators can't be looked at or cleaned."
         }
+        if let failure = report.deviceListFailure {
+            return "The devices could not be listed (\(failure)), so nothing can be deleted."
+        }
         return devices.isEmpty ? "No unavailable devices: nothing to delete." : nil
     }
 

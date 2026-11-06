@@ -81,9 +81,15 @@ public final class DockerSimulatorsModel {
     public var dockerUsage: [DockerUsageLine] { docker?.usage.map(DockerUsageLine.init) ?? [] }
     public var dockerWarnings: [String] { docker?.warnings ?? [] }
 
-    /// What `docker system prune -f` could free at most; nil until Docker has answered.
+    /// Why the numbers are missing although Docker is running (`docker system df` failed); nil when they were read.
+    public var dockerReadFailure: String? {
+        dockerStatus == .running ? docker?.usageFailure : nil
+    }
+
+    /// What `docker system prune -f` could free at most; nil until Docker has answered, and when it
+    /// answered but its numbers could not be read (never 0 then).
     public var dockerReclaimableBytes: Int64? {
-        dockerStatus == .running ? docker?.pruneCeilingBytes : nil
+        dockerStatus == .running && dockerReadFailure == nil ? docker?.pruneCeilingBytes : nil
     }
 
     /// Why Prune is disabled: `DockerReport.pruneBlocker`, or that nothing was scanned yet. nil when it may run.
@@ -101,7 +107,9 @@ public final class DockerSimulatorsModel {
     public var devicesBytes: Int64? { simulators?.devicesBytes }
     public var cachesBytes: Int64? { simulators?.cachesBytes }
     public var unavailableDevices: [SimulatorDevice] { simulators?.unavailableDevices ?? [] }
-    public var unavailableBytes: Int64? { simulatorsAvailable ? simulators?.unavailableDevicesBytes : nil }
+    /// Why the unavailable devices are unknown although Xcode is there (`simctl list devices` failed).
+    public var deviceListFailure: String? { simulatorsAvailable ? simulators?.deviceListFailure : nil }
+    public var unavailableBytes: Int64? { simulatorsAvailable && deviceListFailure == nil ? simulators?.unavailableDevicesBytes : nil }
     public var runtimeLines: [SimulatorRuntimeLine] { simulators?.runtimes.map(SimulatorRuntimeLine.init) ?? [] }
     public var simulatorWarnings: [String] { simulators?.warnings ?? [] }
 

@@ -115,7 +115,8 @@ public final class OverviewModel {
         case .unknown: detail = "Not scanned yet."
         case .notInstalled: detail = "Docker isn't installed."
         case .notRunning: detail = "Docker isn't running."
-        case .running: detail = "At most: volumes and tagged images stay."
+        case .running:
+            detail = dockerSimulators.dockerReadFailure.map { "Couldn't read: \($0)." } ?? "At most: volumes and tagged images stay."
         }
         return OverviewRow(
             kind: .docker, title: title, detail: detail,
@@ -130,6 +131,11 @@ public final class OverviewModel {
         }
         if dockerSimulators.noXcode {
             return OverviewRow(kind: .simulators, title: title, detail: "Xcode isn't installed.", bytes: nil, destination: .dockerSimulators)
+        }
+        if let failure = dockerSimulators.deviceListFailure {
+            return OverviewRow(
+                kind: .simulators, title: title, detail: "Couldn't read: \(failure).", bytes: nil, destination: .dockerSimulators
+            )
         }
         let count = dockerSimulators.unavailableDevices.count
         let detail = count == 1 ? "1 device" : "\(count) devices"

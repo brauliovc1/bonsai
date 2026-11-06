@@ -147,6 +147,37 @@ struct OverviewModelTests {
         #expect(docker.destination == .dockerSimulators)
     }
 
+    /// Wave 4: a failed `docker system df` or `simctl list` is "couldn't read" with the reason, not a 0.
+    @Test func aFailedDockerOrSimulatorReadIsNotShownAsZero() async throws {
+        let world = try await makeWorld {
+            $0.dfFailure = "request returned 500"
+            $0.devicesFailure = "CoreSimulatorService connection invalid"
+        }
+        defer { world.demo.remove() }
+
+        await world.overview.refresh()
+
+        let docker = world.overview.row(.docker)
+        #expect(docker.bytes == nil && docker.sizeText == "–", "\(docker.sizeText)")
+        #expect(docker.detail.hasPrefix("Couldn't read: "), "\(docker.detail)")
+        #expect(docker.detail.contains("request returned 500"), "\(docker.detail)")
+        let simulators = world.overview.row(.simulators)
+        #expect(simulators.bytes == nil && simulators.sizeText == "–", "\(simulators.sizeText)")
+        #expect(simulators.detail.hasPrefix("Couldn't read: "), "\(simulators.detail)")
+        #expect(simulators.detail.contains("CoreSimulatorService connection invalid"), "\(simulators.detail)")
+        // The screen's own numbers agree: unknown, not zero.
+        #expect(world.models.dockerSimulators.dockerReclaimableBytes == nil)
+        #expect(world.models.dockerSimulators.unavailableBytes == nil)
+        #expect(world.models.dockerSimulators.dockerWarnings.contains { $0.contains("request returned 500") })
+
+        // And when the reads work again the numbers are back.
+        world.toolchain.dfFailure = nil
+        world.toolchain.devicesFailure = nil
+        await world.overview.refresh()
+        #expect(world.overview.row(.docker).bytes != nil)
+        #expect(world.overview.row(.simulators).bytes == 323_456)
+    }
+
     @Test func refreshScansEverythingTheOverviewSums() async throws {
         let world = try await makeWorld()
         defer { world.demo.remove() }

@@ -40,7 +40,8 @@ public struct SimulatorScanner: Sendable {
             cachesBytes: measured.caches,
             unavailableDevices: foundDevices,
             runtimes: foundRuntimes,
-            warnings: deviceWarnings + runtimeWarnings + measured.warnings
+            warnings: deviceWarnings + runtimeWarnings + measured.warnings,
+            deviceListFailure: deviceWarnings.first
         )
     }
 

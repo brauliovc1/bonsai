@@ -73,11 +73,11 @@ public struct RemovalExpectation: Sendable, Hashable {
         }
     }
 
-    private static func name(_ branch: String?) -> String {
+    static func name(_ branch: String?) -> String {
         branch ?? "detached"
     }
 
-    private static func short(_ sha: String?) -> String {
+    static func short(_ sha: String?) -> String {
         sha.map { String($0.prefix(12)) } ?? "none"
     }
 }

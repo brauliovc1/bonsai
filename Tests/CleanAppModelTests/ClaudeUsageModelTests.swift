@@ -37,7 +37,7 @@ struct ClaudeUsageModelTests {
         #expect(model.desktopRows.first?.title == "vm_bundles")
         #expect(model.lastScanAt != nil)
         #expect(ClaudeUsageModel.note
-            == "Clean these from Claude > Settings > This computer > Storage. Clean Claude never deletes Claude's data.")
+            == "Clean these from Claude > Settings > This computer > Storage. Bonsai never deletes Claude's data.")
     }
 
     @Test func aTranscriptFolderWhoseProjectIsGoneGetsTheFolderGoneBadge() async throws {

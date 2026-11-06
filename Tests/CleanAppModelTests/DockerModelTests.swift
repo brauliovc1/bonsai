@@ -175,6 +175,35 @@ struct DockerModelTests {
         #expect(world.app.logEntries.isEmpty)
     }
 
+    /// Wave 4: a second confirm while the prune runs is turned away without touching the running one.
+    @Test func aSecondConfirmWhilePruningLeavesItsProgressAlone() async throws {
+        let world = try DockerSimulatorsWorld()
+        defer { world.home.remove() }
+        await world.model.beginDockerPrune()
+        let confirmation = try #require(world.model.dockerConfirmation)
+        let gate = CallGate()
+        world.toolchain.onCall = gate.hold { $0.arguments == ["system", "prune", "-f"] }
+        defer { gate.release() }
+
+        let first = Task { await world.model.confirmDockerPrune(confirmation) }
+        try await gate.waitUntilReached()
+        #expect(world.model.isPruning)
+        #expect(world.model.dockerReport == nil)
+
+        let second = await world.model.confirmDockerPrune(confirmation)
+
+        #expect(!second.didRun)
+        #expect(second.error?.contains("already running") == true, "\(second.error ?? "")")
+        #expect(world.model.dockerReport == nil, "the progress page is still showing")
+        #expect(world.model.isPruning)
+
+        gate.release()
+        let report = await first.value
+        #expect(report.didRun && report.succeeded)
+        #expect(world.model.dockerReport?.didRun == true)
+        #expect(world.toolchain.pruneCalls.count == 1)
+    }
+
     @Test func oneCleanupAtATime() async throws {
         let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }

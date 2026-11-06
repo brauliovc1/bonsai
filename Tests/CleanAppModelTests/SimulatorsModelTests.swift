@@ -86,6 +86,86 @@ struct SimulatorsModelTests {
         #expect(world.model.unavailableDevices.count == 3, "the screen shows the new list")
     }
 
+    /// The review's probe: the old "fresh" list came from a full scan that waited for `du`, so a device that
+    /// went unavailable meanwhile was deleted too. Now only a devices listing sits between the confirm and
+    /// the delete.
+    @Test func onlyAListingOfDevicesSitsBetweenTheConfirmAndTheDelete() async throws {
+        let marker = FileManager.default.temporaryDirectory.appending(path: "clean-claude-du-\(UUID().uuidString).log")
+        let duScript = FileManager.default.temporaryDirectory.appending(path: "clean-claude-du-\(UUID().uuidString).sh")
+        try "#!/bin/sh\necho x >> '\(marker.path)'\nexec /usr/bin/du \"$@\"\n".write(to: duScript, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: duScript.path)
+        defer {
+            try? FileManager.default.removeItem(at: duScript)
+            try? FileManager.default.removeItem(at: marker)
+        }
+        let world = try DockerSimulatorsWorld { $0.tools.du = duScript }
+        defer { world.home.remove() }
+        try FileManager.default.createDirectory(
+            at: world.home.url.appending(path: "Library/Developer/CoreSimulator/Devices"), withIntermediateDirectories: true
+        )
+        await world.model.beginSimulatorsDelete()
+        let confirmation = try #require(world.model.simulatorsConfirmation)
+        let duRuns: @Sendable () -> Int = { ((try? String(contentsOf: marker, encoding: .utf8)) ?? "").split(separator: "\n").count }
+        let before = duRuns()
+        #expect(before > 0, "the sheet's scan measured sizes")
+        let atDelete = Counter()
+        world.toolchain.onCall = { call in
+            if call.arguments == ["simctl", "delete", "unavailable"] { atDelete.set(duRuns()) }
+        }
+
+        let report = await world.model.confirmSimulatorsDelete(confirmation)
+
+        #expect(report.didRun)
+        #expect(atDelete.value == before, "no du ran between the confirm and the delete")
+        let calls = world.toolchain.calls
+        let delete = try #require(calls.firstIndex { $0.arguments == ["simctl", "delete", "unavailable"] })
+        #expect(calls[delete - 1].arguments == ["simctl", "list", "devices", "-j"], "the list comes right before")
+    }
+
+    @Test func aListingThatFailsAtConfirmTimeStopsTheDelete() async throws {
+        let world = try DockerSimulatorsWorld()
+        defer { world.home.remove() }
+        await world.model.beginSimulatorsDelete()
+        let confirmation = try #require(world.model.simulatorsConfirmation)
+
+        world.toolchain.devicesFailure = "CoreSimulatorService connection invalid"
+        let report = await world.model.confirmSimulatorsDelete(confirmation)
+
+        #expect(!report.didRun)
+        #expect(report.error?.contains("could not list the devices") == true, "\(report.error ?? "")")
+        #expect(world.toolchain.deleteCalls.isEmpty)
+        #expect(world.app.logEntries.isEmpty)
+    }
+
+    /// Wave 4: a second confirm while the delete runs is turned away without touching the running one.
+    @Test func aSecondConfirmWhileTheDeleteRunsLeavesItsProgressAlone() async throws {
+        let world = try DockerSimulatorsWorld()
+        defer { world.home.remove() }
+        await world.model.beginSimulatorsDelete()
+        let confirmation = try #require(world.model.simulatorsConfirmation)
+        let gate = CallGate()
+        world.toolchain.onCall = gate.hold { $0.arguments == ["simctl", "delete", "unavailable"] }
+        defer { gate.release() }
+
+        let first = Task { await world.model.confirmSimulatorsDelete(confirmation) }
+        try await gate.waitUntilReached()
+        #expect(world.model.isDeletingDevices)
+        #expect(world.model.simulatorsReport == nil)
+
+        let second = await world.model.confirmSimulatorsDelete(confirmation)
+
+        #expect(!second.didRun)
+        #expect(second.error?.contains("already running") == true, "\(second.error ?? "")")
+        #expect(world.model.simulatorsReport == nil, "the progress page is still showing")
+        #expect(world.model.isDeletingDevices)
+
+        gate.release()
+        let report = await first.value
+        #expect(report.didRun && report.succeeded)
+        #expect(world.model.simulatorsReport?.didRun == true)
+        #expect(world.toolchain.deleteCalls.count == 1)
+    }
+
     @Test func noUnavailableDevicesMeansNothingToDelete() async throws {
         let world = try DockerSimulatorsWorld()
         defer { world.home.remove() }
@@ -117,5 +197,17 @@ struct SimulatorsModelTests {
 
         #expect(!report.didRun)
         #expect(world.toolchain.deleteCalls.isEmpty)
+    }
+}
+
+/// A value one thread sets and the test reads.
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = -1
+
+    var value: Int { lock.withLock { stored } }
+
+    func set(_ value: Int) {
+        lock.withLock { stored = value }
     }
 }

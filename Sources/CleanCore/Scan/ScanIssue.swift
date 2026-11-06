@@ -3,6 +3,7 @@ public struct ScanIssue: Sendable, Codable, Hashable, CustomStringConvertible {
     public enum Kind: String, Sendable, Codable, Hashable {
         case noRoots
         case rootMissing
+        case rootRefused
         case unreadableFolder
         case gitMissing
         case gitUnsupported

@@ -38,11 +38,13 @@ extension DockerSimulatorsModel {
 
     /// Runs `docker system prune -f` through `DockerCleaner.run(ifConfirmed:report:)`, with a scan made
     /// right before (the daemon may have stopped, or been replaced, since the sheet opened). CleanCore
-    /// writes the log entry; if that fails the report says so. Then the screen scans again.
+    /// writes the log entry; if that fails the report says so. Then the screen scans again. A second confirm
+    /// while a prune runs is rejected in the return value only: the running prune's progress stays.
     @discardableResult
     public func confirmDockerPrune(_ confirmation: DockerPruneConfirmation) async -> CleanupCommandReport {
-        guard confirmation.isAllowed, !isPruning else {
-            return show(prune: Self.dockerReport(error: confirmation.blocker ?? "A prune is already running.", result: nil))
+        guard !isPruning else { return Self.dockerReport(error: "A prune is already running.", result: nil) }
+        guard confirmation.isAllowed else {
+            return show(prune: Self.dockerReport(error: confirmation.blocker ?? "The prune is not allowed.", result: nil))
         }
         isPruning = true
         let finished = await app.cleaningUp { await runPrune() }

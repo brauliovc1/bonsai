@@ -38,12 +38,23 @@ public struct LightCleaner: Sendable {
     ///
     /// `knownWorktrees`: every registered worktree of every scanned repo (the caller's scan); a fresh
     /// listing of this worktree's own repo is added.
+    ///
+    /// The folder must still be this repo's worktree (`SafetyCheck.identityBlocker`: its `.git` leads back to
+    /// this repo), checked here and again right before each delete. `expectation`: what the person
+    /// confirmed; when given, a fresh record with another repo, branch or HEAD is refused.
     public func clean(
         _ worktree: Worktree,
         candidates: [LightCleanCandidate],
-        knownWorktrees: [Worktree] = []
+        knownWorktrees: [Worktree] = [],
+        expectation: LightCleanExpectation? = nil
     ) async throws -> LightCleanResult {
         let (fresh, siblings) = try await reread(worktree)
+        let identity = SafetyCheck(git: git)
+        if let blocker = await identity.identityBlocker(of: fresh) { throw LightCleanError.wrongFolder(blocker.sentence) }
+        if let expectation {
+            let changes = expectation.changes(fresh: fresh)
+            guard changes.isEmpty else { throw LightCleanError.changed(path: fresh.path, changes: changes) }
+        }
         var result = LightCleanResult(
             worktree: fresh, deleted: [], refused: [], failed: [], entries: [], warnings: [], freedBytes: nil, logged: true
         )
@@ -72,6 +83,12 @@ public struct LightCleaner: Sendable {
             }
             await afterRecheck(candidate)
             if let reason = Self.inUseReason(await captureCwdIndex(), worktree: fresh.url) {
+                if result.deleted.isEmpty && result.failed.isEmpty { throw Self.error(for: reason) }
+                result.refused += queue[position...].map { Self.skip($0, reason) }
+                break
+            }
+            if let blocker = await identity.identityBlocker(of: fresh) {
+                let reason = LightCleanSkipReason.wrongFolder(blocker.sentence)
                 if result.deleted.isEmpty && result.failed.isEmpty { throw Self.error(for: reason) }
                 result.refused += queue[position...].map { Self.skip($0, reason) }
                 break
@@ -180,6 +197,7 @@ public struct LightCleaner: Sendable {
         switch reason {
         case .inUse(let processes): .inUse(processes)
         case .inUseUnknown(let why): .inUseUnknown(why)
+        case .wrongFolder(let why): .wrongFolder(why)
         default: .unavailable(reason.sentence)
         }
     }
