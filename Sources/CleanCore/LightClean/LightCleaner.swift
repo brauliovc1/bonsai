@@ -76,11 +76,6 @@ public struct LightCleaner: Sendable {
                 result.refused += queue[position...].map { Self.skip($0, reason) }
                 break
             }
-            if let reason = Self.changedSinceCheck(candidate.relativePath, in: fresh.path, identity: verdict.identity) {
-                result.refused.append(Self.skip(candidate, reason))
-                continue
-            }
-
             let current = LightCleanCandidate(
                 worktreePath: candidate.worktreePath,
                 relativePath: candidate.relativePath,
@@ -88,10 +83,16 @@ public struct LightCleaner: Sendable {
                 estimatedBytes: candidate.estimatedBytes,
                 packageClones: verdict.packageClones
             )
+            let target = fresh.url.appending(path: candidate.relativePath, directoryHint: .isDirectory)
             let before = probe.availableBytes()
+            // Nothing runs between this last lstat of the path and removeItem.
+            if let reason = Self.changedSinceCheck(candidate.relativePath, in: fresh.path, identity: verdict.identity) {
+                result.refused.append(Self.skip(candidate, reason))
+                continue
+            }
             var failure: String?
             do {
-                try FileManager.default.removeItem(at: fresh.url.appending(path: candidate.relativePath, directoryHint: .isDirectory))
+                try FileManager.default.removeItem(at: target)
             } catch {
                 failure = error.localizedDescription
             }

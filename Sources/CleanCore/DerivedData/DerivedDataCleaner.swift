@@ -15,7 +15,7 @@ public struct DerivedDataCleaner: Sendable {
     var classifier = DerivedDataClassifier()
     /// Test seam: the free space of the root's volume (default: read from the volume).
     var freeSpace: FreeSpaceProbe?
-    /// Test seam: runs after an orphan's re-check, right before it is deleted.
+    /// Test seam: runs before an orphan's re-check.
     var beforeDelete: @Sendable (OrphanedDerivedData) async -> Void = { _ in }
 
     public init(log: RemovalLog, homeDirectory: URL, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -32,13 +32,13 @@ public struct DerivedDataCleaner: Sendable {
         var result = DerivedDataDeletion(deleted: [], refused: [], failed: [], entries: [], warnings: [], logged: true)
         var freed: [Int64?] = []
         for orphan in orphans.uniqued() {
+            await beforeDelete(orphan)
+            let probe = freeSpace ?? .volume(containing: URL(fileURLWithPath: orphan.root, isDirectory: true))
+            let before = probe.availableBytes()
             if let reason = refusal(for: orphan) {
                 result.refused.append(DerivedDataDeletion.Refusal(orphan: orphan, reason: reason))
                 continue
             }
-            await beforeDelete(orphan)
-            let probe = freeSpace ?? .volume(containing: URL(fileURLWithPath: orphan.root, isDirectory: true))
-            let before = probe.availableBytes()
             var failure: String?
             do {
                 try FileManager.default.removeItem(at: orphan.url)
