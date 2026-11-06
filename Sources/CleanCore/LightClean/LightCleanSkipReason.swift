@@ -47,8 +47,7 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
         case .symlink:
             return "It is a symbolic link; light clean never follows or deletes links."
         case .nestedCheckout(let paths):
-            let list = paths.prefix(5).joined(separator: ", ") + (paths.count > 5 ? " and \(paths.count - 5) more" : "")
-            return "Another git checkout is inside and would be deleted with it: \(list)."
+            return "Another git checkout is inside and would be deleted with it: \(Self.list(paths))."
         case .nestedSearchIncomplete(let why):
             return "The search for other checkouts inside could not finish (\(why)), so one could be missed."
         case .gitError(let message):
@@ -58,10 +57,14 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
         case .notACandidate(let why):
             return "It is not a light-clean folder of this worktree: \(why)."
         case .inUse(let processes):
-            return "A running process has its working folder inside the worktree: "
-                + processes.map(\.description).joined(separator: ", ") + "."
+            return "A running process has its working folder inside the worktree: \(Self.list(processes.map(\.description)))."
         case .inUseUnknown(let why):
             return "Running processes could not be checked (\(why))."
         }
+    }
+
+    /// Up to five items, then "and N more".
+    private static func list(_ items: [String]) -> String {
+        items.prefix(5).joined(separator: ", ") + (items.count > 5 ? " and \(items.count - 5) more" : "")
     }
 }
