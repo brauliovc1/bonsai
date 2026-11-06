@@ -124,6 +124,6 @@ struct LightCleanNestedTests {
         #expect(!world.exists("node_modules", in: wt))
         #expect(!world.exists("packages/caf\u{E9}/node_modules", in: wt))
         #expect(world.exists("packages/caf\u{E9}", in: wt))
-        #expect(try world.log.entries().map(\.action) == [.lightClean])
+        #expect(try world.log.entries().map(\.action) == [.lightClean, .lightClean])
     }
 }

@@ -2,9 +2,10 @@ import Foundation
 
 /// Finds the folders light clean may delete in one worktree or main checkout (PLAN §4.2). Read-only.
 ///
-/// A folder is a candidate only when its name is in `RegenerableNames.folders`, `git check-ignore` says it
-/// is ignored, git tracks nothing in it, it is not a symlink, and no other checkout is inside it (§4.1
-/// nested checkouts, added 11-06). The walk goes to depth 4 and never into `.git` or a folder that matched.
+/// A folder is a candidate only when its name is in `RegenerableNames.folders`, git tracks nothing in it,
+/// `git check-ignore` says it is ignored, the worktree's `git status` lists nothing in it, it is not a
+/// symlink, and no other checkout with local work is inside it (§4.1 nested checkouts). The walk goes to
+/// depth 4 and never into `.git` or a folder that matched.
 public struct LightCleanFinder: Sendable {
     public var git: Git
     /// For size estimates; nil = no estimates.
@@ -34,9 +35,18 @@ public struct LightCleanFinder: Sendable {
         let walk = LightCleanWalk().walk(worktree.path)
         let check = LightCleanCheck(git: git, nestedSearch: nestedSearch)
         let root = worktree.url
+        let status: LightCleanStatus
+        do {
+            status = walk.matches.isEmpty ? LightCleanStatus(paths: []) : try await LightCleanStatus.read(git: git, worktree: root)
+        } catch {
+            let skipped = walk.matches.map {
+                LightCleanSkip(relativePath: $0.relativePath, name: $0.name, reason: .gitError("git status failed: \(error)"))
+            }
+            return LightCleanFindings(worktree: worktree, skipped: skipped, unreadable: walk.unreadable)
+        }
         let verdicts = await BoundedConcurrency.map(walk.matches, limit: maxConcurrent) { match in
             if match.isSymlink { return LightCleanCheck.Verdict(reason: .symlink) }
-            return await check.verdict(for: match.relativePath, in: root, knownWorktrees: knownWorktrees)
+            return await check.verdict(for: match.relativePath, in: root, status: status, knownWorktrees: knownWorktrees)
         }
 
         var passing: [(match: LightCleanWalk.Match, packageClones: [String])] = []

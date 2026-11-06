@@ -40,6 +40,13 @@ public struct CleanupCommandResult: Sendable, Equatable {
     /// The entry is in the log.
     public var logged: Bool { logEntry != nil && logError == nil }
 
+    /// What a command-line caller exits with: the tool's own failure first (its exit code, or 1 for a
+    /// timeout), then 1 when the log entry could not be written, else 0.
+    public var exitStatus: Int32 {
+        if !succeeded { return exitCode == 0 ? 1 : exitCode }
+        return logged ? 0 : 1
+    }
+
     /// Runs one cleanup command, measures free space around it, then logs it. Nothing is logged when the
     /// command could not be started (it throws).
     static func measuredRun(

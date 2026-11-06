@@ -14,6 +14,7 @@ final class DerivedDataWorld: Sendable {
         directory = try TemporaryDirectory(prefix: "clean-claude-derived-data")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
     }
 
     func remove() {
@@ -23,6 +24,8 @@ final class DerivedDataWorld: Sendable {
     var root: URL { directory.url.appending(path: "DerivedData", directoryHint: .isDirectory) }
     var projects: URL { directory.url.appending(path: "projects", directoryHint: .isDirectory) }
     var logFolder: URL { directory.url.appending(path: "settings", directoryHint: .isDirectory) }
+    /// The home folder the scanner and cleaner are told about (empty).
+    var home: URL { directory.url.appending(path: "home", directoryHint: .isDirectory) }
     var log: RemovalLog { RemovalLog(directory: logFolder) }
 
     /// A project path inside `projects/` (not created).
@@ -62,13 +65,13 @@ final class DerivedDataWorld: Sendable {
     }
 
     func scanner(internalPrefixes: [String] = []) -> DerivedDataScanner {
-        var scanner = DerivedDataScanner(root: root, du: URL(fileURLWithPath: "/usr/bin/du"))
+        var scanner = DerivedDataScanner(root: root, du: URL(fileURLWithPath: "/usr/bin/du"), homeDirectory: home)
         scanner.classifier.internalPrefixes = internalPrefixes
         return scanner
     }
 
     func cleaner(freeSpace: [Int64?] = [100, 100]) -> DerivedDataCleaner {
-        var cleaner = DerivedDataCleaner(log: log)
+        var cleaner = DerivedDataCleaner(log: log, homeDirectory: home)
         cleaner.classifier.internalPrefixes = []
         cleaner.freeSpace = ScriptedFreeSpace(freeSpace).probe
         return cleaner

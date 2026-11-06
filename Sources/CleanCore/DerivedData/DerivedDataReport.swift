@@ -4,13 +4,23 @@ public struct DerivedDataReport: Sendable, Hashable, Encodable {
     public var root: String
     /// False when the root does not exist (Xcode never built anything, or a custom location is gone).
     public var rootExists: Bool
+    /// Why the root was not listed (it is `/`, the home folder, a folder above it, or not a folder): an
+    /// error to show. nil normally.
+    public var refusal: String?
     /// Every folder in the root (symlinks and files are left out), sorted by name.
     public var entries: [DerivedDataEntry]
     public var warnings: [String]
 
-    public init(root: String, rootExists: Bool, entries: [DerivedDataEntry] = [], warnings: [String] = []) {
+    public init(
+        root: String,
+        rootExists: Bool,
+        refusal: String? = nil,
+        entries: [DerivedDataEntry] = [],
+        warnings: [String] = []
+    ) {
         self.root = root
         self.rootExists = rootExists
+        self.refusal = refusal
         self.entries = entries
         self.warnings = warnings
     }

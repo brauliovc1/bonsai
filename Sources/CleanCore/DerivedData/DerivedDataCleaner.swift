@@ -3,70 +3,69 @@ import Foundation
 /// Deletes orphaned DerivedData folders (PLAN §4.4). It takes only `OrphanedDerivedData`, which only the
 /// scanner makes, and only for orphaned entries.
 ///
-/// Right before deleting each one it checks again that the folder is still a real folder and that its
-/// `info.plist` still names the same workspace, which still does not exist. One `derivedDataDelete` log
-/// entry lists every folder with its project path.
+/// Right before deleting each one it checks again that the root is an acceptable DerivedData root, that
+/// the folder is still a real folder, and that its `info.plist` still names the same workspace, which still
+/// does not exist (and is not on an unmounted volume). Each deleted folder gets its own `derivedDataDelete`
+/// log entry, written right after its delete.
 public struct DerivedDataCleaner: Sendable {
     public var log: RemovalLog
+    /// For the root check: the home folder and the folders above it are never cleaned.
+    public var homeDirectory: URL
     public var now: @Sendable () -> Date
     var classifier = DerivedDataClassifier()
     /// Test seam: the free space of the root's volume (default: read from the volume).
     var freeSpace: FreeSpaceProbe?
+    /// Test seam: runs after an orphan's re-check, right before it is deleted.
+    var beforeDelete: @Sendable (OrphanedDerivedData) async -> Void = { _ in }
 
-    public init(log: RemovalLog, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(log: RemovalLog, homeDirectory: URL, now: @escaping @Sendable () -> Date = { Date() }) {
         self.log = log
+        self.homeDirectory = homeDirectory
         self.now = now
     }
 
     public init(environment: CleanEnvironment) {
-        self.init(log: RemovalLog(environment: environment), now: environment.now)
+        self.init(log: RemovalLog(environment: environment), homeDirectory: environment.homeDirectory, now: environment.now)
     }
 
     public func delete(_ orphans: [OrphanedDerivedData]) async -> DerivedDataDeletion {
-        var result = DerivedDataDeletion(deleted: [], refused: [], failed: [], entry: nil, warnings: [], logged: true)
-        let queue = orphans.uniqued()
-        guard let first = queue.first else { return result }
-        let probe = freeSpace ?? .volume(containing: URL(fileURLWithPath: first.root, isDirectory: true))
-        let before = probe.availableBytes()
-
-        for orphan in queue {
+        var result = DerivedDataDeletion(deleted: [], refused: [], failed: [], entries: [], warnings: [], logged: true)
+        var freed: [Int64?] = []
+        for orphan in orphans.uniqued() {
             if let reason = refusal(for: orphan) {
                 result.refused.append(DerivedDataDeletion.Refusal(orphan: orphan, reason: reason))
                 continue
             }
+            await beforeDelete(orphan)
+            let probe = freeSpace ?? .volume(containing: URL(fileURLWithPath: orphan.root, isDirectory: true))
+            let before = probe.availableBytes()
+            var failure: String?
             do {
                 try FileManager.default.removeItem(at: orphan.url)
-                result.deleted.append(orphan)
             } catch {
-                result.failed.append(DerivedDataDeletion.Failure(orphan: orphan, message: error.localizedDescription))
+                failure = error.localizedDescription
             }
+            let after = probe.availableBytes()
+            let bytes = before.flatMap { before in after.map { max(0, $0 - before) } }
+            freed.append(bytes)
+            if let failure {
+                result.failed.append(DerivedDataDeletion.Failure(orphan: orphan, message: failure))
+            } else {
+                result.deleted.append(orphan)
+            }
+            record(entry(for: orphan, failure: failure, freedBytes: bytes), in: &result)
         }
-        guard !result.deleted.isEmpty || !result.failed.isEmpty else { return result }
-
-        let after = probe.availableBytes()
-        let estimates = result.deleted.compactMap(\.bytes)
-        let entry = RemovalLogEntry(
-            date: now(),
-            mode: .manual,
-            action: .derivedDataDelete,
-            repoPath: first.root,
-            path: first.root,
-            estimatedBytes: estimates.isEmpty ? nil : estimates.reduce(0, +),
-            freedBytes: before.flatMap { before in after.map { max(0, $0 - before) } },
-            notes: Self.logNotes(result)
-        )
-        result.entry = entry
-        do {
-            try log.append(entry)
-        } catch {
-            result.logged = false
-            result.warnings.append("the DerivedData delete was not logged: \(error)")
+        if !freed.isEmpty, freed.allSatisfy({ $0 != nil }) {
+            result.freedBytes = freed.compactMap { $0 }.reduce(0, +)
         }
         return result
     }
 
     /// Why `orphan` must not be deleted now, or nil when it is still orphaned.
     func refusal(for orphan: OrphanedDerivedData) -> String? {
+        if let refusal = DerivedDataRootCheck.refusal(root: URL(fileURLWithPath: orphan.root), home: homeDirectory) {
+            return refusal
+        }
         guard !orphan.name.isEmpty, !orphan.name.contains("/"), orphan.name != ".", orphan.name != ".." else {
             return "\(orphan.name) is not a folder name"
         }
@@ -87,10 +86,29 @@ public struct DerivedDataCleaner: Sendable {
         }
     }
 
-    /// One line per folder: its name and project path, or why it was refused or failed.
-    static func logNotes(_ result: DerivedDataDeletion) -> [String] {
-        result.deleted.map { "deleted \($0.name): project \($0.workspacePath)" }
-            + result.refused.map { "refused \($0.orphan.name): \($0.reason)" }
-            + result.failed.map { "failed \($0.orphan.name) (project \($0.orphan.workspacePath)): \($0.message)" }
+    /// One entry per folder: `path` is the folder, `repoPath` the DerivedData root.
+    private func entry(for orphan: OrphanedDerivedData, failure: String?, freedBytes: Int64?) -> RemovalLogEntry {
+        let note = failure.map { "failed to delete \(orphan.name) (project \(orphan.workspacePath)): \($0)" }
+            ?? "deleted \(orphan.name): project \(orphan.workspacePath)"
+        return RemovalLogEntry(
+            date: now(),
+            mode: .manual,
+            action: .derivedDataDelete,
+            repoPath: orphan.root,
+            path: orphan.folder,
+            estimatedBytes: orphan.bytes,
+            freedBytes: freedBytes,
+            notes: [note]
+        )
+    }
+
+    private func record(_ entry: RemovalLogEntry, in result: inout DerivedDataDeletion) {
+        result.entries.append(entry)
+        do {
+            try log.append(entry)
+        } catch {
+            result.logged = false
+            result.warnings.append("\(entry.path) was not logged: \(error)")
+        }
     }
 }

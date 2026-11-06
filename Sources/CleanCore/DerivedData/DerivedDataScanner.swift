@@ -5,22 +5,28 @@ public struct DerivedDataScanner: Sendable {
     public var root: URL
     /// For size estimates; nil = no sizes.
     public var du: URL?
+    /// For the root check: the home folder and the folders above it are never listed.
+    public var homeDirectory: URL
     var classifier = DerivedDataClassifier()
 
-    public init(root: URL, du: URL?) {
+    public init(root: URL, du: URL?, homeDirectory: URL) {
         self.root = root
         self.du = du
+        self.homeDirectory = homeDirectory
     }
 
     /// The root from `DerivedDataLocator`, `du` from the environment. The locator's note becomes a warning.
     public static func scan(environment: CleanEnvironment, runner: CommandRunner = .live) async -> DerivedDataReport {
         let location = await DerivedDataLocator(environment: environment, runner: runner).locate()
-        var report = await DerivedDataScanner(root: location.root, du: environment.tools.du).scan()
+        var report = await DerivedDataScanner(root: location.root, du: environment.tools.du, homeDirectory: environment.homeDirectory).scan()
         if let note = location.note { report.warnings.insert(note, at: 0) }
         return report
     }
 
     public func scan() async -> DerivedDataReport {
+        if let refusal = DerivedDataRootCheck.refusal(root: root, home: homeDirectory) {
+            return DerivedDataReport(root: root.path, rootExists: PathPresence.of(root.path) != .missing, refusal: refusal)
+        }
         guard let listing = DirectoryEntries.read(root.path) else {
             if PathPresence.of(root.path) == .missing {
                 return DerivedDataReport(root: root.path, rootExists: false)

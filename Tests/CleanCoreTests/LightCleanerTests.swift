@@ -18,29 +18,49 @@ struct LightCleanerTests {
         return (wt, worktree, findings)
     }
 
-    @Test func deletesTheCandidatesMeasuresAndLogsOnce() async throws {
+    @Test func deletesTheCandidatesMeasuresAndLogsEachFolder() async throws {
         let world = try await LightCleanWorld.make()
         defer { world.remove() }
         let (wt, worktree, findings) = try await threeFolders(world)
 
-        let result = try await world.cleaner(freeSpace: [1_000, 21_000])
+        // Free space before and after each of the three deletes.
+        let result = try await world.cleaner(freeSpace: [1_000, 6_000, 6_000, 11_000, 11_000, 21_000])
             .clean(worktree, candidates: findings.candidates)
 
-        #expect(result.deleted.map(\.relativePath) == ["node_modules", "packages/a/node_modules", "packages/b/node_modules"])
+        let relatives = ["node_modules", "packages/a/node_modules", "packages/b/node_modules"]
+        #expect(result.deleted.map(\.relativePath) == relatives)
         #expect(result.refused.isEmpty && result.failed.isEmpty && result.warnings.isEmpty && result.logged)
         #expect(!world.exists("node_modules", in: wt))
         #expect(world.exists("packages/a", in: wt) && world.exists("README.md", in: wt))
         #expect(result.freedBytes == 20_000)
 
         let entries = try world.log.entries()
-        let entry = try #require(entries.first)
-        #expect(entries.count == 1 && entry == result.entry)
-        #expect(entry.action == .lightClean && entry.mode == .manual && !entry.isRestorable)
-        #expect(entry.repoPath == worktree.repoPath && entry.path == worktree.path)
-        #expect(entry.branch == "three" && entry.headSha == worktree.head && entry.kind == .sibling)
-        #expect(entry.estimatedBytes == Int64(16 * 1024))
-        #expect(entry.freedBytes == 20_000)
-        #expect(entry.notes == ["deleted node_modules", "deleted packages/a/node_modules", "deleted packages/b/node_modules"])
+        #expect(entries == result.entries)
+        #expect(entries.map(\.path) == relatives.map { worktree.path + "/" + $0 })
+        #expect(entries.map(\.freedBytes) == [5_000, 5_000, 10_000])
+        #expect(entries.map(\.estimatedBytes) == [Int64(8 * 1024), Int64(4 * 1024), Int64(4 * 1024)])
+        #expect(entries.map(\.notes) == relatives.map { ["deleted \($0) from \(worktree.path)"] })
+        for entry in entries {
+            #expect(entry.action == .lightClean && entry.mode == .manual && !entry.isRestorable)
+            #expect(entry.repoPath == worktree.repoPath)
+            #expect(entry.branch == "three" && entry.headSha == worktree.head && entry.kind == .sibling)
+        }
+    }
+
+    // Review item 8: each folder's entry is written right after its delete, so an interrupted clean
+    // still logs the folders already gone.
+    @Test func eachDeleteIsLoggedBeforeTheNextFolderIsChecked() async throws {
+        let world = try await LightCleanWorld.make()
+        defer { world.remove() }
+        let (_, worktree, findings) = try await threeFolders(world)
+        let log = world.log
+        let seen = Recorder()
+        var cleaner = world.cleaner()
+        cleaner.afterRecheck = { candidate in seen.add(candidate.relativePath, (try? log.entries().count) ?? -1) }
+
+        _ = try await cleaner.clean(worktree, candidates: findings.candidates)
+
+        #expect(seen.values == ["node_modules: 0", "packages/a/node_modules: 1", "packages/b/node_modules: 2"])
     }
 
     @Test func aCandidateTrackedSinceTheFindIsRefusedAndTheOthersAreCleaned() async throws {
@@ -54,11 +74,9 @@ struct LightCleanerTests {
         #expect(result.deleted.map(\.relativePath) == ["node_modules", "packages/b/node_modules"])
         #expect(result.refused == [LightCleanSkip(relativePath: "packages/a/node_modules", name: "node_modules", reason: .hasTrackedFiles)])
         #expect(world.exists("packages/a/node_modules/b.js", in: wt))
-        let entry = try #require(try world.log.entries().first)
-        #expect(entry.notes == [
-            "deleted node_modules",
-            "deleted packages/b/node_modules",
-            "refused packages/a/node_modules: git tracks files inside it.",
+        #expect(try world.log.entries().map(\.notes) == [
+            ["deleted node_modules from \(worktree.path)"],
+            ["deleted packages/b/node_modules from \(worktree.path)"],
         ])
     }
 
@@ -174,7 +192,7 @@ struct LightCleanerTests {
         #expect(result.refused.map(\.relativePath) == ["packages/a/node_modules", "packages/b/node_modules"])
         #expect(result.refused.allSatisfy { $0.reason == .inUse([inside]) })
         #expect(world.exists("packages/a/node_modules/b.js", in: wt))
-        #expect(try world.log.entries().first?.notes.count == 3)
+        #expect(try world.log.entries().map(\.path) == [worktree.path + "/node_modules"])
     }
 
     @Test func noProcessIndexMeansNothingIsDeleted() async throws {
@@ -210,7 +228,7 @@ struct LightCleanerTests {
 
         let result = try await world.cleaner().clean(try await world.worktree(other), candidates: findings.candidates)
 
-        #expect(result.deleted.isEmpty && result.entry == nil)
+        #expect(result.deleted.isEmpty && result.entries.isEmpty)
         #expect(result.refused.count == 3)
         #expect(result.refused.allSatisfy { if case .notACandidate = $0.reason { true } else { false } })
         #expect(world.exists("node_modules/a.js", in: wt) && world.exists("node_modules/a.js", in: other))
@@ -227,8 +245,22 @@ struct LightCleanerTests {
 
         let result = try await world.cleaner().clean(worktree, candidates: findings.candidates)
         #expect(result.refused.map(\.reason) == [.gone, .gone, .gone])
-        #expect(result.entry == nil && result.freedBytes == nil)
+        #expect(result.entries.isEmpty && result.freedBytes == nil)
         #expect(try world.log.entries().isEmpty)
+    }
+}
+
+/// Collects `name: count` lines from `@Sendable` closures.
+private final class Recorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lines: [String] = []
+
+    func add(_ name: String, _ count: Int) {
+        lock.withLock { lines.append("\(name): \(count)") }
+    }
+
+    var values: [String] {
+        lock.withLock { lines }
     }
 }
 

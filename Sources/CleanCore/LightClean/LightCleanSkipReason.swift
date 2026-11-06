@@ -4,6 +4,8 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
     case notIgnored
     /// `git ls-files` lists files inside it.
     case hasTrackedFiles
+    /// The worktree's `git status` lists these paths inside it (edited, untracked or staged files).
+    case uncommittedFiles([String])
     case symlink
     /// Other checkouts inside (relative to the folder; `.` = the folder itself is one): a `.git` file, a
     /// registered worktree, or a clone with local work.
@@ -26,6 +28,7 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
         switch self {
         case .notIgnored: "not ignored"
         case .hasTrackedFiles: "tracked files"
+        case .uncommittedFiles(let paths): "uncommitted files (\(paths.count))"
         case .symlink: "symlink"
         case .nestedCheckout(let paths): "nested checkout (\(paths.count))"
         case .nestedSearchIncomplete: "nested search incomplete"
@@ -44,6 +47,8 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
             return "git does not ignore it, so it may hold project files."
         case .hasTrackedFiles:
             return "git tracks files inside it."
+        case .uncommittedFiles(let paths):
+            return "git status lists files inside it that would be lost: \(Self.list(paths))."
         case .symlink:
             return "It is a symbolic link; light clean never follows or deletes links."
         case .nestedCheckout(let paths):

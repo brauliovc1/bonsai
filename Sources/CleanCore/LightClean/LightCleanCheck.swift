@@ -1,12 +1,14 @@
 import Foundation
 
-/// The PLAN §4.2 light-clean conditions for one folder, plus the nested-checkout rule of §4.1 (added
-/// 11-06). `LightCleanFinder` runs it for every folder whose name matched, and `LightCleaner` runs it
-/// again right before deleting each candidate. Read-only.
+/// The PLAN §4.2 light-clean conditions for one folder, plus the nested-checkout rule of §4.1. Read-only.
+/// `LightCleanFinder` runs it for every folder whose name matched, and `LightCleaner` runs it again right
+/// before deleting each candidate.
 ///
-/// git always runs inside the folder with `.`, never with the folder's path as an argument: Foundation's
-/// `Process` hands arguments to git decomposed ("é" as "e" + U+0301), and git can't match a decomposed
-/// path that contains an emoji against the worktree it is in.
+/// `check-ignore` and `ls-files` run in the folder's parent with the folder's name: run inside the folder,
+/// git would apply the folder's own `.gitignore` to the folder itself. The names in `RegenerableNames` are
+/// ASCII, so they reach git unchanged; the parent's path only goes to `-C` (a chdir, which matches names
+/// whatever their Unicode form). `ls-files` matches the name case-insensitively (`:(icase)`), and the
+/// worktree's `git status` must list nothing under the folder.
 struct LightCleanCheck: Sendable {
     var git: Git
     var nestedSearch: NestedCheckoutSearch
@@ -14,61 +16,82 @@ struct LightCleanCheck: Sendable {
     struct Verdict: Sendable, Hashable {
         /// nil = the folder may be deleted.
         var reason: LightCleanSkipReason?
-        /// Clones with no local work inside, which go with the folder.
+        /// Repos with no local work inside, which go with the folder.
         var packageClones: [String] = []
+        /// The folder as lstat saw it when the checks began, for the re-check right before deleting.
+        var identity: FileIdentity?
     }
 
-    /// `relative`: the folder, relative to `worktree`. `knownWorktrees`: every registered worktree of
-    /// every scanned repo; one inside the folder keeps it.
-    func verdict(for relative: String, in worktree: URL, knownWorktrees: [Worktree]) async -> Verdict {
-        // Every folder on the way down must be a plain folder: a symlinked parent would aim the delete elsewhere.
-        var parent = ""
-        for part in relative.split(separator: "/").dropLast() {
-            parent = parent.isEmpty ? String(part) : parent + "/" + part
-            guard DirectoryEntries.kind(ofItemAt: worktree.appending(path: parent).path) == .directory else {
-                return Verdict(reason: .notACandidate("\(parent) is not a plain folder"))
-            }
-        }
+    /// `relative`: the folder, relative to `worktree`. `status`: the worktree's status, read beforehand.
+    /// `knownWorktrees`: every registered worktree of every scanned repo; one inside the folder keeps it.
+    func verdict(
+        for relative: String,
+        in worktree: URL,
+        status: LightCleanStatus,
+        knownWorktrees: [Worktree]
+    ) async -> Verdict {
+        if let problem = Self.pathProblem(relative, in: worktree.path) { return Verdict(reason: problem) }
         let folder = worktree.appending(path: relative, directoryHint: .isDirectory)
-        switch DirectoryEntries.kind(ofItemAt: folder.path) {
-        case .symlink: return Verdict(reason: .symlink)
-        case .other, nil: return Verdict(reason: .gone)
-        case .directory: break
-        }
-        if Remover.itemExists(at: folder.appending(path: ".git").path) {
+        let identity = FileIdentity.of(folder.path)
+        if Remover.itemExists(at: folder.appending(path: ".git").path) || NestedCheckoutSearch.isBareRepo(folder) {
             return Verdict(reason: .nestedCheckout(["."]))
         }
-        if let reason = await gitReason(folder, worktree: worktree) { return Verdict(reason: reason) }
-        return await nestedVerdict(folder, knownWorktrees: knownWorktrees)
+        let name = relative.split(separator: "/").last.map(String.init) ?? relative
+        if let reason = await gitReason(name: name, parent: folder.deletingLastPathComponent(), worktree: worktree) {
+            return Verdict(reason: reason)
+        }
+        let changed = status.paths(under: relative)
+        if !changed.isEmpty { return Verdict(reason: .uncommittedFiles(changed)) }
+        var verdict = await nestedVerdict(folder, knownWorktrees: knownWorktrees)
+        verdict.identity = identity
+        return verdict
     }
 
-    /// Tracking nothing and ignored, as git sees it from inside the folder. A git failure is a reason too.
-    /// Tracked files are asked first: git calls a folder with tracked files in it "not ignored".
-    private func gitReason(_ folder: URL, worktree: URL) async -> LightCleanSkipReason? {
+    /// Every folder from the worktree root down to `relative` must be a real folder, the last one included:
+    /// a symlink on the way would aim a delete elsewhere, and a symlink as the folder would delete the link.
+    static func pathProblem(_ relative: String, in root: String) -> LightCleanSkipReason? {
+        guard FileIdentity.of(root)?.kind == .directory else { return .notACandidate("the worktree folder is not a plain folder") }
+        let parts = relative.split(separator: "/")
+        var path = root
+        for (index, part) in parts.enumerated() {
+            path += "/" + part
+            let shown = parts[...index].joined(separator: "/")
+            let isLast = index == parts.count - 1
+            switch FileIdentity.of(path)?.kind {
+            case .directory: continue
+            case .symlink: return isLast ? .symlink : .notACandidate("\(shown) is not a plain folder")
+            case .other, nil: return isLast ? .gone : .notACandidate("\(shown) is not a plain folder")
+            }
+        }
+        return nil
+    }
+
+    /// Tracked files, then ignored, as git sees them from the folder's parent. A git failure is a reason
+    /// too. Tracked files are asked first: git calls a folder with tracked files in it "not ignored".
+    private func gitReason(name: String, parent: URL, worktree: URL) async -> LightCleanSkipReason? {
         do {
             // git must answer for this worktree, not for a repo around it (a broken `.git` file).
-            let topLevel = try await git.gitString(["rev-parse", "--show-toplevel"], in: folder)
+            let topLevel = try await git.gitString(["rev-parse", "--show-toplevel"], in: parent)
             guard CanonicalPath.same(URL(fileURLWithPath: topLevel), worktree) else {
                 return .gitError("git sees \(topLevel) here, not this worktree")
             }
-            if !(try await git.git(["ls-files", "-z"], in: folder)).isEmpty { return .hasTrackedFiles }
-            let ignore = try await git.result(["check-ignore", "-q", "."], in: folder)
+            if !(try await git.git(["ls-files", "-z", "--", ":(icase)\(name)"], in: parent)).isEmpty { return .hasTrackedFiles }
+            let ignore = try await git.result(["check-ignore", "-q", "--", name], in: parent)
             if ignore.timedOut { return .gitError("git check-ignore timed out") }
             switch ignore.exitCode {
-            case 0: break
+            case 0: return nil
             case 1: return .notIgnored
             default:
                 let message = ignore.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
                 return .gitError("git check-ignore failed (exit \(ignore.exitCode))" + (message.isEmpty ? "" : ": \(message)"))
             }
-            return nil
         } catch {
             return .gitError("\(error)")
         }
     }
 
-    /// `.git` files and registered worktrees always keep the folder; a plain clone keeps it unless it
-    /// holds no local work (P2's `NestedCloneCheck`). A search that can't finish keeps it too.
+    /// `.git` files and registered worktrees always keep the folder; a plain clone or bare repo keeps it
+    /// unless it holds no local work (`NestedCloneCheck`). A search that can't finish keeps it too.
     private func nestedVerdict(_ folder: URL, knownWorktrees: [Worktree]) async -> Verdict {
         let search = nestedSearch.search(folder)
         let registered = knownWorktrees.compactMap { CanonicalPath.relativePath(of: $0.url, to: folder) }

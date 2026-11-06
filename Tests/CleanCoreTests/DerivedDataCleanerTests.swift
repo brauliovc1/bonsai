@@ -18,7 +18,8 @@ struct DerivedDataCleanerTests {
         let report = await world.scanner().scan()
         #expect(report.orphans.map(\.name) == ["Gone-aaa", "Old-bbb"])
 
-        let deletion = await world.cleaner(freeSpace: [1_000, 13_000]).delete(report.orphans)
+        // Free space before and after each of the two deletes.
+        let deletion = await world.cleaner(freeSpace: [1_000, 9_000, 9_000, 13_000]).delete(report.orphans)
 
         #expect(deletion.deleted.map(\.name) == ["Gone-aaa", "Old-bbb"])
         #expect(deletion.refused.isEmpty && deletion.failed.isEmpty && deletion.logged && deletion.warnings.isEmpty)
@@ -29,15 +30,37 @@ struct DerivedDataCleanerTests {
         #expect(report.orphans.map(\.bytes) == [Int64(12 * 1024), Int64(8 * 1024)])
 
         let entries = try world.log.entries()
-        let entry = try #require(entries.first)
-        #expect(entries.count == 1 && entry == deletion.entry)
-        #expect(entry.action == .derivedDataDelete && entry.mode == .manual && !entry.isRestorable)
-        #expect(entry.path == world.root.path)
-        #expect(entry.estimatedBytes == Int64(20 * 1024) && entry.freedBytes == 12_000)
-        #expect(entry.notes == [
-            "deleted Gone-aaa: project \(world.project("Gone.xcworkspace"))",
-            "deleted Old-bbb: project \(world.project("Old.xcodeproj"))",
+        #expect(entries == deletion.entries)
+        #expect(entries.map(\.path) == [world.root.path + "/Gone-aaa", world.root.path + "/Old-bbb"])
+        #expect(entries.map(\.estimatedBytes) == [Int64(12 * 1024), Int64(8 * 1024)])
+        #expect(entries.map(\.freedBytes) == [8_000, 4_000])
+        #expect(entries.map(\.notes) == [
+            ["deleted Gone-aaa: project \(world.project("Gone.xcworkspace"))"],
+            ["deleted Old-bbb: project \(world.project("Old.xcodeproj"))"],
         ])
+        for entry in entries {
+            #expect(entry.action == .derivedDataDelete && entry.mode == .manual && !entry.isRestorable)
+            #expect(entry.repoPath == world.root.path)
+        }
+    }
+
+    // Review item 8: each folder's entry is written right after its delete.
+    @Test func eachDeleteIsLoggedBeforeTheNextFolder() async throws {
+        let world = try DerivedDataWorld()
+        defer { world.remove() }
+        for name in ["A-aaa", "B-bbb", "C-ccc"] {
+            try world.entry(name, workspace: world.project("\(name).xcodeproj"))
+        }
+        let orphans = await world.scanner().scan().orphans
+        let log = world.log
+        let counts = LogCounts()
+        var cleaner = world.cleaner()
+        cleaner.beforeDelete = { _ in counts.add((try? log.entries().count) ?? -1) }
+
+        let deletion = await cleaner.delete(orphans)
+
+        #expect(deletion.deleted.count == 3)
+        #expect(counts.values == [0, 1, 2])
     }
 
     @Test func anOrphanWhoseProjectReappearsIsRefused() async throws {
@@ -56,7 +79,7 @@ struct DerivedDataCleanerTests {
         #expect(deletion.refused.map(\.orphan.name) == ["Back-aaa"])
         #expect(deletion.refused.first?.reason == "its project is back at \(workspace)")
         #expect(world.exists("Back-aaa/Build/blob"))
-        #expect(try world.log.entries().first?.notes.last == "refused Back-aaa: its project is back at \(workspace)")
+        #expect(try world.log.entries().map(\.notes) == [["deleted Gone-bbb: project \(world.project("Gone.xcodeproj"))"]])
     }
 
     @Test func anOrphanThatChangedSinceTheScanIsRefused() async throws {
@@ -75,7 +98,7 @@ struct DerivedDataCleanerTests {
 
         let deletion = await world.cleaner().delete(orphans)
 
-        #expect(deletion.deleted.isEmpty && deletion.entry == nil)
+        #expect(deletion.deleted.isEmpty && deletion.entries.isEmpty)
         // Sorted by name: Linked-ccc, Plistless-bbb, Renamed-aaa.
         #expect(deletion.refused.map(\.reason) == [
             "it is no longer a folder",
@@ -104,7 +127,7 @@ struct DerivedDataCleanerTests {
         let world = try DerivedDataWorld()
         defer { world.remove() }
         let deletion = await world.cleaner().delete([])
-        #expect(deletion.deleted.isEmpty && deletion.entry == nil)
+        #expect(deletion.deleted.isEmpty && deletion.entries.isEmpty)
         #expect(try world.log.entries().isEmpty)
     }
 
@@ -118,7 +141,21 @@ struct DerivedDataCleanerTests {
 
         let deletion = await world.cleaner().delete(orphans)
         #expect(deletion.deleted.count == 1 && !deletion.logged)
-        #expect(deletion.warnings.first?.hasPrefix("the DerivedData delete was not logged") == true)
-        #expect(deletion.entry != nil)
+        #expect(deletion.warnings.first?.contains("Gone-aaa was not logged") == true)
+        #expect(deletion.entries.count == 1)
+    }
+}
+
+/// Collects numbers from `@Sendable` closures.
+private final class LogCounts: @unchecked Sendable {
+    private let lock = NSLock()
+    private var numbers: [Int] = []
+
+    func add(_ number: Int) {
+        lock.withLock { numbers.append(number) }
+    }
+
+    var values: [Int] {
+        lock.withLock { numbers }
     }
 }

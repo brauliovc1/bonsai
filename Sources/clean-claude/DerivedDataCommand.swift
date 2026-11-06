@@ -22,12 +22,15 @@ struct DerivedDataCommand: AsyncParsableCommand {
     @Flag(help: "Really delete what --delete-orphans describes.")
     var yes = false
 
-    @Option(help: ArgumentHelp("List this DerivedData folder instead of Xcode's.", valueName: "path"))
+    @Option(help: ArgumentHelp("List this DerivedData folder instead of Xcode's (listing only).", valueName: "path"))
     var location: String?
 
     func validate() throws {
         if yes && !deleteOrphans {
             throw ValidationError("--yes only goes with --delete-orphans.")
+        }
+        if location != nil && deleteOrphans {
+            throw ValidationError("--location is for listing only; --delete-orphans always uses Xcode's DerivedData location.")
         }
     }
 
@@ -36,12 +39,20 @@ struct DerivedDataCommand: AsyncParsableCommand {
         let environment = context.environment
         let report: DerivedDataReport
         if let location {
-            report = await DerivedDataScanner(root: context.absoluteURL(location), du: environment.tools.du).scan()
+            report = await DerivedDataScanner(
+                root: context.absoluteURL(location),
+                du: environment.tools.du,
+                homeDirectory: environment.homeDirectory
+            ).scan()
         } else {
             report = await DerivedDataScanner.scan(environment: environment)
         }
         for warning in report.warnings {
             StandardError.write("warning: \(warning)")
+        }
+        if let refusal = report.refusal {
+            StandardError.write("error: \(refusal)")
+            throw ExitCode.failure
         }
         print(DerivedDataText(report: report, home: environment.homeDirectory).render())
         guard deleteOrphans else { return }

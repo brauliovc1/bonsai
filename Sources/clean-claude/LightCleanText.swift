@@ -45,10 +45,9 @@ enum LightCleanText {
         for failure in result.failed {
             lines.append("failed \(failure.candidate.relativePath): \(failure.message)")
         }
-        if result.entry != nil {
+        if !result.entries.isEmpty {
             let freed = result.freedBytes.map(ByteFormatting.string) ?? "unknown"
-            let id = result.entry.map { "; log id \($0.id.uuidString)" } ?? ""
-            lines.append("\(name): \(result.deleted.count) deleted, freed \(freed) (measured)\(id)")
+            lines.append("\(name): \(result.deleted.count) deleted, freed \(freed) (measured); \(result.entries.count) log entries")
         } else {
             lines.append("\(name): nothing was deleted.")
         }

@@ -48,9 +48,9 @@ struct DerivedDataText {
         for failure in deletion.failed {
             lines.append("failed \(failure.orphan.name): \(failure.message)")
         }
-        if let entry = deletion.entry {
+        if !deletion.entries.isEmpty {
             let freed = deletion.freedBytes.map(ByteFormatting.string) ?? "unknown"
-            lines.append("\(deletion.deleted.count) deleted, freed \(freed) (measured); log id \(entry.id.uuidString)")
+            lines.append("\(deletion.deleted.count) deleted, freed \(freed) (measured); \(deletion.entries.count) log entries")
         } else {
             lines.append("Nothing was deleted.")
         }

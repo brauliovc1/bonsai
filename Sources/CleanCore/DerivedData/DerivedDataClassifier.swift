@@ -4,8 +4,8 @@ import Foundation
 /// `DerivedDataCleaner` again right before deleting. Read-only.
 ///
 /// Orphaned only when `info.plist` has an absolute `WorkspacePath`, that path is not under `/var/folders`
-/// or `/private/var/folders`, and lstat says it does not exist (`ENOENT`/`ENOTDIR`; a path that can't be
-/// looked at is unreadable, not missing).
+/// or `/private/var/folders`, not on an unmounted `/Volumes/<name>`, and lstat says it does not exist
+/// (`ENOENT`/`ENOTDIR`; a path that can't be looked at is unreadable, not missing).
 struct DerivedDataClassifier: Sendable {
     static let xcodeInternalPrefixes = ["/var/folders", "/private/var/folders"]
 
@@ -38,6 +38,14 @@ struct DerivedDataClassifier: Sendable {
             return Classification(state: .unreadable, workspacePath: workspace, detail: "WorkspacePath is not an absolute path")
         }
         if isXcodeInternal(workspace) { return Classification(state: .xcodeInternal, workspacePath: workspace) }
+        if let volume = Self.volume(of: workspace) {
+            switch PathPresence.of(volume) {
+            case .present: break
+            case .missing: return Classification(state: .volumeMissing, workspacePath: workspace)
+            case .unknown(let why):
+                return Classification(state: .unreadable, workspacePath: workspace, detail: "\(volume) can't be checked: \(why)")
+            }
+        }
         switch PathPresence.of(workspace) {
         case .present:
             return Classification(state: .live, workspacePath: workspace)
@@ -46,6 +54,13 @@ struct DerivedDataClassifier: Sendable {
         case .unknown(let why):
             return Classification(state: .unreadable, workspacePath: workspace, detail: "the project path can't be checked: \(why)")
         }
+    }
+
+    /// `/Volumes/<name>` for a path on another volume, after removing `.` and `..` lexically; nil otherwise.
+    static func volume(of path: String) -> String? {
+        let parts = Worktree.standardize(path).split(separator: "/")
+        guard parts.count >= 2, parts[0] == "Volumes" else { return nil }
+        return "/Volumes/" + parts[1]
     }
 
     /// Under one of the internal prefixes, after removing `.` and `..` lexically.

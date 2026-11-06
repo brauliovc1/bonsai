@@ -8,6 +8,16 @@ public struct Git: Sendable {
     /// Arguments placed before the subcommand, e.g. `-c key=value` pairs.
     public var leadingArguments: [String]
     public var timeout: Duration
+    /// Test seam: the environment git inherits (nil = this process's), before `GIT_*` is stripped.
+    var inheritedEnvironment: [String: String]?
+
+    /// Before every subcommand: git never runs an fsmonitor hook, whatever a repo's config names.
+    public static let fixedArguments = ["-c", "core.fsmonitor=false"]
+
+    /// Inherited variables with this prefix never reach git: `GIT_DIR`, `GIT_INDEX_FILE`, `GIT_WORK_TREE`,
+    /// `GIT_CEILING_DIRECTORIES` and the like would make it answer about something else. The ones
+    /// clean-claude sets itself (`ProcessRunner.addedEnvironment`, `environmentAdditions`) are added after.
+    public static let strippedEnvironmentPrefix = "GIT_"
 
     public init(
         executable: URL,
@@ -24,12 +34,7 @@ public struct Git: Sendable {
     /// Runs `git -C <directory> <args>` and returns stdout. Throws `GitError` on a non-zero exit or timeout.
     @discardableResult
     public func git(_ args: [String], in directory: URL) async throws -> Data {
-        let result = try await ProcessRunner.run(
-            executable: executable,
-            arguments: leadingArguments + ["-C", directory.path] + args,
-            environmentAdditions: environmentAdditions,
-            timeout: timeout
-        )
+        let result = try await run(arguments: leadingArguments + ["-C", directory.path] + args, timeout: timeout)
         guard result.succeeded else {
             throw GitError(
                 exitCode: result.exitCode,
@@ -44,10 +49,17 @@ public struct Git: Sendable {
     /// Runs `git -C <directory> <args>` and returns the whole result; a non-zero exit is not an error here.
     /// For commands that report on stderr (`worktree prune --verbose`) or whose exit code is the answer.
     public func result(_ args: [String], in directory: URL) async throws -> ProcessResult {
+        try await run(arguments: leadingArguments + ["-C", directory.path] + args, timeout: timeout)
+    }
+
+    /// Every git process starts here: `fixedArguments` first, inherited `GIT_*` variables removed.
+    private func run(arguments: [String], timeout: Duration) async throws -> ProcessResult {
         try await ProcessRunner.run(
             executable: executable,
-            arguments: leadingArguments + ["-C", directory.path] + args,
+            arguments: Self.fixedArguments + arguments,
             environmentAdditions: environmentAdditions,
+            removingInherited: [Self.strippedEnvironmentPrefix],
+            inheritedEnvironment: inheritedEnvironment,
             timeout: timeout
         )
     }
@@ -74,12 +86,7 @@ public struct Git: Sendable {
 
     /// The installed git's version (`git --version`).
     public func version() async throws -> GitVersion? {
-        let result = try await ProcessRunner.run(
-            executable: executable,
-            arguments: ["--version"],
-            environmentAdditions: environmentAdditions,
-            timeout: .seconds(10)
-        )
+        let result = try await run(arguments: ["--version"], timeout: .seconds(10))
         guard result.succeeded else {
             throw GitError(
                 exitCode: result.exitCode,

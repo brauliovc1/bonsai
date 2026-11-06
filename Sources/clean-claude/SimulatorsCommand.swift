@@ -60,10 +60,10 @@ struct SimulatorsCommand: AsyncParsableCommand {
             print("Freed on disk so far (measured): \(ByteFormatting.string(freed)).")
         }
         if let logError = result.logError {
-            StandardError.write("warning: \(logError)")
+            StandardError.write("error: \(logError)")
         }
-        if !result.succeeded {
-            throw ExitCode(result.exitCode == 0 ? 1 : result.exitCode)
+        if result.exitStatus != 0 {
+            throw ExitCode(result.exitStatus)
         }
     }
 }

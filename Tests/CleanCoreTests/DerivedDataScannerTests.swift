@@ -98,7 +98,7 @@ struct DerivedDataScannerTests {
         try world.entry("Gone-aaa", workspace: "/nonexistent-clean-claude-\(UUID().uuidString)/Gone.xcodeproj")
         let location = await DerivedDataLocator(preferences: FakeXcodePreferences(value: world.root.path), homeDirectory: world.directory.url).locate()
 
-        let report = await DerivedDataScanner(root: location.root, du: nil).scan()
+        let report = await DerivedDataScanner(root: location.root, du: nil, homeDirectory: world.home).scan()
         #expect(report.root == world.root.path)
         #expect(report.orphans.map(\.name) == ["Gone-aaa"])
         #expect(report.entries.allSatisfy { $0.bytes == nil }, "no du, no sizes")
