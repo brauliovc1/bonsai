@@ -2,9 +2,10 @@ import CleanCore
 import Foundation
 import Observation
 
-/// The Worktrees screen: rows from the shared scan, sorting, filters, selection, and the remove and prune
-/// flows (`WorktreesModel+Remove`, `WorktreesModel+Prune`). Removal goes only through `Remover` (manual
-/// mode), prune only through `Pruner`.
+/// The Worktrees screen: rows from the shared scan, sorting, filters, selection, the Deps column
+/// (`WorktreesModel+Dependencies`), and the remove, prune and light-clean flows (`WorktreesModel+Remove`,
+/// `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune only through `Pruner`,
+/// light clean only through `LightCleaner`.
 @MainActor
 @Observable
 public final class WorktreesModel {
@@ -50,6 +51,24 @@ public final class WorktreesModel {
     @ObservationIgnored var volumeOf: (URL) -> URL? = WorktreesModel.volume(of:)
     @ObservationIgnored var freeBytes: (URL) -> Int64? = { FreeSpaceProbe.volume(containing: $0).availableBytes() }
 
+    // Deps column (WorktreesModel+Dependencies).
+    public internal(set) var dependencySizes: [WorktreeRow.ID: DependencySize] = [:]
+    /// Sizes are being measured (one run at a time).
+    public internal(set) var isMeasuringDependencies = false
+    /// Measured, or started, at least once: the screen measures on first appearance only.
+    public internal(set) var hasRequestedDependencies = false
+
+    // Light clean sheet (WorktreesModel+LightClean).
+    public var isShowingLightCleanSheet = false
+    /// The selected worktrees are being looked at afresh before the sheet shows them.
+    public internal(set) var isPreparingLightClean = false
+    public internal(set) var lightCleanConfirmation: LightCleanConfirmation?
+    public internal(set) var isLightCleaning = false
+    public internal(set) var lightCleansDone = 0
+    /// Set when the confirmed folders are done; the sheet then shows it.
+    public internal(set) var lightCleanReport: LightCleanReport?
+    @ObservationIgnored var lightCleanSheetToken = 0
+
     // Prune sheet (WorktreesModel+Prune).
     public var isShowingPruneSheet = false
     public internal(set) var isPreparingPrune = false
@@ -67,7 +86,10 @@ public final class WorktreesModel {
 
     /// Every worktree of the last scan, in scan order.
     public var allRows: [WorktreeRow] {
-        app.assessments.enumerated().map { WorktreeRow(assessment: $1, scanOrder: $0) }
+        app.assessments.enumerated().map { order, assessment in
+            let id = WorktreeRow.ID(assessment.worktree)
+            return WorktreeRow(assessment: assessment, scanOrder: order, dependencies: dependencySizes[id] ?? .notMeasured)
+        }
     }
 
     /// The rows shown: filtered, searched and sorted.

@@ -40,10 +40,7 @@ public struct WorktreeInspector: Sendable {
             )
             let records = URL(fileURLWithPath: commonDir).appending(path: "worktrees", directoryHint: .isDirectory)
             guard CanonicalPath.isInside(gitDir, directory: records) else {
-                state.gitErrors.append(
-                    "its .git file leads to \(gitDir.path), not to a record of \(worktree.repoPath); this record is "
-                        + "stale and the folder belongs to another repo"
-                )
+                state.staleRecord = gitDir.path
                 return state
             }
         } catch {

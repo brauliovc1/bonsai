@@ -33,6 +33,16 @@ struct MenuContentView: View {
                 MenuButton(title: "Refresh", systemImage: "arrow.clockwise") { app.requestRefresh() }
                     .disabled(app.isScanning)
                 MenuButton(title: "Open \(AppInfo.name)", systemImage: "macwindow") { openMainWindow() }
+                SettingsLink {
+                    Label("Settings…", systemImage: "gearshape")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // The app has no Dock icon until a window opens, so bring the Settings window forward.
+                .simultaneousGesture(TapGesture().onEnded { NSApp.activate() })
                 MenuButton(title: "Quit \(AppInfo.name)", systemImage: "power") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }

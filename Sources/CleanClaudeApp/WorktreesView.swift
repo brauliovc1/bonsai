@@ -2,7 +2,8 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The Worktrees screen: every worktree of the last scan with its verdict; remove and prune from here.
+/// The Worktrees screen: every worktree of the last scan with its verdict and its Deps; remove, prune and
+/// light clean from here.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
 
@@ -21,6 +22,10 @@ struct WorktreesView: View {
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
         }
+        .sheet(isPresented: $model.isShowingLightCleanSheet, onDismiss: { model.dismissLightClean() }) {
+            LightCleanSheet(model: model)
+        }
+        .task(id: model.app.scanCount) { await model.computeDependenciesIfNeeded() }
     }
 
     private var table: some View {
@@ -39,6 +44,10 @@ struct WorktreesView: View {
             .width(min: 56, ideal: 66)
             TableColumn("Size", value: \.sizeSortKey) { row in
                 Text(row.sizeText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .width(min: 64, ideal: 78)
+            TableColumn("Deps", value: \.dependencySortKey) { row in
+                DepsCell(row: row)
             }
             .width(min: 64, ideal: 78)
             TableColumn("Idle", value: \.idleSortKey) { row in
@@ -79,6 +88,8 @@ struct WorktreesView: View {
                 .disabled(folders.isEmpty)
             Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.path)) }
             Divider()
+            Button("Light clean…") { Task { await model.beginLightClean(ids) } }
+                .disabled(model.app.isCleaningUp)
             Button("Remove…") { Task { await model.beginRemoval(ids) } }
                 .disabled(model.app.isCleaningUp)
         }
@@ -104,6 +115,16 @@ struct WorktreesView: View {
                 .help("git worktree prune for the worktrees whose folders are gone")
                 .disabled(model.app.isCleaningUp)
             }
+            Button { Task { await model.computeDependencies() } } label: {
+                Label("Compute deps sizes", systemImage: "scalemass")
+            }
+            .help("Measure the dependency and build folders light clean could delete in every worktree")
+            .disabled(model.isMeasuringDependencies || model.allRows.isEmpty)
+            Button { Task { await model.beginLightClean() } } label: {
+                Label("Light clean…", systemImage: "paintbrush")
+            }
+            .help("Delete the selected worktrees' node_modules, build output and other regenerable folders (you confirm first)")
+            .disabled(model.selectedRows.isEmpty || model.app.isCleaningUp)
             Button { Task { await model.beginRemoval() } } label: {
                 Label("Remove…", systemImage: "trash")
             }

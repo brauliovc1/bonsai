@@ -13,12 +13,18 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
     public var date: Date { entry.date }
     public var path: String { entry.path }
 
-    /// "Removed worktree", "Cleared missing folders"; later phases' actions show their raw name until
-    /// they get a label here.
+    /// "Removed worktree", "Light clean", "Docker prune"; an action this version has no label for shows its
+    /// raw name (no exhaustive switch, so a later phase's new action still compiles).
     public var actionText: String {
-        let action = entry.action == .worktreeRemove ? "Removed worktree"
-            : entry.action == .worktreePrune ? "Cleared missing folders"
-            : entry.action.rawValue
+        let labels: [RemovalAction: String] = [
+            .worktreeRemove: "Removed worktree",
+            .worktreePrune: "Cleared missing folders",
+            .lightClean: "Light clean",
+            .derivedDataDelete: "Deleted orphaned DerivedData",
+            .dockerPrune: "Docker prune",
+            .simulatorsDeleteUnavailable: "Deleted unavailable simulators",
+        ]
+        let action = labels[entry.action] ?? entry.action.rawValue
         return entry.mode == .auto ? "\(action) (auto)" : action
     }
 

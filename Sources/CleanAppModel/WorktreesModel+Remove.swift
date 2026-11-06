@@ -12,19 +12,7 @@ extension WorktreesModel {
             return RemovalConfirmation(items: chosen.map { Self.blocked($0, because: "git not found") })
         }
 
-        let scanner = WorktreeScanner(git: git, cursorWorktreesDirectory: app.environment.cursorWorktreesDirectory)
-        var listings: [String: [Worktree]] = [:]
-        var failures: [String: String] = [:]
-        for repo in Set(chosen.map(\.worktree.repoPath)) {
-            do {
-                listings[repo] = try await scanner.worktrees(in: URL(fileURLWithPath: repo, isDirectory: true))
-            } catch {
-                failures[repo] = "\(error)"
-            }
-        }
-        let records: [Worktree?] = chosen.map { row in
-            listings[row.worktree.repoPath]?.first { CanonicalPath.same($0.url, row.url) }
-        }
+        let (records, listings, failures) = await freshRecords(of: chosen, git: git)
         let known = (app.scan?.worktrees ?? []) + listings.values.flatMap { $0 }
         let assessor = WorktreeAssessor(git: git, settings: app.settings, environment: app.environment)
         var fresh = await assessor.assess(records.compactMap { $0 }, knownWorktrees: known, sizes: app.scan?.sizes ?? [:])
@@ -128,6 +116,28 @@ extension WorktreesModel {
             before[index].flatMap { before in after[index].map { max(0, $0 - before) } }
         }
         return RemovalReport(outcomes: outcomes, measuredFreedBytes: gains.isEmpty ? nil : gains.reduce(0, +))
+    }
+
+    /// git's current record of each row's worktree (nil when git no longer lists it), the repos' full
+    /// listings, and why a repo could not be listed. Shared by the remove and light-clean sheets.
+    func freshRecords(
+        of chosen: [WorktreeRow],
+        git: Git
+    ) async -> (records: [Worktree?], listings: [String: [Worktree]], failures: [String: String]) {
+        let scanner = WorktreeScanner(git: git, cursorWorktreesDirectory: app.environment.cursorWorktreesDirectory)
+        var listings: [String: [Worktree]] = [:]
+        var failures: [String: String] = [:]
+        for repo in Set(chosen.map(\.worktree.repoPath)) {
+            do {
+                listings[repo] = try await scanner.worktrees(in: URL(fileURLWithPath: repo, isDirectory: true))
+            } catch {
+                failures[repo] = "\(error)"
+            }
+        }
+        let records: [Worktree?] = chosen.map { row in
+            listings[row.worktree.repoPath]?.first { CanonicalPath.same($0.url, row.url) }
+        }
+        return (records, listings, failures)
     }
 
     /// A blocked sheet item for a row that can't be looked at afresh.

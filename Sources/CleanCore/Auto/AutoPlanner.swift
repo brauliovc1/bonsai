@@ -36,7 +36,7 @@ public enum AutoPlanner {
     static func holdsLocalWork(_ safety: SafetyReport) -> Bool {
         let hardStop = safety.blockers.contains { reason in
             switch reason {
-            case .mainCheckout, .missingFolder, .locked, .gitError: true
+            case .mainCheckout, .missingFolder, .locked, .gitError, .staleRecord: true
             default: false
             }
         }

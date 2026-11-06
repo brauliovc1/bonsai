@@ -12,10 +12,13 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public let assessment: WorktreeAssessment
     /// Position in the scan (each repo's main checkout first); the last sort key, so ties keep it.
     public let scanOrder: Int
+    /// The Deps column: what light clean could delete here (not part of the safety verdict).
+    public let dependencies: DependencySize
 
-    public init(assessment: WorktreeAssessment, scanOrder: Int) {
+    public init(assessment: WorktreeAssessment, scanOrder: Int, dependencies: DependencySize = .notMeasured) {
         self.assessment = assessment
         self.scanOrder = scanOrder
+        self.dependencies = dependencies
     }
 
     /// Repo and path together: two repos can list the same folder (one repo's stale record and another
@@ -41,6 +44,9 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public var kindText: String { worktree.kind.rawValue }
     public var sizeBytes: Int64? { assessment.estimatedBytes }
     public var sizeText: String { DisplayText.bytes(sizeBytes) }
+    public var dependencyBytes: Int64? { dependencies.bytes }
+    /// "–" when not measured yet, measuring, or nothing to clean; the view draws a spinner while measuring.
+    public var dependencyText: String { DisplayText.bytes(dependencyBytes) }
     public var idleDays: Int? { assessment.idle.idleDays }
     public var idleText: String { DisplayText.idle(assessment) }
 
@@ -94,12 +100,18 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public var canRemove: Bool { assessment.safety.manualAllowed }
     /// git still lists it but its folder is gone: `git worktree prune` clears the record.
     public var isMissingFolder: Bool { assessment.safety.blockers.contains(.missingFolder) }
+    /// git's record belongs to another repo's folder: nothing is read from, or done to, that folder as this row.
+    public var isStaleRecord: Bool { staleRecordReason != nil }
+    public var staleRecordReason: SafetyReason? {
+        assessment.safety.blockers.first { if case .staleRecord = $0 { true } else { false } }
+    }
     /// Reveal in Finder and Open in Terminal only for a real folder (not a file, not a symlink).
     public var isOpenableFolder: Bool { FolderCheck.isRealDirectory(url) }
 
     // MARK: - Sort keys (unknown values sort first)
 
     public var sizeSortKey: Int64 { sizeBytes ?? -1 }
+    public var dependencySortKey: Int64 { dependencyBytes ?? -1 }
     public var idleSortKey: Int { idleDays ?? -1 }
     public var statusSortKey: Int {
         switch tone {

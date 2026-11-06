@@ -61,7 +61,8 @@ public struct SafetyCheck: Sendable {
         var notes: [SafetyReason] = []
         var autoOnly: [SafetyReason] = []
 
-        // Any git error blocks both: the other facts can't be trusted.
+        // A stale record or any git error blocks both: the other facts can't be trusted.
+        if let leadsTo = state.staleRecord { blockers.append(.staleRecord(leadsTo: leadsTo)) }
         if let error = state.gitErrors.first { blockers.append(.gitError(error)) }
         if let reason = worktree.lockedReason { blockers.append(.locked(reason: reason)) }
         if !state.operationsInProgress.isEmpty { blockers.append(.operationInProgress(state.operationsInProgress)) }
