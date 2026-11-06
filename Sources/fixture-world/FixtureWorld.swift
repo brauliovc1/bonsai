@@ -14,12 +14,8 @@ struct FixtureWorld {
             fail("usage: fixture-world <folder>\n  <folder>: empty or new, inside \(temp)", code: 2)
         }
         let folder = URL(fileURLWithPath: argument, isDirectory: true).standardized
-        guard TemporaryDirectory.isDisposable(folder) else {
-            fail("error: \(folder.path) is not inside \(temp); fixture-world only builds there", code: 2)
-        }
-        let contents = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
-        guard contents.allSatisfy({ $0 == ".DS_Store" }) else {
-            fail("error: \(folder.path) is not empty", code: 2)
+        if let problem = DemoWorld.problem(withTarget: folder) {
+            fail("error: \(problem)", code: 2)
         }
 
         let world: DemoWorld

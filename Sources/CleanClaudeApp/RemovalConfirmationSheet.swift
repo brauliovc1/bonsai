@@ -2,18 +2,20 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// Confirms a removal: the allowed items with their notes and warnings, the blocked ones greyed out with
-/// their reasons, the estimated total. After it runs, the same sheet shows what happened to each item.
+/// Confirms a removal. It first looks at the selected worktrees afresh, then shows the allowed items with
+/// their notes and warnings, the blocked ones greyed out with their reasons, and the estimated total. After
+/// it runs, the same sheet shows what happened to each item.
 struct RemovalConfirmationSheet: View {
     let model: WorktreesModel
-    let confirmation: RemovalConfirmation
 
     var body: some View {
         Group {
             if let report = model.report {
                 RemovalReportView(report: report) { model.dismissRemoval() }
+            } else if let confirmation = model.confirmation {
+                confirmPage(confirmation)
             } else {
-                confirmPage
+                SheetProgress(text: "Checking the selected worktrees…") { model.dismissRemoval() }
             }
         }
         .padding(20)
@@ -22,7 +24,7 @@ struct RemovalConfirmationSheet: View {
         .interactiveDismissDisabled(model.isRemoving)
     }
 
-    private var confirmPage: some View {
+    private func confirmPage(_ confirmation: RemovalConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(confirmation.allowed.isEmpty ? "Nothing can be removed" : "\(confirmation.removeButtonTitle)?")
                 .font(.title2.weight(.semibold))
@@ -55,11 +57,11 @@ struct RemovalConfirmationSheet: View {
                 Text(RemovalConfirmation.keptLine)
                     .foregroundStyle(.secondary)
             }
-            buttons
+            buttons(confirmation)
         }
     }
 
-    private var buttons: some View {
+    private func buttons(_ confirmation: RemovalConfirmation) -> some View {
         HStack {
             if model.isRemoving {
                 ProgressView().controlSize(.small)

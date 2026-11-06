@@ -82,7 +82,7 @@ struct WorktreesModelTests {
         let python = try world.url("cobalt-py")
         let atlas = world.repos[0]
 
-        let confirmation = model.prepareRemoval(model.ids([archive, otter, env, wip, swift, python, atlas]))
+        let confirmation = await model.prepareRemoval(model.ids([archive, otter, env, wip, swift, python, atlas]))
         #expect(confirmation.items.count == 7)
         #expect(Set(confirmation.allowed.map(\.worktree.url.lastPathComponent)) == [
             "atlas-archive", "tidy-otter", "beacon-env", "cobalt-swift",
@@ -105,7 +105,7 @@ struct WorktreesModelTests {
     @Test func claudeWarningAndIgnoredFiles() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }
-        let confirmation = model.prepareRemoval(model.ids([
+        let confirmation = await model.prepareRemoval(model.ids([
             try world.url("tidy-otter"), try world.url("beacon-env"), try world.url("atlas-review"),
         ]))
         let otter = try #require(confirmation.allowed.first { $0.worktree.kind == .claude })

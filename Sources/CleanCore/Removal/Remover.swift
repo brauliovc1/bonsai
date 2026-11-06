@@ -29,11 +29,15 @@ public struct Remover: Sendable {
 
     /// `knownWorktrees`: every registered worktree of every scanned repo (the caller's scan). They are
     /// checked for nesting together with a fresh listing of this worktree's own repo.
+    ///
+    /// `expectation`: what the person confirmed. When given, the removal is refused with
+    /// `RemovalExpectation.Mismatch` if the fresh state differs from it in any way that matters.
     public func remove(
         _ worktree: Worktree,
         mode: RemovalMode,
         estimatedBytes: Int64?,
-        knownWorktrees: [Worktree] = []
+        knownWorktrees: [Worktree] = [],
+        expectation: RemovalExpectation? = nil
     ) async throws -> RemovalResult {
         let (fresh, siblings) = try await reread(worktree, mode: mode)
         // The slow checks first; the process index last, right before git runs, so a process that moved
@@ -48,6 +52,10 @@ public struct Remover: Sendable {
             settings: assessor.settings,
             cwdIndex: await captureCwdIndex()
         )
+        if let expectation {
+            let changes = expectation.changes(fresh: fresh, safety: safety, idle: idle)
+            guard changes.isEmpty else { throw RemovalExpectation.Mismatch(path: fresh.path, changes: changes) }
+        }
         let allowed = mode == .manual ? safety.manualAllowed : safety.autoEligible
         guard allowed else { throw RemovalError.refused(mode: mode, report: safety) }
 

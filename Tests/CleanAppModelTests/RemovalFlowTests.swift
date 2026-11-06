@@ -15,7 +15,9 @@ struct RemovalFlowTests {
         let scans = app.scanCount
         model.selection = model.ids([archive, wip])
 
-        model.beginRemoval()
+        await model.beginRemoval()
+        #expect(model.isShowingRemovalSheet)
+        #expect(!model.isPreparingRemoval)
         let confirmation = try #require(model.confirmation)
         #expect(confirmation.allowed.count == 1)
         let outcomes = await model.confirmRemoval(confirmation)
@@ -45,6 +47,7 @@ struct RemovalFlowTests {
         #expect(branch.contains("archive"), "the branch is kept")
 
         model.dismissRemoval()
+        #expect(!model.isShowingRemovalSheet)
         #expect(model.confirmation == nil)
         #expect(model.report == nil)
     }
@@ -57,13 +60,14 @@ struct RemovalFlowTests {
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
         let model = WorktreesModel(app: app)
-        let confirmation = model.prepareRemoval(model.ids([task]))
+        let confirmation = await model.prepareRemoval(model.ids([task]))
         #expect(confirmation.allowed.count == 1)
 
         try fixture.write("new work\n", to: "after-the-sheet-opened.txt", in: task)
         let outcomes = await model.confirmRemoval(confirmation)
         let outcome = try #require(outcomes.first)
         #expect(!outcome.removed)
+        #expect(outcome.changedSinceConfirmed)
         #expect(outcome.error?.contains("uncommitted") == true, "\(outcome.error ?? "")")
         #expect(FileManager.default.fileExists(atPath: task.appending(path: "after-the-sheet-opened.txt").path))
         #expect(app.logEntries.isEmpty)
@@ -76,7 +80,10 @@ struct RemovalFlowTests {
         let gone = try world.url("beacon-gone")
         #expect(model.missingFolderRows.map(\.url.lastPathComponent) == ["beacon-gone"])
 
-        let outcomes = await model.prune()
+        let plan = await model.preparePrune()
+        #expect(plan.repos.map(\.repoName) == ["beacon"])
+        #expect(plan.entryCount == 1)
+        let outcomes = await model.prune(plan)
         let outcome = try #require(outcomes.first)
         #expect(outcomes.count == 1)
         #expect(outcome.repoName == "beacon")
@@ -101,8 +108,8 @@ struct RemovalFlowTests {
         let removals = RemovalsModel(app: app)
         #expect(removals.rows.isEmpty)
 
-        await worktrees.confirmRemoval(worktrees.prepareRemoval(worktrees.ids([first])))
-        await worktrees.confirmRemoval(worktrees.prepareRemoval(worktrees.ids([second])))
+        await worktrees.confirmRemoval(await worktrees.prepareRemoval(worktrees.ids([first])))
+        await worktrees.confirmRemoval(await worktrees.prepareRemoval(worktrees.ids([second])))
         #expect(removals.rows.map(\.branchText) == ["second", "first"], "newest first")
         #expect(removals.rows.allSatisfy { $0.isRestorable })
         #expect(worktrees.allRows.count == 1)

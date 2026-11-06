@@ -5,7 +5,6 @@ import SwiftUI
 /// The Worktrees screen: every worktree of the last scan with its verdict; remove and prune from here.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
-    @State private var confirmingPrune = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,22 +18,8 @@ struct WorktreesView: View {
         .navigationTitle("Worktrees")
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch or path")
         .toolbar { toolbar }
-        .sheet(item: $model.confirmation) { confirmation in
-            RemovalConfirmationSheet(model: model, confirmation: confirmation)
-        }
-        .confirmationDialog(
-            "Clean up \(model.missingFolderRows.count == 1 ? "1 missing folder" : "\(model.missingFolderRows.count) missing folders")?",
-            isPresented: $confirmingPrune
-        ) {
-            Button("Clean Up") { Task { await model.prune() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("git forgets the worktrees whose folders are gone (git worktree prune). Their branches are kept.")
-        }
-        .alert("Missing folders", isPresented: pruneAlertShown) {
-            Button("OK") { model.dismissPruneOutcomes() }
-        } message: {
-            Text((model.pruneOutcomes ?? []).map(\.summary).joined(separator: "\n"))
+        .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
+            RemovalConfirmationSheet(model: model)
         }
     }
 
@@ -65,10 +50,13 @@ struct WorktreesView: View {
             }
             .width(min: 150, ideal: 260)
         }
+        .sheet(isPresented: $model.isShowingPruneSheet, onDismiss: { model.dismissPrune() }) {
+            PruneSheet(model: model)
+        }
         .contextMenu(forSelectionType: WorktreeRow.ID.self) { ids in
             contextMenu(for: ids)
         } primaryAction: { ids in
-            FolderActions.reveal(rows(ids).map(\.url).filter(FolderActions.exists))
+            FolderActions.reveal(rows(ids).filter(\.isOpenableFolder).map(\.url))
         }
         .overlay {
             if model.allRows.isEmpty, !model.app.isScanning {
@@ -83,19 +71,19 @@ struct WorktreesView: View {
     @ViewBuilder
     private func contextMenu(for ids: Set<WorktreeRow.ID>) -> some View {
         let rows = rows(ids)
-        let existing = rows.map(\.url).filter(FolderActions.exists)
+        let folders = rows.filter(\.isOpenableFolder).map(\.url)
         if !rows.isEmpty {
-            Button("Reveal in Finder") { FolderActions.reveal(existing) }
-                .disabled(existing.isEmpty)
-            Button("Open in Terminal") { FolderActions.openInTerminal(existing) }
-                .disabled(existing.isEmpty)
+            Button("Reveal in Finder") { FolderActions.reveal(folders) }
+                .disabled(folders.isEmpty)
+            Button("Open in Terminal") { FolderActions.openInTerminal(folders) }
+                .disabled(folders.isEmpty)
             Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.path)) }
             Divider()
-            Button("Remove…") { model.beginRemoval(ids) }
+            Button("Remove…") { Task { await model.beginRemoval(ids) } }
                 .disabled(model.app.isCleaningUp)
         }
         if rows.contains(where: \.isMissingFolder) {
-            Button("Clean up missing folders…") { confirmingPrune = true }
+            Button("Clean up missing folders…") { Task { await model.beginPrune() } }
                 .disabled(model.app.isCleaningUp)
         }
     }
@@ -110,13 +98,13 @@ struct WorktreesView: View {
             .disabled(model.app.isScanning)
             WorktreesFilterMenu(model: model)
             if !model.missingFolderRows.isEmpty {
-                Button { confirmingPrune = true } label: {
+                Button { Task { await model.beginPrune() } } label: {
                     Label("Clean up missing folders…", systemImage: "folder.badge.minus")
                 }
                 .help("git worktree prune for the worktrees whose folders are gone")
                 .disabled(model.app.isCleaningUp)
             }
-            Button { model.beginRemoval() } label: {
+            Button { Task { await model.beginRemoval() } } label: {
                 Label("Remove…", systemImage: "trash")
             }
             .help("Remove the selected worktrees (you confirm first)")
@@ -126,10 +114,6 @@ struct WorktreesView: View {
 
     private func rows(_ ids: Set<WorktreeRow.ID>) -> [WorktreeRow] {
         model.rows.filter { ids.contains($0.id) }
-    }
-
-    private var pruneAlertShown: Binding<Bool> {
-        Binding(get: { model.pruneOutcomes != nil }, set: { if !$0 { model.dismissPruneOutcomes() } })
     }
 
     private var emptyDescription: String {

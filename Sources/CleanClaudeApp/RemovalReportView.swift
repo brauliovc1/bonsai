@@ -39,16 +39,16 @@ private struct OutcomeView: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: outcome.removed ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                .foregroundStyle(outcome.removed ? .green : .red)
+            Image(systemName: icon)
+                .foregroundStyle(outcome.removed ? .green : outcome.changedSinceConfirmed ? .orange : .red)
             VStack(alignment: .leading, spacing: 3) {
                 ItemHeader(item: outcome.item)
                 if outcome.removed {
                     Text("Removed. Freed \(DisplayText.bytes(outcome.freedBytes)) "
                         + "(estimate \(DisplayText.bytes(outcome.item.estimatedBytes))).")
                 } else if let error = outcome.error {
-                    Text("Not removed: \(error)")
-                        .foregroundStyle(.red)
+                    Text(outcome.changedSinceConfirmed ? error : "Not removed: \(error)")
+                        .foregroundStyle(outcome.changedSinceConfirmed ? .orange : .red)
                 }
                 ForEach(outcome.warnings, id: \.self) { warning in
                     Label(warning, systemImage: "exclamationmark.triangle")
@@ -57,5 +57,10 @@ private struct OutcomeView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var icon: String {
+        if outcome.removed { return "checkmark.circle.fill" }
+        return outcome.changedSinceConfirmed ? "arrow.triangle.2.circlepath.circle.fill" : "xmark.octagon.fill"
     }
 }

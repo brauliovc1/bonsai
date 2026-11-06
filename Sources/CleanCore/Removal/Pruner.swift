@@ -81,9 +81,19 @@ public struct Pruner: Sendable {
 
     /// Re-reads the preview, refuses when it has refusals, prunes, then logs one `worktreePrune` entry for
     /// the repo with each pruned entry's path, branch or HEAD in `notes`.
-    public func prune(repo: URL, mode: RemovalMode = .manual) async throws -> Result {
+    ///
+    /// `expectedEntries`: the entries the person was shown. When given, a fresh preview with any other set
+    /// (a folder that went missing since, one that came back) refuses the repo.
+    public func prune(repo: URL, mode: RemovalMode = .manual, expectedEntries: Set<Entry>? = nil) async throws -> Result {
         let preview = try await preview(repo: repo)
         guard preview.refusals.isEmpty else { throw Refused(refusals: preview.refusals) }
+        if let expectedEntries, Set(preview.entries) != expectedEntries {
+            let fresh = Set(preview.entries)
+            let added = fresh.subtracting(expectedEntries).map { "now also \($0.note)" }
+            let gone = expectedEntries.subtracting(fresh).map { "no longer \($0.note)" }
+            throw Refused(refusals: ["the missing folders changed since they were shown; review them again"]
+                + (added + gone).sorted())
+        }
         let pruned = try await run(["worktree", "prune", "--verbose"], in: repo)
         guard !pruned.isEmpty else { return Result(repoPath: repo.path, pruned: [], entry: nil, warnings: []) }
 

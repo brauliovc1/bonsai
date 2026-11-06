@@ -18,7 +18,19 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
         self.scanOrder = scanOrder
     }
 
-    public var id: String { assessment.id }
+    /// Repo and path together: two repos can list the same folder (one repo's stale record and another
+    /// repo's real worktree), and they must stay two rows.
+    public struct ID: Hashable, Sendable {
+        public var repoPath: String
+        public var path: String
+
+        public init(_ worktree: Worktree) {
+            repoPath = worktree.repoPath
+            path = worktree.path
+        }
+    }
+
+    public var id: ID { ID(worktree) }
     public var worktree: Worktree { assessment.worktree }
     public var path: String { worktree.path }
     public var url: URL { worktree.url }
@@ -82,6 +94,8 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public var canRemove: Bool { assessment.safety.manualAllowed }
     /// git still lists it but its folder is gone: `git worktree prune` clears the record.
     public var isMissingFolder: Bool { assessment.safety.blockers.contains(.missingFolder) }
+    /// Reveal in Finder and Open in Terminal only for a real folder (not a file, not a symlink).
+    public var isOpenableFolder: Bool { FolderCheck.isRealDirectory(url) }
 
     // MARK: - Sort keys (unknown values sort first)
 

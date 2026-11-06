@@ -14,12 +14,14 @@ public struct RemovalConfirmation: Identifiable, Sendable {
             self.assessment = assessment
         }
 
-        public var id: String { assessment.id }
+        public var id: WorktreeRow.ID { WorktreeRow.ID(assessment.worktree) }
         public var worktree: Worktree { assessment.worktree }
         public var repoName: String { DisplayText.repoName(worktree.repoPath) }
         public var branchText: String { DisplayText.branch(of: worktree) }
         public var estimatedBytes: Int64? { assessment.estimatedBytes }
         public var isAllowed: Bool { assessment.safety.manualAllowed }
+        /// What `Remover` checks the fresh state against right before removing.
+        public var expectation: RemovalExpectation { RemovalExpectation(assessment: assessment) }
 
         /// Why it can't be removed (empty when allowed).
         public var blockers: [SafetyReason] { assessment.safety.blockers }
