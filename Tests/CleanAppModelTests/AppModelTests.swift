@@ -107,6 +107,7 @@ struct AppModelTests {
         #expect(free > 0)
         #expect(total > 0)
         #expect(total >= free)
+        #expect(disk.volumeName?.isEmpty == false)
         #expect((0...1).contains(disk.usedFraction ?? -1))
 
         // A folder that doesn't exist (a scan root that was deleted) measures its nearest existing parent.

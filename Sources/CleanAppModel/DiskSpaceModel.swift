@@ -10,6 +10,8 @@ public final class DiskSpaceModel {
     public private(set) var folder: URL?
     public private(set) var freeBytes: Int64?
     public private(set) var totalBytes: Int64?
+    /// The volume's name in Finder ("Macintosh HD").
+    public private(set) var volumeName: String?
 
     public init(folder: URL? = nil) {
         self.folder = folder
@@ -33,6 +35,7 @@ public final class DiskSpaceModel {
         guard let folder else {
             freeBytes = nil
             totalBytes = nil
+            volumeName = nil
             return
         }
         // A fresh URL each time (URL caches resource values), from the nearest folder that exists.
@@ -40,8 +43,10 @@ public final class DiskSpaceModel {
         while !FileManager.default.fileExists(atPath: probe.path), probe.path != "/" {
             probe = probe.deletingLastPathComponent()
         }
-        let values = try? probe.resourceValues(forKeys: [.volumeAvailableCapacityKey, .volumeTotalCapacityKey])
+        let keys: Set<URLResourceKey> = [.volumeAvailableCapacityKey, .volumeTotalCapacityKey, .volumeLocalizedNameKey]
+        let values = try? probe.resourceValues(forKeys: keys)
         freeBytes = values?.volumeAvailableCapacity.map(Int64.init)
         totalBytes = values?.volumeTotalCapacity.map(Int64.init)
+        volumeName = values?.volumeLocalizedName
     }
 }

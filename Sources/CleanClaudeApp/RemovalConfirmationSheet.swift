@@ -44,10 +44,13 @@ struct RemovalConfirmationSheet: View {
             }
             Divider()
             if !confirmation.allowed.isEmpty {
-                LabeledContent("Estimated total") {
+                HStack {
+                    Text("Estimated total")
+                    Spacer()
                     Text(DisplayText.bytes(confirmation.estimatedTotalBytes)
                         + (confirmation.hasUnknownSizes ? " (some sizes unknown)" : ""))
                         .monospacedDigit()
+                        .fontWeight(.semibold)
                 }
                 Text(RemovalConfirmation.keptLine)
                     .foregroundStyle(.secondary)

@@ -25,30 +25,29 @@ struct RecentlyRemovedView: View {
                 Text(row.date, format: .dateTime.year().month(.abbreviated).day().hour().minute())
                     .monospacedDigit()
             }
-            .width(min: 120, ideal: 150)
+            .width(min: 120, ideal: 140, max: 180)
             TableColumn("Action") { row in
                 Text(row.actionText)
             }
-            .width(min: 110, ideal: 150)
+            .width(min: 110, ideal: 130, max: 190)
             TableColumn("Path") { row in
                 Text(row.path)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(row.notesHelp)
             }
-            .width(min: 160, ideal: 320)
             TableColumn("Branch") { row in
                 Text(row.branchText)
             }
-            .width(min: 90, ideal: 150)
+            .width(min: 80, ideal: 120, max: 220)
             TableColumn("Freed") { row in
                 Text(row.freedText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .width(min: 60, ideal: 76)
+            .width(min: 60, ideal: 72, max: 100)
             TableColumn("") { row in
                 restoreCell(row)
             }
-            .width(min: 90, ideal: 110)
+            .width(min: 90, ideal: 96, max: 120)
         }
         .contextMenu(forSelectionType: RemovalLogRow.ID.self) { ids in
             let rows = model.rows.filter { ids.contains($0.id) }
@@ -95,10 +94,12 @@ private struct MessageBar: View {
         HStack(alignment: .firstTextBaseline) {
             Image(systemName: message.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .foregroundStyle(message.isError ? .red : .green)
+            // A width from the HStack, then up to four lines: a fixedSize text next to a Spacer would be
+            // measured at no width and make the whole screen thousands of points tall.
             Text(message.text)
                 .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer()
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Button("Dismiss", action: dismiss)
         }
         .padding(10)

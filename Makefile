@@ -24,6 +24,7 @@ run: app
 
 # Replaces the installed app and puts the CLI in ~/.local/bin. No sudo.
 install: app
+	mkdir -p "$(INSTALL_DIR)"
 	rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
 	cp -R "$(BUNDLE)" "$(INSTALL_DIR)/$(APP_NAME).app"
 	swift build -c release --product $(CLI)

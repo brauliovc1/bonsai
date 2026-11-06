@@ -11,7 +11,9 @@ struct MenuContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             DiskSummaryView(disk: app.disk)
             Divider()
-            LabeledContent("Reclaimable now") {
+            HStack {
+                Text("Reclaimable now")
+                Spacer()
                 Text(app.scan == nil ? "–" : DisplayText.bytes(app.reclaimableBytes))
                     .monospacedDigit()
                     .fontWeight(.semibold)
