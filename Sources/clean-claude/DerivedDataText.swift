@@ -50,7 +50,7 @@ struct DerivedDataText {
         }
         if !deletion.entries.isEmpty {
             let freed = deletion.freedBytes.map(ByteFormatting.string) ?? "unknown"
-            lines.append("\(deletion.deleted.count) deleted, freed \(freed) (measured); \(deletion.entries.count) log entries")
+            lines.append("\(deletion.deleted.count) deleted, freed \(freed) (measured); \(deletion.entries.count) log \(deletion.entries.count == 1 ? "entry" : "entries")")
         } else {
             lines.append("Nothing was deleted.")
         }

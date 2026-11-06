@@ -47,7 +47,7 @@ enum LightCleanText {
         }
         if !result.entries.isEmpty {
             let freed = result.freedBytes.map(ByteFormatting.string) ?? "unknown"
-            lines.append("\(name): \(result.deleted.count) deleted, freed \(freed) (measured); \(result.entries.count) log entries")
+            lines.append("\(name): \(result.deleted.count) deleted, freed \(freed) (measured); \(result.entries.count) log \(result.entries.count == 1 ? "entry" : "entries")")
         } else {
             lines.append("\(name): nothing was deleted.")
         }
