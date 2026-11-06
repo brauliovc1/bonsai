@@ -25,9 +25,18 @@ public final class GitFixture: Sendable {
 
     static let tools = ToolPaths.resolve()
 
-    public init() throws {
+    public convenience init() throws {
+        try self.init(directory: TemporaryDirectory(prefix: "clean-claude-fixture"))
+    }
+
+    /// A fixture in `folder` (inside the temp dir), left in place when the fixture goes away.
+    public convenience init(keeping folder: URL) throws {
+        try self.init(directory: TemporaryDirectory(keeping: folder))
+    }
+
+    init(directory: TemporaryDirectory) throws {
         guard let executable = Self.tools.git else { throw FixtureError(description: "git not found") }
-        directory = try TemporaryDirectory(prefix: "clean-claude-fixture")
+        self.directory = directory
         home = directory.url.appending(path: "home", directoryHint: .isDirectory)
         remotes = directory.url.appending(path: "remotes", directoryHint: .isDirectory)
         scanRoot = directory.url.appending(path: "root", directoryHint: .isDirectory)

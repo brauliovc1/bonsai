@@ -31,6 +31,21 @@ public struct WorktreeInspector: Sendable {
                 return state
             }
             gitDir = URL(fileURLWithPath: try await git.gitString(["rev-parse", "--absolute-git-dir"], in: folder))
+            // The folder's `.git` file must lead back to one of this repo's records (`<common dir>/worktrees/`).
+            // When it leads to another repo's, this record is stale (another repo's worktree now lives at the
+            // path) and every fact below would describe that other worktree.
+            let commonDir = try await git.gitString(
+                ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+                in: worktree.repoURL
+            )
+            let records = URL(fileURLWithPath: commonDir).appending(path: "worktrees", directoryHint: .isDirectory)
+            guard CanonicalPath.isInside(gitDir, directory: records) else {
+                state.gitErrors.append(
+                    "its .git file leads to \(gitDir.path), not to a record of \(worktree.repoPath); this record is "
+                        + "stale and the folder belongs to another repo"
+                )
+                return state
+            }
         } catch {
             state.gitErrors.append("\(error)")
             return state

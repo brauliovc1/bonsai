@@ -7,15 +7,31 @@ import Foundation
 /// its last use, before the end of the scope.
 public final class TemporaryDirectory: Sendable {
     public let url: URL
+    /// False for a folder adopted with `init(keeping:)`: it outlives this object.
+    public let removesOnDeinit: Bool
 
     public init(prefix: String = "clean-claude-test") throws {
         url = FileManager.default.temporaryDirectory
             .appending(path: "\(prefix)-\(UUID().uuidString)", directoryHint: .isDirectory)
+        removesOnDeinit = true
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
+    /// Adopts `url` (created if missing), which must be inside the system temporary directory. It is not
+    /// removed on deinit: `fixture-world` leaves its demo world behind on purpose.
+    public init(keeping url: URL) throws {
+        guard Self.isDisposable(url) else {
+            throw GitFixture.FixtureError(
+                description: "\(url.path) is not inside \(FileManager.default.temporaryDirectory.path)"
+            )
+        }
+        self.url = url.standardized
+        removesOnDeinit = false
+        try FileManager.default.createDirectory(at: self.url, withIntermediateDirectories: true)
+    }
+
     deinit {
-        remove()
+        if removesOnDeinit { remove() }
     }
 
     /// Deletes the folder. Refuses anything that is not inside the system temporary directory.
