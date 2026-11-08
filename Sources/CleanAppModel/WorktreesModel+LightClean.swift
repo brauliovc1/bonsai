@@ -81,8 +81,9 @@ extension WorktreesModel {
         isLightCleaning = true
         lightCleansDone = 0
         let finished = await app.cleaningUp { await clean(items) }
+        let busy = app.busyReason
         let outcomes = finished ?? items.map {
-            LightCleanOutcome(item: $0, error: "another cleanup is still running; nothing was deleted")
+            LightCleanOutcome(item: $0, error: "\(busy); nothing was deleted")
         }
         let report = LightCleanReport(outcomes: outcomes)
         lightCleanReport = report

@@ -52,7 +52,7 @@ extension DockerSimulatorsModel {
         let finished = await app.cleaningUp {
             await runDelete(confirmed: confirmation.devices, estimatedBytes: confirmation.estimatedBytes)
         }
-        let report = finished ?? Self.simulatorsReport(error: "Another cleanup is still running.", result: nil)
+        let report = finished ?? Self.simulatorsReport(error: app.busySentence, result: nil)
         isDeletingDevices = false
         _ = show(report)
         if finished != nil {

@@ -64,8 +64,9 @@ extension WorktreesModel {
         isRemoving = true
         removalsDone = 0
         let finished = await app.cleaningUp { await remove(items) }
+        let busy = app.busyReason
         let report = finished ?? RemovalReport(
-            outcomes: items.map { RemovalOutcome(item: $0, result: nil, error: "another cleanup is still running") },
+            outcomes: items.map { RemovalOutcome(item: $0, result: nil, error: busy) },
             measuredFreedBytes: nil
         )
         self.report = report

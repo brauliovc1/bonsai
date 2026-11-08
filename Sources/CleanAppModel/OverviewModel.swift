@@ -9,13 +9,12 @@ import Observation
 public final class OverviewModel {
     /// Light clean counts worktrees idle at least this many days.
     public static let lightCleanIdleDays = 7
-    /// The placeholder row; auto mode itself comes later.
-    public static let autoModeText = "Auto mode: off"
 
     public let app: AppModel
     public let worktrees: WorktreesModel
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
+    public let autoMode: AutoModeModel
     public let navigation: NavigationModel
 
     public init(
@@ -23,13 +22,23 @@ public final class OverviewModel {
         worktrees: WorktreesModel,
         derivedData: DerivedDataModel,
         dockerSimulators: DockerSimulatorsModel,
+        autoMode: AutoModeModel,
         navigation: NavigationModel
     ) {
         self.app = app
         self.worktrees = worktrees
         self.derivedData = derivedData
         self.dockerSimulators = dockerSimulators
+        self.autoMode = autoMode
         self.navigation = navigation
+    }
+
+    /// The auto mode row: off / report-only until <date> / on.
+    public var autoModeText: String { autoMode.statusText }
+
+    /// The auto mode row's second line: the last run and the next.
+    public var autoModeDetail: String {
+        autoMode.isRunning ? "Running now…" : autoMode.lastRunText + " " + autoMode.nextRunText
     }
 
     public var disk: DiskSpaceModel { app.disk }

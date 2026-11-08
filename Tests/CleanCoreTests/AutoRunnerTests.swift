@@ -46,7 +46,8 @@ struct AutoRunnerTests {
         let settings = Settings(autoEnabled: true, autoEnabledAt: environment.now())
         let plan = try await plan(world, environment, settings: settings)
 
-        // idle-a gains a file after planning: its re-check fails, idle-b still goes.
+        // idle-a gains an untracked file after planning: it no longer matches the plan, so it is refused and
+        // stays; idle-b still goes.
         try world.fixture.write("late\n", to: "late.txt", in: paths[0])
         let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
         let outcome = await runner.run(plan, ignoringReportOnly: true)
@@ -54,13 +55,86 @@ struct AutoRunnerTests {
         #expect(!outcome.reportOnly)
         #expect(outcome.removed.map(\.entry.branch) == ["idle-b"])
         #expect(outcome.removed.first?.entry.mode == .auto)
-        #expect(outcome.failed.map(\.worktree.branch) == ["idle-a"])
+        #expect(outcome.refused.map(\.worktree.branch) == ["idle-a"])
+        #expect(outcome.refused.first?.reason.hasPrefix("changed since the plan: New: ") == true, "\(outcome.refused)")
+        #expect(outcome.failed.isEmpty)
         #expect(FileManager.default.fileExists(atPath: paths[0].appending(path: "late.txt").path))
         #expect(!FileManager.default.fileExists(atPath: paths[1].path))
         #expect(FileManager.default.fileExists(atPath: paths[2].appending(path: "work.txt").path))
 
         let summary = outcome.summary(date: environment.now())
-        #expect(summary.removedCount == 1 && summary.notifiedCount == 1 && summary.failures.count == 1)
+        #expect(summary.removedCount == 1 && summary.notifiedCount == 1 && summary.failures.isEmpty)
+        #expect(summary.refused.count == 1 && summary.refused[0].contains("alpha-idle-a: changed since the plan"))
+        #expect(summary.plannedCount == 2)
         #expect(try RemovalLog(environment: environment).entries().map(\.branch) == ["idle-b"])
+    }
+
+    /// The plan's verdict travels with each removal: a worktree whose branch moved after the plan (a new
+    /// commit, pushed, so every safety rule still passes) is refused because HEAD is not what was planned.
+    @Test func aCommitAfterThePlanIsRefusedEvenWhenItPassesTheRules() async throws {
+        let (world, environment, paths) = try await world()
+        defer { world.remove() }
+        let settings = Settings(autoEnabled: true, autoEnabledAt: environment.now())
+        let plan = try await plan(world, environment, settings: settings)
+
+        try world.fixture.write("more\n", to: "more.txt", in: paths[0])
+        try await world.fixture.commitAll(in: paths[0], message: "More")
+        try await world.fixture.run(["push", "--quiet", "-u", "origin", "idle-a"], in: paths[0])
+        let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
+        let outcome = await runner.run(plan, ignoringReportOnly: true)
+
+        #expect(outcome.refused.map(\.worktree.branch) == ["idle-a"])
+        #expect(outcome.refused.first?.reason.contains("HEAD moved") == true, "\(outcome.refused)")
+        #expect(FileManager.default.fileExists(atPath: paths[0].appending(path: "more.txt").path))
+        #expect(outcome.removed.map(\.entry.branch) == ["idle-b"])
+    }
+
+    /// Once `shouldContinue` says no, nothing more is removed and the rest are reported as left alone.
+    @Test func aStoppedRunRemovesNothingMore() async throws {
+        let (world, environment, paths) = try await world()
+        defer { world.remove() }
+        let settings = Settings(autoEnabled: true, autoEnabledAt: environment.now())
+        let plan = try await plan(world, environment, settings: settings)
+        let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
+
+        let asked = Counter()
+        let outcome = await runner.run(plan, ignoringReportOnly: true) { asked.next() == 0 }
+
+        #expect(outcome.removed.map(\.entry.branch) == ["idle-a"])
+        #expect(outcome.refused.map(\.worktree.branch) == ["idle-b"])
+        #expect(outcome.refused.first?.reason == "the run was stopped before its turn")
+        #expect(FileManager.default.fileExists(atPath: paths[1].path))
+        #expect(asked.value == 2, "asked once per removal until it said no")
+    }
+
+    @Test func reportOnlyNeverAsksTheRemover() async throws {
+        let (world, environment, paths) = try await world()
+        defer { world.remove() }
+        let settings = Settings(autoEnabled: true, autoEnabledAt: environment.now())
+        let plan = try await plan(world, environment, settings: settings)
+        let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
+
+        let asked = Counter()
+        let outcome = await runner.run(plan) { asked.next() >= 0 }
+        #expect(outcome.reportOnly && outcome.planned == 2 && outcome.estimatedBytes == plan.estimatedBytes)
+        #expect(asked.value == 0)
+        #expect(paths.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        #expect(!FileManager.default.fileExists(atPath: RemovalLog(environment: environment).fileURL.path))
+    }
+}
+
+/// Counts calls from any task.
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int { lock.withLock { count } }
+
+    /// The number of earlier calls.
+    func next() -> Int {
+        lock.withLock {
+            defer { count += 1 }
+            return count
+        }
     }
 }

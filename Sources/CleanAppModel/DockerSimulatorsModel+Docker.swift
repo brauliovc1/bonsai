@@ -48,7 +48,7 @@ extension DockerSimulatorsModel {
         }
         isPruning = true
         let finished = await app.cleaningUp { await runPrune() }
-        let report = finished ?? Self.dockerReport(error: "Another cleanup is still running.", result: nil)
+        let report = finished ?? Self.dockerReport(error: app.busySentence, result: nil)
         isPruning = false
         _ = show(prune: report)
         if finished != nil {

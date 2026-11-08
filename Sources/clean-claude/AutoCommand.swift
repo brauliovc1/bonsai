@@ -44,7 +44,7 @@ struct AutoCommand: AsyncParsableCommand {
             .run(plan, ignoringReportOnly: true, knownWorktrees: scan.worktrees)
         print(text.render(outcome))
         saveSummary(outcome.summary(date: context.environment.now()), context: context)
-        if !outcome.failed.isEmpty { throw ExitCode.failure }
+        if !outcome.failed.isEmpty || !outcome.refused.isEmpty { throw ExitCode.failure }
     }
 
     /// Records the run as `lastAutoRun`, re-reading the settings first so nothing else is overwritten.

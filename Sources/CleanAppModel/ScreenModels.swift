@@ -14,9 +14,22 @@ public final class ScreenModels {
     public let claudeUsage: ClaudeUsageModel
     public let overview: OverviewModel
     public let settings: SettingsModel
+    public let autoMode: AutoModeModel
+    public let autoScheduler: AutoModeScheduler
+    public let launchAtLogin: LaunchAtLoginModel
+    public let menuBar: MenuBarModel
 
-    /// `runner`: how docker, xcrun and `defaults` are run; tests pass a scripted one.
-    public init(app: AppModel, runner: CommandRunner = .live, navigation: NavigationModel = NavigationModel()) {
+    /// `runner`: how docker, xcrun and `defaults` are run; tests pass a scripted one. `notifier` and
+    /// `loginItems`: the app passes UNUserNotificationCenter and SMAppService; the defaults do nothing.
+    public init(
+        app: AppModel,
+        runner: CommandRunner = .live,
+        navigation: NavigationModel = NavigationModel(),
+        notifier: (any Notifier)? = nil,
+        loginItems: (any LoginItemService)? = nil,
+        appName: String = "Bonsai"
+    ) {
+        let notifier = notifier ?? SilentNotifier()
         self.app = app
         self.navigation = navigation
         worktrees = WorktreesModel(app: app)
@@ -25,11 +38,18 @@ public final class ScreenModels {
         dockerSimulators = DockerSimulatorsModel(app: app, runner: runner)
         claudeUsage = ClaudeUsageModel(app: app)
         settings = SettingsModel(app: app)
+        autoMode = AutoModeModel(app: app, notifier: notifier, appName: appName)
+        autoScheduler = AutoModeScheduler(model: autoMode)
+        launchAtLogin = LaunchAtLoginModel(service: loginItems ?? UnavailableLoginItems())
+        let menuBar = MenuBarModel(app: app, notifier: notifier, appName: appName)
+        self.menuBar = menuBar
+        autoMode.onRunFinished = { await menuBar.refresh() }
         overview = OverviewModel(
             app: app,
             worktrees: worktrees,
             derivedData: derivedData,
             dockerSimulators: dockerSimulators,
+            autoMode: autoMode,
             navigation: navigation
         )
     }

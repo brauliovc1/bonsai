@@ -2,7 +2,7 @@ import CleanAppModel
 import SwiftUI
 
 /// The Overview: free space, what can be reclaimed in each category with a button to the screen that does
-/// it, the auto-mode placeholder, and the last scan with Refresh.
+/// it, auto mode with its last and next run, and the last scan with Refresh.
 struct OverviewView: View {
     let model: OverviewModel
 
@@ -26,13 +26,7 @@ struct OverviewView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                HStack {
-                    Image(systemName: "clock.badge.checkmark").foregroundStyle(.secondary)
-                    Text(OverviewModel.autoModeText)
-                    Spacer()
-                }
-                .padding(12)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                AutoModeRow(model: model)
                 HStack(spacing: 10) {
                     if model.isRefreshing {
                         ProgressView().controlSize(.small)
@@ -102,5 +96,30 @@ private struct OverviewRowView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+    }
+}
+
+/// Auto mode: off / report-only until <date> / on, with the last and next run, and a way to Settings.
+private struct AutoModeRow: View {
+    let model: OverviewModel
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: "clock.badge.checkmark").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.autoModeText)
+                Text(model.autoModeDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if model.autoMode.isRunning {
+                ProgressView().controlSize(.small)
+            }
+            SettingsLink { Text("Settings…") }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
     }
 }

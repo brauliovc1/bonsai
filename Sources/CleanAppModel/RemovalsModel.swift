@@ -39,7 +39,7 @@ public final class RemovalsModel {
         restoringID = id
         let restorer = Restorer(git: git, environment: app.environment)
         let message = await app.cleaningUp { await Self.restore(id, with: restorer) }
-            ?? Message(text: "Could not restore: another cleanup is still running.", isError: true)
+            ?? Message(text: "Could not restore: \(app.busyReason).", isError: true)
         restoringID = nil
         show(message)
         await app.cleanupFinished()

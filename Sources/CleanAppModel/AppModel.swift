@@ -36,6 +36,8 @@ public final class AppModel {
     public private(set) var scanCount = 0
     /// A removal, prune or restore is running; the others wait their turn (their buttons are disabled).
     public private(set) var isCleaningUp = false
+    /// The cleanup running is an auto-mode run (from its fresh scan to its last removal).
+    public private(set) var isAutoRunning = false
 
     private var scanTask: Task<Void, Never>?
     private var rescanRequested = false
@@ -158,11 +160,27 @@ public final class AppModel {
         }
     }
 
-    /// Runs `body` unless another cleanup is running (then returns nil without running it).
-    func cleaningUp<T>(_ body: () async -> T) async -> T? {
+    /// Why a cleanup can't start now, for refusals: "Auto mode is running" while an auto-mode run holds the
+    /// guard, else "another cleanup is still running".
+    public var busyReason: String {
+        isAutoRunning ? "Auto mode is running" : "another cleanup is still running"
+    }
+
+    /// `busyReason` as a sentence of its own.
+    public var busySentence: String {
+        isAutoRunning ? "Auto mode is running." : "Another cleanup is still running."
+    }
+
+    /// Runs `body` unless another cleanup is running (then returns nil without running it). `byAutoMode`:
+    /// the body is an auto-mode run, so refusals say "Auto mode is running".
+    func cleaningUp<T>(byAutoMode: Bool = false, _ body: () async -> T) async -> T? {
         guard !isCleaningUp else { return nil }
         isCleaningUp = true
-        defer { isCleaningUp = false }
+        isAutoRunning = byAutoMode
+        defer {
+            isCleaningUp = false
+            isAutoRunning = false
+        }
         return await body()
     }
 }

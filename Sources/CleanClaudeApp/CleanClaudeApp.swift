@@ -1,24 +1,46 @@
+import AppKit
 import CleanAppModel
 import CleanCore
 import SwiftUI
 
 /// The menu-bar app: a menu-bar window with the disk summary, the main window (it opens on the Overview),
 /// and the Settings window. No Dock icon (LSUIElement) except while the main window is open.
+///
+/// At launch: the first scan, the free-space label (every five minutes), and auto mode's scheduler (a check
+/// now, on wake, and daily; each check runs only when auto mode is on and a day has passed).
 @main
 struct CleanClaudeApp: App {
     @State private var models: ScreenModels
 
     init() {
         let app = AppModel(environment: .live())
-        _models = State(initialValue: ScreenModels(app: app))
+        let navigation = NavigationModel()
+        let notifier = SystemNotifier { section in
+            navigation.show(section)
+            WindowOpener.shared.openMainWindow()
+        }
+        let hasBundle = Bundle.main.bundleIdentifier != nil
+        let models = ScreenModels(
+            app: app,
+            navigation: navigation,
+            notifier: notifier,
+            loginItems: hasBundle ? SystemLoginItems() : nil,
+            appName: AppInfo.name
+        )
+        _models = State(initialValue: models)
         app.requestRefresh()
+        models.menuBar.startRefreshing()
+        models.autoScheduler.start(
+            wakeCenter: NSWorkspace.shared.notificationCenter,
+            wakeName: NSWorkspace.didWakeNotification
+        )
     }
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(app: models.app)
+            MenuContentView(app: models.app, autoMode: models.autoMode)
         } label: {
-            Image(systemName: "internaldrive")
+            MenuBarLabel(model: models.menuBar)
         }
         .menuBarExtraStyle(.window)
 
@@ -28,7 +50,7 @@ struct CleanClaudeApp: App {
         .defaultSize(width: 1040, height: 640)
 
         Settings {
-            SettingsView(model: models.settings)
+            SettingsView(model: models.settings, autoMode: models.autoMode, launchAtLogin: models.launchAtLogin)
         }
     }
 }

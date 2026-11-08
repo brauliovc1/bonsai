@@ -1,14 +1,18 @@
 import CleanAppModel
 import SwiftUI
 
-/// The Settings window. A TabView so later phases add their own tab (Auto mode).
+/// The Settings window: General and Auto mode.
 struct SettingsView: View {
     let model: SettingsModel
+    let autoMode: AutoModeModel
+    let launchAtLogin: LaunchAtLoginModel
 
     var body: some View {
         TabView {
             GeneralSettingsView(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
+            AutoModeSettingsView(model: autoMode, launchAtLogin: launchAtLogin)
+                .tabItem { Label("Auto mode", systemImage: "clock.badge.checkmark") }
         }
         .frame(width: 540)
         .frame(minHeight: 360)
