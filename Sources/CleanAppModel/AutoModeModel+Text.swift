@@ -31,14 +31,14 @@ extension AutoModeModel {
         return run.refused.map { "Left alone: \($0)" } + run.failures.map { "Failed: \($0)" }
     }
 
-    /// When the next run may start.
+    /// When the next run may start. No closing period after a date: some locales end the time with one.
     public var nextRunText: String {
         guard isEnabled else { return "Next run: none while auto mode is off." }
         if isRunning { return "Running now…" }
         guard let next = nextRun, next > now else {
             return "Next run: at the next check (daily, at launch and when the Mac wakes)."
         }
-        return "Next run: after \(Self.dateText(next))."
+        return "Next run: after \(Self.dateText(next))"
     }
 
     public static let idleThresholdNote = "Change it in General."

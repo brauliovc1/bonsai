@@ -58,7 +58,10 @@ struct AutoModeSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
+                        .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .help(line)
+                        .textSelection(.enabled)
                 }
                 Text(model.nextRunText)
                     .foregroundStyle(.secondary)
