@@ -95,9 +95,10 @@ struct AutoModeScheduleTests {
         #expect(try world.saved().lastAutoRun?.date == first, "woke within a day: no run")
 
         world.clock.advance(by: 86_400)
+        let scans = world.app.scanCount
         center.post(name: wake, object: nil)
         try await Task.sleep(for: .milliseconds(200))
-        #expect(try world.saved().lastAutoRun?.date == first, "not right at the wake: it waits a while first")
+        #expect(!world.autoMode.isRunning && world.app.scanCount == scans, "not right at the wake: it waits a while first")
         #expect(await eventually { (try? world.saved().lastAutoRun?.date) == world.clock.now }, "woke a day later: runs")
         #expect(AutoModeScheduler.identifier == "io.github.brauliovc1.bonsai.auto")
         #expect(AutoSchedule.wakeDelay == .seconds(300))
