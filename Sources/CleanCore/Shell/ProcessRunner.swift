@@ -13,6 +13,10 @@ public enum ProcessRunner {
     /// How long a process gets to exit after SIGTERM before it is sent SIGKILL.
     static let killGracePeriod: Duration = .seconds(2)
 
+    /// The clock every timeout runs on. It doesn't count time the Mac sleeps: a `git worktree remove` that
+    /// is running when the lid closes must not be stopped on wake for the hours the Mac slept.
+    public static let timeoutClock = SuspendingClock()
+
     /// Runs `executable` and waits for it. stdout and stderr are read concurrently, so a child that fills
     /// one pipe cannot deadlock. On timeout the child gets SIGTERM, then SIGKILL after 2 s, and the result
     /// has `timedOut == true`. Cancelling the calling task terminates the child.
@@ -31,6 +35,24 @@ public enum ProcessRunner {
         inheritedEnvironment: [String: String]? = nil,
         timeout: Duration = .seconds(60)
     ) async throws -> ProcessResult {
+        try await run(
+            executable: executable, arguments: arguments, directory: directory,
+            environmentAdditions: environmentAdditions, removingInherited: prefixes,
+            inheritedEnvironment: inheritedEnvironment, timeout: timeout, clock: timeoutClock
+        )
+    }
+
+    /// `run` with the timeout measured on `clock` (tests pass one that never advances).
+    static func run<C: Clock>(
+        executable: URL,
+        arguments: [String],
+        directory: URL? = nil,
+        environmentAdditions: [String: String] = [:],
+        removingInherited prefixes: [String] = [],
+        inheritedEnvironment: [String: String]? = nil,
+        timeout: Duration,
+        clock: C
+    ) async throws -> ProcessResult where C.Duration == Duration {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
@@ -63,13 +85,13 @@ public enum ProcessRunner {
 
             let watchdog = Task {
                 do {
-                    try await Task.sleep(for: timeout)
+                    try await clock.sleep(for: timeout)
                 } catch {
                     return false
                 }
                 guard child.isRunning else { return false }
                 child.terminate()
-                try? await Task.sleep(for: killGracePeriod)
+                try? await clock.sleep(for: killGracePeriod)
                 if child.isRunning { child.kill() }
                 return true
             }

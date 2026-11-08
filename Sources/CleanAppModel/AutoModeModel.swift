@@ -6,23 +6,24 @@ import Observation
 /// (§4.1) are removed; for the first `reportOnlyDays` after it is turned on it only reports. Worktrees with
 /// local work only get a notification.
 ///
-/// The scheduled run, the launch and wake checks and Run now share one path: a fresh scan with
-/// `WorktreeAssessor`'s verdicts, `AutoPlanner`, `AutoRunner` (each removal through `Remover` in auto mode
-/// with the `RemovalExpectation` its planned assessment gives; report-only never calls the remover), then
-/// `lastAutoRun` and at most one notification. The run holds `AppModel`'s cleanup guard from the scan to
-/// its last removal, so it never overlaps a manual cleanup. Settings are changed the `SettingsModel` way:
-/// read the file, change only this model's keys, save, reload.
+/// The scheduled check, the launch and wake checks and Run now share one path (AutoModeModel+Run): a fresh
+/// scan with `WorktreeAssessor`'s verdicts, `AutoPlanner`, `AutoRunner` (each removal through `Remover` in
+/// auto mode with the `RemovalExpectation` its planned assessment gives, and the rules re-read from disk
+/// right before git; report-only never calls the remover), then `lastAutoRun` and at most one
+/// notification. The run holds `AppModel`'s cleanup guard and `cleanup.lock` from the scan to its last
+/// removal, so it never overlaps a manual cleanup, another app instance or the CLI. Settings are changed
+/// the `SettingsModel` way under `settings.lock`: read the file, change only this model's keys, save, reload.
 @MainActor
 @Observable
 public final class AutoModeModel {
     public let app: AppModel
     let notifier: any Notifier
     let appName: String
-    public private(set) var isRunning = false
+    public internal(set) var isRunning = false
     /// Why the last change or run didn't go through; nil when it did.
-    public private(set) var error: String?
-    /// Turned off during a run: the run stops before its next removal.
-    private var stopRequested = false
+    public internal(set) var error: String?
+    /// Turned off here during a run: the run stops before git runs for its next removal.
+    var stopRequested = false
     /// After every run that got as far as a plan (the menu bar refreshes its free space).
     var onRunFinished: (@MainActor () async -> Void)?
     /// Test seam: runs after the plan is made, before the first removal, inside the cleanup guard.
@@ -33,6 +34,7 @@ public final class AutoModeModel {
         self.notifier = notifier
         self.appName = appName
         app.reloadSettings()
+        repairMissingStartDate()
     }
 
     var settings: Settings { app.settings }
@@ -47,7 +49,7 @@ public final class AutoModeModel {
     public var isReportOnly: Bool { isEnabled && AutoSchedule.isReportOnly(now: now, settings: settings) }
     public var lastRun: AutoRunSummary? { settings.lastAutoRun }
     public var nextRun: Date? { AutoSchedule.nextRun(now: now, settings: settings) }
-    public var canRunNow: Bool { isEnabled && !isRunning && !app.isCleaningUp }
+    public var canRunNow: Bool { isEnabled && !isRunning && !app.isCleaningUp && !app.isQuitting }
 
     // MARK: - Settings
 
@@ -55,7 +57,8 @@ public final class AutoModeModel {
     /// window), then asks for notification permission: here, never at launch. Already on: nothing changes.
     public func enable() async {
         do {
-            if try SettingsEditor.current(app).autoEnabled {
+            let saved = try SettingsEditor.current(app)
+            if saved.autoEnabled && saved.autoEnabledAt != nil {
                 app.reloadSettings()
                 return
             }
@@ -72,7 +75,7 @@ public final class AutoModeModel {
         _ = await notifier.requestAuthorization()
     }
 
-    /// Turns auto mode off. A run that is going stops before its next removal.
+    /// Turns auto mode off. A run that is going stops before git runs for its next removal.
     public func disable() {
         stopRequested = true
         save("Auto mode was not turned off") { $0.autoEnabled = false }
@@ -84,8 +87,25 @@ public final class AutoModeModel {
         await app.refresh()
     }
 
+    /// On with no start date (written by hand or by an older version) would stay report-only forever and
+    /// never have asked for notifications: the report-only week starts now, and permission is asked, as if it
+    /// had just been turned on.
+    func repairMissingStartDate() {
+        guard let saved = try? SettingsEditor.current(app), saved.autoEnabled, saved.autoEnabledAt == nil else { return }
+        let start = now
+        do {
+            try SettingsEditor.update(app) { settings in
+                if settings.autoEnabled && settings.autoEnabledAt == nil { settings.autoEnabledAt = start }
+            }
+        } catch {
+            self.error = "Auto mode has no start date and it could not be set: \(error)"
+            return
+        }
+        Task { _ = await notifier.requestAuthorization() }
+    }
+
     @discardableResult
-    private func save(_ failure: String, _ change: (inout Settings) -> Void) -> Bool {
+    func save(_ failure: String, _ change: (inout Settings) -> Void) -> Bool {
         do {
             try SettingsEditor.update(app, change)
             error = nil
@@ -94,100 +114,5 @@ public final class AutoModeModel {
             self.error = "\(failure): \(error)"
             return false
         }
-    }
-
-    // MARK: - Running
-
-    /// The launch, wake and daily check: runs when `AutoSchedule.shouldRun` says so, with the settings read
-    /// now. `early`: how much sooner than a day counts (the daily background activity may fire up to an
-    /// hour early, and would otherwise skip a day).
-    public func checkSchedule(early: TimeInterval = 0) async {
-        guard !isRunning, let settings = try? SettingsEditor.current(app) else { return }
-        guard AutoSchedule.shouldRun(now: now.addingTimeInterval(early), settings: settings) else { return }
-        await runNow()
-    }
-
-    /// Runs auto mode now, on the same path as the scheduled run (report-only inside the window). Does
-    /// nothing while a run is going or when auto mode is off; when another cleanup holds the guard it doesn't
-    /// start and the next check tries again. Returns what was saved as `lastAutoRun`, nil when nothing ran.
-    @discardableResult
-    public func runNow() async -> AutoRunSummary? {
-        guard !isRunning else { return nil }
-        isRunning = true
-        defer { isRunning = false }
-        stopRequested = false
-        do {
-            guard try SettingsEditor.current(app).autoEnabled else {
-                error = "Auto mode is off."
-                return nil
-            }
-        } catch {
-            self.error = "Auto mode didn't run: \(error)"
-            return nil
-        }
-        let started = now
-        guard let result = await app.cleaningUp(byAutoMode: true, { await run() }) else {
-            error = "Auto mode waited: another cleanup is running. The next check tries again."
-            return nil
-        }
-        let outcome: AutoRunner.Outcome
-        switch result {
-        case .problem(let problem):
-            error = "Auto mode didn't run: \(problem)"
-            return nil
-        case .ran(let ran):
-            outcome = ran
-        }
-
-        let summary = outcome.summary(date: started)
-        do {
-            try SettingsEditor.update(app) { $0.lastAutoRun = summary }
-            error = nil
-        } catch {
-            self.error = "The run was not recorded: \(error)"
-        }
-        if outcome.removed.isEmpty {
-            app.reloadLog()
-            app.disk.refresh()
-        } else {
-            await app.cleanupFinished()
-        }
-        if let content = NotificationContent.autoRun(summary, appName: appName) {
-            await notifier.post(content)
-        }
-        await onRunFinished?()
-        return summary
-    }
-
-    private enum RunResult {
-        case ran(AutoRunner.Outcome)
-        case problem(String)
-    }
-
-    /// Scan, plan, run. Inside the cleanup guard.
-    private func run() async -> RunResult {
-        await app.refresh()
-        if let problem = app.problem { return .problem(problem) }
-        guard let scan = app.scan, let git = app.git else { return .problem("nothing was scanned") }
-        // The settings the scan read: its verdicts were made with them.
-        let settings = app.settings
-        guard settings.autoEnabled else { return .problem("auto mode was turned off") }
-        let plan = AutoPlanner.plan(app.assessments, settings: settings, now: now)
-        await afterPlanning()
-        let remover = Remover(git: git, settings: settings, environment: app.environment)
-        let outcome = await AutoRunner(remover: remover).run(plan, knownWorktrees: scan.worktrees) { [weak self] in
-            await self?.keepGoing(planned: settings) ?? false
-        }
-        return .ran(outcome)
-    }
-
-    /// Asked before each removal: not turned off here, and the saved rules are still the ones the plan used
-    /// (the Settings window or the CLI may have changed them). Otherwise the run stops; the next check
-    /// starts fresh with the new rules.
-    private func keepGoing(planned: Settings) -> Bool {
-        guard !stopRequested, let saved = try? SettingsEditor.current(app), saved.autoEnabled else { return false }
-        return saved.includeClaudeInAuto == planned.includeClaudeInAuto
-            && saved.effectiveIdleThresholdDays == planned.effectiveIdleThresholdDays
-            && !AutoSchedule.isReportOnly(now: now, settings: saved)
     }
 }

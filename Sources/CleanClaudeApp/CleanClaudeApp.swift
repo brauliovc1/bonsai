@@ -7,13 +7,16 @@ import SwiftUI
 /// and the Settings window. No Dock icon (LSUIElement) except while the main window is open.
 ///
 /// At launch: the first scan, the free-space label (every five minutes), and auto mode's scheduler (a check
-/// now, on wake, and daily; each check runs only when auto mode is on and a day has passed).
+/// now, hourly and a few minutes after a wake; each runs only when auto mode is on and a day has passed).
+/// Quitting waits for a removal in progress (AppDelegate).
 @main
 struct CleanClaudeApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var models: ScreenModels
 
     init() {
         let app = AppModel(environment: .live())
+        AppDelegate.app = app
         let navigation = NavigationModel()
         let notifier = SystemNotifier { section in
             navigation.show(section)

@@ -89,7 +89,7 @@ struct AutoRunnerTests {
         #expect(outcome.removed.map(\.entry.branch) == ["idle-b"])
     }
 
-    /// Once `shouldContinue` says no, nothing more is removed and the rest are reported as left alone.
+    /// Once `stopReason` gives a reason, nothing more is removed and the rest are reported as stopped.
     @Test func aStoppedRunRemovesNothingMore() async throws {
         let (world, environment, paths) = try await world()
         defer { world.remove() }
@@ -98,13 +98,33 @@ struct AutoRunnerTests {
         let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
 
         let asked = Counter()
-        let outcome = await runner.run(plan, ignoringReportOnly: true) { asked.next() == 0 }
+        let outcome = await runner.run(plan, ignoringReportOnly: true) { asked.next() < 2 ? nil : .turnedOff }
 
         #expect(outcome.removed.map(\.entry.branch) == ["idle-a"])
-        #expect(outcome.refused.map(\.worktree.branch) == ["idle-b"])
-        #expect(outcome.refused.first?.reason == "the run was stopped before its turn")
+        #expect(outcome.refused.isEmpty)
+        #expect(outcome.stopped == .turnedOff && outcome.stoppedWorktrees.map(\.branch) == ["idle-b"])
         #expect(FileManager.default.fileExists(atPath: paths[1].path))
-        #expect(asked.value == 2, "asked once per removal until it said no")
+        #expect(asked.value == 3, "asked before each removal and again right before its git")
+        let summary = outcome.summary(date: environment.now())
+        #expect(summary.stopReason == .turnedOff && summary.stoppedCount == 1)
+    }
+
+    /// The last ask is inside `Remover`, after its re-check and the process index, right before git: a stop
+    /// there leaves the worktree untouched and logs nothing.
+    @Test func aStopRightBeforeGitLeavesTheWorktreeAlone() async throws {
+        let (world, environment, paths) = try await world()
+        defer { world.remove() }
+        let settings = Settings(autoEnabled: true, autoEnabledAt: environment.now())
+        let plan = try await plan(world, environment, settings: settings)
+        let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
+
+        let asked = Counter()
+        let outcome = await runner.run(plan, ignoringReportOnly: true) { asked.next() == 0 ? nil : .rulesChanged }
+
+        #expect(outcome.removed.isEmpty && outcome.refused.isEmpty && outcome.failed.isEmpty)
+        #expect(outcome.stopped == .rulesChanged && outcome.stoppedWorktrees.map(\.branch) == ["idle-a", "idle-b"])
+        #expect(paths.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        #expect(!FileManager.default.fileExists(atPath: RemovalLog(environment: environment).fileURL.path))
     }
 
     @Test func reportOnlyNeverAsksTheRemover() async throws {
@@ -115,7 +135,7 @@ struct AutoRunnerTests {
         let runner = AutoRunner(remover: Remover(git: world.fixture.git, settings: settings, environment: environment))
 
         let asked = Counter()
-        let outcome = await runner.run(plan) { asked.next() >= 0 }
+        let outcome = await runner.run(plan) { _ = asked.next(); return nil }
         #expect(outcome.reportOnly && outcome.planned == 2 && outcome.estimatedBytes == plan.estimatedBytes)
         #expect(asked.value == 0)
         #expect(paths.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })

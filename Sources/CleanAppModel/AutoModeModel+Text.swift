@@ -61,7 +61,7 @@ extension AutoModeModel {
         if run.notifiedCount > 0 { parts.append("\(run.notifiedCount) with local work") }
         if !run.refused.isEmpty { parts.append("\(run.refused.count) left alone") }
         if !run.failures.isEmpty { parts.append("\(run.failures.count) failed") }
-        return parts.joined(separator: ", ") + "."
+        return parts.joined(separator: ", ") + "." + (run.stopReason.map { " " + $0.sentence } ?? "")
     }
 
     static func dateText(_ date: Date) -> String {

@@ -23,6 +23,8 @@ struct LightCleanCommand: AsyncParsableCommand {
 
     func run() async throws {
         let context = try CommandContext.load()
+        let lock = try CommandContext.holdCleanupLock(if: yes, environment: context.environment)
+        defer { lock?.release() }
         let git = try context.requireGit()
         let scan = try await context.scan(rootOptions, includeSizes: false)
         let url = context.absoluteURL(path)

@@ -93,6 +93,12 @@ extension WorktreesModel {
         let before = volumes.map(freeBytes)
         var outcomes: [RemovalOutcome] = []
         for item in items {
+            // Quitting: the removal in progress finishes and is logged, the rest are left alone.
+            if app.isQuitting {
+                outcomes.append(RemovalOutcome(item: item, result: nil, error: "not removed: the app is quitting"))
+                removalsDone += 1
+                continue
+            }
             do {
                 let result = try await remover.remove(
                     item.worktree,

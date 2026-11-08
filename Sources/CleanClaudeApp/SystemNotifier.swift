@@ -22,15 +22,20 @@ final class SystemNotifier: NSObject, Notifier, UNUserNotificationCenterDelegate
         return (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
     }
 
-    func post(_ content: NotificationContent) async {
-        guard let center else { return }
+    func post(_ content: NotificationContent) async -> Bool {
+        guard let center else { return false }
         let status = await center.notificationSettings().authorizationStatus
-        guard status == .authorized || status == .provisional else { return }
+        guard status == .authorized || status == .provisional else { return false }
         let message = UNMutableNotificationContent()
         message.title = content.title
         message.body = content.body
         message.userInfo = ["opens": content.opens.rawValue]
-        try? await center.add(UNNotificationRequest(identifier: content.identifier, content: message, trigger: nil))
+        do {
+            try await center.add(UNNotificationRequest(identifier: content.identifier, content: message, trigger: nil))
+            return true
+        } catch {
+            return false
+        }
     }
 
     nonisolated func userNotificationCenter(

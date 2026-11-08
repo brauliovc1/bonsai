@@ -5,8 +5,12 @@ import Foundation
 public enum AutoSchedule {
     /// At most one run per this many seconds (a day).
     public static let interval: TimeInterval = 86_400
-    /// How much earlier than `interval` the daily background activity may fire.
-    public static let tolerance: TimeInterval = 3_600
+    /// The background activity asks every hour (10 minutes tolerance), so a run starts within about an hour
+    /// of being due, and never sooner than `interval` after the last one.
+    public static let checkInterval: TimeInterval = 3_600
+    public static let checkTolerance: TimeInterval = 600
+    /// After a wake the check waits this long: right after waking a Mac can be too busy for timed work.
+    public static let wakeDelay: Duration = .seconds(5 * 60)
 
     /// True when auto mode is on and has not run in the last 24 hours. A last run dated after `now` (the
     /// clock was set back) counts as old; otherwise auto mode would wait until that date.

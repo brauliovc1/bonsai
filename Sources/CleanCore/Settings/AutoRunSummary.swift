@@ -19,6 +19,10 @@ public struct AutoRunSummary: Sendable, Codable, Equatable {
     public var plannedCount: Int
     /// The `du` estimate of the planned worktrees.
     public var estimatedBytes: Int64
+    /// Why the run stopped before the end of its plan, if it did.
+    public var stopReason: RemovalStop?
+    /// Planned worktrees not removed because the run stopped (never touched).
+    public var stoppedCount: Int
 
     public init(
         date: Date,
@@ -29,7 +33,9 @@ public struct AutoRunSummary: Sendable, Codable, Equatable {
         failures: [String] = [],
         refused: [String] = [],
         plannedCount: Int = 0,
-        estimatedBytes: Int64 = 0
+        estimatedBytes: Int64 = 0,
+        stopReason: RemovalStop? = nil,
+        stoppedCount: Int = 0
     ) {
         self.date = date
         self.reportOnly = reportOnly
@@ -40,10 +46,13 @@ public struct AutoRunSummary: Sendable, Codable, Equatable {
         self.refused = refused
         self.plannedCount = plannedCount
         self.estimatedBytes = estimatedBytes
+        self.stopReason = stopReason
+        self.stoppedCount = stoppedCount
     }
 
     private enum CodingKeys: String, CodingKey {
         case date, reportOnly, removedCount, freedBytes, notifiedCount, failures, refused, plannedCount, estimatedBytes
+        case stopReason, stoppedCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -57,5 +66,12 @@ public struct AutoRunSummary: Sendable, Codable, Equatable {
         refused = try container.decodeIfPresent([String].self, forKey: .refused) ?? []
         plannedCount = try container.decodeIfPresent(Int.self, forKey: .plannedCount) ?? 0
         estimatedBytes = try container.decodeIfPresent(Int64.self, forKey: .estimatedBytes) ?? 0
+        // An unknown stop reason (a newer version wrote it) reads as "stopped" for the rules.
+        if container.contains(.stopReason), (try? container.decodeNil(forKey: .stopReason)) == false {
+            stopReason = (try? container.decode(RemovalStop.self, forKey: .stopReason)) ?? .rulesChanged
+        } else {
+            stopReason = nil
+        }
+        stoppedCount = try container.decodeIfPresent(Int.self, forKey: .stoppedCount) ?? 0
     }
 }

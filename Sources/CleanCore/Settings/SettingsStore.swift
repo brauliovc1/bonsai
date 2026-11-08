@@ -1,8 +1,13 @@
 import Foundation
 
-/// Reads and writes `<settingsDir>/settings.json`.
+/// Reads and writes `<settingsDir>/settings.json`. The app and the CLI both change it, so every
+/// read-modify-write (`update`) holds an exclusive `flock` on `settings.lock` (PLAN §3): a change made in
+/// between can't be put back by an older copy.
 public struct SettingsStore: Sendable {
     public static let fileName = "settings.json"
+    public static let lockFileName = "settings.lock"
+    /// How long `update` and `loadLocked` wait for another process's lock.
+    public static let lockTimeout: Duration = .seconds(5)
 
     public var directory: URL
 
@@ -15,6 +20,7 @@ public struct SettingsStore: Sendable {
     }
 
     public var fileURL: URL { directory.appending(path: Self.fileName) }
+    public var lockURL: URL { directory.appending(path: Self.lockFileName) }
 
     public struct LoadError: Error, Sendable, CustomStringConvertible {
         public var path: String
@@ -44,6 +50,27 @@ public struct SettingsStore: Sendable {
             throw LoadError(path: fileURL.path, message: settings.problems.joined(separator: "; "))
         }
         return settings
+    }
+
+    /// Reads the file, changes it and saves it, holding `settings.lock` throughout. A file that can't be read
+    /// is never overwritten (the load throws first). Returns what was saved.
+    @discardableResult
+    public func update(_ change: (inout Settings) throws -> Void) throws -> Settings {
+        let lock = try FileLock.lock(lockURL, timeout: Self.lockTimeout)
+        defer { lock.release() }
+        var settings = try load()
+        try change(&settings)
+        try save(settings)
+        return settings
+    }
+
+    /// `load()` while holding `settings.lock`, so a write in progress elsewhere finishes first. Without a
+    /// settings folder there is nothing to wait for (and nothing is created).
+    public func loadLocked() throws -> Settings {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return try load() }
+        let lock = try FileLock.lock(lockURL, timeout: Self.lockTimeout)
+        defer { lock.release() }
+        return try load()
     }
 
     /// Writes the settings atomically (pretty, sorted keys, ISO 8601 dates), creating the folder if needed.

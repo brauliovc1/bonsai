@@ -154,7 +154,27 @@ struct DockerModelTests {
     }
 
     @Test func aLogWriteFailureIsShownNotSwallowed() async throws {
-        // The settings folder sits below a file, so the log can't be created.
+        // removals.jsonl is a folder, so the log can't be written (the settings folder itself works, so
+        // cleanup.lock can be taken).
+        let world = try DockerSimulatorsWorld()
+        defer { world.home.remove() }
+        let log = RemovalLog(environment: world.app.environment).fileURL
+        try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+        await world.model.beginDockerPrune()
+        let confirmation = try #require(world.model.dockerConfirmation)
+
+        let report = await world.model.confirmDockerPrune(confirmation)
+
+        #expect(world.toolchain.pruneCalls.count == 1, "the command ran")
+        #expect(report.succeeded)
+        let logError = try #require(report.logError, "the failed log write is part of the report")
+        #expect(logError.contains("not logged"), "\(logError)")
+        #expect(world.app.logEntries.isEmpty)
+    }
+
+    /// Wave 5: a settings folder that can't be created (it sits below a file) means no `cleanup.lock`, so the
+    /// cleanup doesn't run at all rather than run unguarded and unlogged.
+    @Test func anUnusableSettingsFolderRefusesTheCleanup() async throws {
         var blocker: URL?
         let world = try DockerSimulatorsWorld { environment in
             let file = environment.homeDirectory.appending(path: "blocker")
@@ -168,11 +188,9 @@ struct DockerModelTests {
 
         let report = await world.model.confirmDockerPrune(confirmation)
 
-        #expect(world.toolchain.pruneCalls.count == 1, "the command ran")
-        #expect(report.succeeded)
-        let logError = try #require(report.logError, "the failed log write is part of the report")
-        #expect(logError.contains("not logged"), "\(logError)")
-        #expect(world.app.logEntries.isEmpty)
+        #expect(world.toolchain.pruneCalls.isEmpty, "docker was not run")
+        #expect(!report.succeeded)
+        #expect(report.error?.hasPrefix("The cleanup lock can't be taken: ") == true, "\(report.error ?? "")")
     }
 
     /// Wave 4: a second confirm while the prune runs is turned away without touching the running one.

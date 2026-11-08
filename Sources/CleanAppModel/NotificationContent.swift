@@ -21,8 +21,8 @@ public struct NotificationContent: Sendable, Hashable {
     }
 
     /// What an auto-mode run reports, or nil when there is nothing to say (nothing planned, nothing kept for
-    /// local work, nothing left alone or failed). A report-only run opens the Overview, a normal run
-    /// Recently removed.
+    /// local work, nothing left alone, failed or stopped). A report-only run opens the Overview, a normal run
+    /// Recently removed. The caller posts nothing when auto mode is off by the time the run ends.
     public static func autoRun(_ summary: AutoRunSummary, appName: String = "Bonsai") -> NotificationContent? {
         let localWork = summary.notifiedCount > 0
             ? " \(summary.notifiedCount) idle \(summary.notifiedCount == 1 ? "worktree has" : "worktrees have") local work."
@@ -39,7 +39,9 @@ public struct NotificationContent: Sendable, Hashable {
 
         let leftAlone = summary.refused.count
         let failed = summary.failures.count
-        guard summary.removedCount > 0 || summary.notifiedCount > 0 || leftAlone > 0 || failed > 0 else { return nil }
+        let stopped = summary.stopReason != nil
+        guard summary.removedCount > 0 || summary.notifiedCount > 0 || leftAlone > 0 || failed > 0 || stopped
+        else { return nil }
         var body = summary.removedCount > 0
             ? "Removed \(DisplayText.worktrees(summary.removedCount)), freed \(ByteFormatting.string(summary.freedBytes))."
             : "Auto mode removed nothing."
@@ -49,6 +51,9 @@ public struct NotificationContent: Sendable, Hashable {
         }
         if failed > 0 {
             body += " \(DisplayText.worktrees(failed)) could not be removed."
+        }
+        if let stop = summary.stopReason {
+            body += " " + stop.sentence
         }
         return NotificationContent(identifier: autoRunIdentifier, title: appName, body: body, opens: .recentlyRemoved)
     }

@@ -19,6 +19,25 @@ struct CommandContext {
         }
     }
 
+    /// `cleanup.lock` for the whole command when it changes anything (`--yes`), so it never runs together
+    /// with the app's cleanups, auto mode or another clean-claude. Refused (exit 1) while someone holds it.
+    /// Keep the result alive until the command ends; nil without `--yes`.
+    static func holdCleanupLock(if yes: Bool, environment: CleanEnvironment) throws -> FileLock? {
+        guard yes else { return nil }
+        let lock: FileLock?
+        do {
+            lock = try CleanupLock.tryAcquire(environment: environment)
+        } catch {
+            StandardError.write("error: \(error)")
+            throw ExitCode.failure
+        }
+        guard let lock else {
+            StandardError.write("error: \(CleanupLock.busyMessage); nothing was changed. Try again when it is done.")
+            throw ExitCode.failure
+        }
+        return lock
+    }
+
     /// git, or a clear error when it is missing.
     func requireGit() throws -> Git {
         guard let git = WorktreeAssessor.git(for: environment) else {

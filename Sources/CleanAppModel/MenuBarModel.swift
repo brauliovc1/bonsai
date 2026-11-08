@@ -17,6 +17,8 @@ public final class MenuBarModel {
     let notifier: any Notifier
     let appName: String
     private var refreshTask: Task<Void, Never>?
+    /// The last low-space notification this app posted, in case its date could not be saved.
+    private var lastNotice: Date?
 
     public init(app: AppModel, notifier: any Notifier = SilentNotifier(), appName: String = "Bonsai") {
         self.app = app
@@ -58,19 +60,22 @@ public final class MenuBarModel {
         refreshTask = nil
     }
 
-    /// Posts the low-space notification when space is low and none was posted in the last day. The date
-    /// is saved first, so a settings file that can't be written means no notification rather than one
-    /// every five minutes.
+    /// Posts the low-space notification when space is low and none was posted in the last day. The date is
+    /// saved only when a notification was really shown (notifications not allowed = nothing written, also no
+    /// settings.json on a fresh install). Unreadable settings = no notification.
     public func checkLowSpace() async {
         guard isLow, let free = app.disk.freeBytes else { return }
         let now = app.environment.now()
         guard let settings = try? SettingsEditor.current(app) else { return }
-        if let last = settings.lowSpaceNotifiedAt, last <= now, now.timeIntervalSince(last) < Self.noticeInterval {
+        for last in [settings.lowSpaceNotifiedAt, lastNotice].compactMap({ $0 })
+        where last <= now && now.timeIntervalSince(last) < Self.noticeInterval {
             return
         }
-        guard (try? SettingsEditor.update(app, { $0.lowSpaceNotifiedAt = now })) != nil else { return }
-        await notifier.post(.lowSpace(
+        let posted = await notifier.post(.lowSpace(
             freeBytes: free, warningGB: settings.lowSpaceWarningGB, volumeName: app.disk.volumeName, appName: appName
         ))
+        guard posted else { return }
+        lastNotice = now
+        _ = try? SettingsEditor.update(app) { $0.lowSpaceNotifiedAt = now }
     }
 }

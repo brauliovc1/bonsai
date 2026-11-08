@@ -26,6 +26,11 @@ struct MenuContentView: View {
             Text(autoMode.isRunning ? "Auto mode is running…" : autoMode.statusText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if app.isQuitting && app.isCleaningUp {
+                Label("Finishing the current removal…", systemImage: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             if let problem = app.problem {
                 Text(problem)
                     .font(.caption)

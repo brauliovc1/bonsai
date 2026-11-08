@@ -103,6 +103,12 @@ extension WorktreesModel {
         let known = app.scan?.worktrees ?? []
         var outcomes: [LightCleanOutcome] = []
         for item in items {
+            // Quitting: the worktree in progress finishes, the rest are left alone.
+            if app.isQuitting {
+                outcomes.append(LightCleanOutcome(item: item, error: "the app is quitting; nothing was deleted"))
+                lightCleansDone += 1
+                continue
+            }
             do {
                 let result = try await cleaner.clean(
                     item.worktree,

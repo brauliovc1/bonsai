@@ -32,12 +32,17 @@ public struct Remover: Sendable {
     ///
     /// `expectation`: what the person confirmed. When given, the removal is refused with
     /// `RemovalExpectation.Mismatch` if the fresh state differs from it in any way that matters.
+    ///
+    /// `stillAllowed`: asked last, after the re-check and the process index, immediately before git runs
+    /// (auto mode re-reads its rules from disk here). A stop throws `RemovalError.stopped` and nothing is
+    /// touched or logged.
     public func remove(
         _ worktree: Worktree,
         mode: RemovalMode,
         estimatedBytes: Int64?,
         knownWorktrees: [Worktree] = [],
-        expectation: RemovalExpectation? = nil
+        expectation: RemovalExpectation? = nil,
+        stillAllowed: (@Sendable () async -> RemovalStop?)? = nil
     ) async throws -> RemovalResult {
         let (fresh, siblings) = try await reread(worktree, mode: mode)
         // The slow checks first; the process index last, right before git runs, so a process that moved
@@ -62,12 +67,15 @@ public struct Remover: Sendable {
         let volumeFolder = fresh.url.deletingLastPathComponent()
         let freeBefore = Self.availableCapacity(at: volumeFolder)
 
+        if let stillAllowed, let stop = await stillAllowed() { throw RemovalError.stopped(stop) }
         await beforeGitRemove()
         let (arguments, directory) = Self.removeCommand(for: fresh)
         do {
             try await git.git(arguments, in: directory)
         } catch let error as GitError {
-            throw RemovalError.gitFailed(stderr: error.timedOut ? "git timed out" : error.stderr)
+            // A stopped git may have deleted part of the folder already; there is no complete removal to log.
+            if error.timedOut { throw RemovalError.interrupted(path: fresh.path) }
+            throw RemovalError.gitFailed(stderr: error.stderr)
         }
 
         var warnings: [String] = []

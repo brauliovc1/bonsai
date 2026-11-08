@@ -17,7 +17,7 @@ struct AutoModeScheduleTests {
 
         await world.autoMode.checkSchedule()
         #expect(try world.saved().lastAutoRun == nil, "it did not start")
-        #expect(world.autoMode.error?.contains("another cleanup is running") == true)
+        #expect(world.autoMode.error == "Auto mode waited: another cleanup is still running. The next check tries again.")
         #expect(try world.exists("atlas-archive"))
         #expect(world.app.busyReason == "another cleanup is still running")
 
@@ -62,17 +62,18 @@ struct AutoModeScheduleTests {
         #expect(world.autoMode.nextRun == start.addingTimeInterval(86_400))
         #expect(world.autoMode.nextRunText.hasPrefix("Next run: after "))
 
+        world.clock.set(start.addingTimeInterval(23 * 3_600))
+        await world.autoMode.checkSchedule()
+        #expect(try world.saved().lastAutoRun?.date == start, "23 h (an hourly check): no run")
         world.clock.set(start.addingTimeInterval(23 * 3_600 + 59 * 60))
         await world.autoMode.checkSchedule()
         #expect(try world.saved().lastAutoRun?.date == start, "23 h 59 m: no run")
-        await world.autoMode.checkSchedule(early: AutoSchedule.tolerance)
-        #expect(try world.saved().lastAutoRun?.date == world.clock.now, "the daily activity may fire an hour early")
 
-        let second = world.clock.now
-        world.clock.set(second.addingTimeInterval(86_400))
+        world.clock.set(start.addingTimeInterval(86_400))
         await world.autoMode.checkSchedule()
         #expect(try world.saved().lastAutoRun?.date == world.clock.now, "24 h: runs")
-        #expect(world.notifier.posted.count == 3, "one notification per run")
+        #expect(world.notifier.posted.count == 2, "one notification per run")
+        #expect(AutoSchedule.checkInterval == 3_600 && AutoSchedule.checkTolerance == 600, "checked hourly")
     }
 
     @Test func theLaunchAndWakeChecksRunAutoMode() async throws {
@@ -81,7 +82,8 @@ struct AutoModeScheduleTests {
         let center = NotificationCenter()
         let wake = Notification.Name("test.didWake")
         let scheduler = AutoModeScheduler(model: world.autoMode)
-        scheduler.start(wakeCenter: center, wakeName: wake, daily: false)
+        scheduler.wakeDelay = .milliseconds(600)
+        scheduler.start(wakeCenter: center, wakeName: wake, hourly: false)
         defer { scheduler.stop() }
 
         #expect(await eventually { (try? world.saved().lastAutoRun) != nil }, "the launch check")
@@ -89,13 +91,16 @@ struct AutoModeScheduleTests {
         let first = try #require(try world.saved().lastAutoRun?.date)
 
         center.post(name: wake, object: nil)
-        try await Task.sleep(for: .milliseconds(200))
+        try await Task.sleep(for: .milliseconds(900))
         #expect(try world.saved().lastAutoRun?.date == first, "woke within a day: no run")
 
         world.clock.advance(by: 86_400)
         center.post(name: wake, object: nil)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(try world.saved().lastAutoRun?.date == first, "not right at the wake: it waits a while first")
         #expect(await eventually { (try? world.saved().lastAutoRun?.date) == world.clock.now }, "woke a day later: runs")
         #expect(AutoModeScheduler.identifier == "io.github.brauliovc1.bonsai.auto")
+        #expect(AutoSchedule.wakeDelay == .seconds(300))
     }
 
     @Test func theOverviewRowShowsOffReportOnlyAndOnWithTheRuns() async throws {

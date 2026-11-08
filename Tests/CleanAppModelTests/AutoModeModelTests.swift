@@ -127,10 +127,12 @@ struct AutoModeModelTests {
         world.autoMode.afterPlanning = { world.autoMode.disable() }
 
         let summary = try #require(await world.autoMode.runNow())
-        #expect(summary.removedCount == 0)
-        #expect(summary.refused.count == 2 && summary.refused.allSatisfy { $0.hasSuffix("the run was stopped before its turn") })
+        #expect(summary.removedCount == 0 && summary.refused.isEmpty)
+        #expect(summary.stopReason == .turnedOff && summary.stoppedCount == 2)
         #expect(try world.exists("atlas-archive") && world.exists("tidy-otter"))
         #expect(try world.logEntries().isEmpty)
+        #expect(world.notifier.posted.isEmpty, "auto mode is off when the run ends: no notification")
+        #expect(world.autoMode.lastRunText.hasSuffix("removed nothing, 1 with local work. Auto mode was turned off, so the run stopped."))
     }
 
     /// The rules the plan used change on disk during the run (the CLI or the General tab): it stops.
@@ -147,8 +149,12 @@ struct AutoModeModelTests {
                 try? store.save(settings)
             }
             let summary = try #require(await world.autoMode.runNow())
-            #expect(summary.removedCount == 0 && summary.refused.count == 2)
+            #expect(summary.removedCount == 0 && summary.refused.isEmpty)
+            #expect(summary.stopReason == .rulesChanged && summary.stoppedCount == 2)
             #expect(try world.logEntries().isEmpty)
+            let body = try #require(world.notifier.posted.first?.body)
+            #expect(body == "Auto mode removed nothing. 1 idle worktree has local work. The rules changed, so the run stopped.")
+            #expect(!body.contains("left alone"))
         }
     }
 
@@ -165,7 +171,8 @@ struct AutoModeModelTests {
 
         let summary = try #require(await world.autoMode.runNow())
         #expect(try world.saved().autoEnabled, "the file could not be changed")
-        #expect(summary.removedCount == 0 && summary.refused.count == 2)
+        #expect(summary.removedCount == 0 && summary.stopReason == .turnedOff && summary.stoppedCount == 2)
+        #expect(world.notifier.posted.isEmpty, "turned off here: no notification")
         #expect(try world.exists("atlas-archive") && world.exists("tidy-otter"))
         #expect(world.autoMode.error?.hasPrefix("The run was not recorded") == true, "\(world.autoMode.error ?? "")")
     }
