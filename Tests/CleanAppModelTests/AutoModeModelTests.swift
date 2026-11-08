@@ -17,6 +17,7 @@ struct AutoModeModelTests {
         defer { world.remove() }
         try SettingsStore(environment: world.environment).save(Settings(idleThresholdDays: 45))
         world.app.reloadSettings()
+        try await Task.sleep(for: .milliseconds(100))
         #expect(world.notifier.authorizationRequests == 0, "not at launch")
         #expect(world.autoMode.statusText == "Auto mode: off")
 
@@ -56,6 +57,7 @@ struct AutoModeModelTests {
         #expect(try world.logEntries().isEmpty)
         #expect(try world.saved().lastAutoRun == summary, "lastAutoRun is saved")
         #expect(summary.date == world.clock.now)
+        #expect(world.notifier.authorizationRequests == 0, "a run never asks; only turning it on does")
 
         let size = ByteFormatting.string(summary.estimatedBytes)
         #expect(summary.estimatedBytes > 0)
@@ -148,6 +150,40 @@ struct AutoModeModelTests {
             #expect(summary.removedCount == 0 && summary.refused.count == 2)
             #expect(try world.logEntries().isEmpty)
         }
+    }
+
+    /// Turned off while the settings folder can't be written: the file still says on, the run stops anyway.
+    @Test func turningItOffStopsTheRunEvenWhenTheFileCantBeSaved() async throws {
+        let world = try await AutoWorld.make(enabledDaysAgo: 8, includeClaude: true)
+        defer { world.remove() }
+        let folder = world.environment.settingsDirectory
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+        world.autoMode.afterPlanning = {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+            world.autoMode.disable()
+        }
+
+        let summary = try #require(await world.autoMode.runNow())
+        #expect(try world.saved().autoEnabled, "the file could not be changed")
+        #expect(summary.removedCount == 0 && summary.refused.count == 2)
+        #expect(try world.exists("atlas-archive") && world.exists("tidy-otter"))
+        #expect(world.autoMode.error?.hasPrefix("The run was not recorded") == true, "\(world.autoMode.error ?? "")")
+    }
+
+    /// A call while a run is finishing (saving, notifying) does nothing either.
+    @Test func aCallWhileARunIsFinishingDoesNothing() async throws {
+        let world = try await AutoWorld.make(enabledDaysAgo: 8)
+        defer { world.remove() }
+        var nested: [AutoRunSummary?] = []
+        world.notifier.onPost = {
+            world.notifier.onPost = nil
+            nested.append(await world.autoMode.runNow())
+            await world.autoMode.checkSchedule()
+        }
+        await world.autoMode.runNow()
+        #expect(nested.count == 1 && nested[0] == nil)
+        #expect(world.notifier.posted.count == 1)
+        #expect(world.app.scanCount <= 3, "one run: its scan and the rescan after its removal")
     }
 
     @Test func twoOverlappingRunsRunOnce() async throws {

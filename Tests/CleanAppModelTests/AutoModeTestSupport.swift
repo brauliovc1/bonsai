@@ -29,6 +29,8 @@ final class TestClock: @unchecked Sendable {
 final class RecordingNotifier: Notifier {
     var authorizationRequests = 0
     var posted: [NotificationContent] = []
+    /// Runs inside `post`, after recording (a test can start something while a run is finishing).
+    var onPost: (@MainActor () async -> Void)?
 
     func requestAuthorization() async -> Bool {
         authorizationRequests += 1
@@ -37,6 +39,7 @@ final class RecordingNotifier: Notifier {
 
     func post(_ content: NotificationContent) async {
         posted.append(content)
+        await onPost?()
     }
 }
 
