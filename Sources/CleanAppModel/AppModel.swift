@@ -36,6 +36,12 @@ public final class AppModel {
     public private(set) var scanCount = 0
     /// A removal, prune or restore is running; the others wait their turn (their buttons are disabled).
     public private(set) var isCleaningUp = false
+    /// The cleanup running is an auto-mode run (from its fresh scan to its last removal).
+    public private(set) var isAutoRunning = false
+    /// Quit was asked for: running cleanups stop before their next item, new ones don't start.
+    public private(set) var isQuitting = false
+    /// Why the last cleanup that didn't start was refused, when it wasn't this app's own cleanup.
+    private var lastRefusal: String?
 
     private var scanTask: Task<Void, Never>?
     private var rescanRequested = false
@@ -158,11 +164,57 @@ public final class AppModel {
         }
     }
 
-    /// Runs `body` unless another cleanup is running (then returns nil without running it).
-    func cleaningUp<T>(_ body: () async -> T) async -> T? {
+    /// Why a cleanup can't start now, for refusals: "Auto mode is running" while an auto-mode run holds the
+    /// guard, "another cleanup is still running" for this app's own, and `CleanupLock.busyMessage` when
+    /// another app instance or the CLI holds `cleanup.lock`.
+    public var busyReason: String {
+        if isAutoRunning { return "Auto mode is running" }
+        if isCleaningUp { return "another cleanup is still running" }
+        return lastRefusal ?? "another cleanup is still running"
+    }
+
+    /// `busyReason` as a sentence of its own.
+    public var busySentence: String {
+        busyReason.prefix(1).uppercased() + busyReason.dropFirst() + "."
+    }
+
+    /// Runs `body` holding the in-app guard and `cleanup.lock` (across processes, PLAN §3), or returns nil
+    /// without running it when another cleanup holds either, or the app is quitting. `byAutoMode`: the body
+    /// is an auto-mode run, so refusals say "Auto mode is running".
+    func cleaningUp<T>(byAutoMode: Bool = false, _ body: () async -> T) async -> T? {
         guard !isCleaningUp else { return nil }
+        guard !isQuitting else {
+            lastRefusal = "the app is quitting"
+            return nil
+        }
+        let lock: FileLock
+        do {
+            guard let taken = try CleanupLock.tryAcquire(environment: environment) else {
+                lastRefusal = CleanupLock.busyMessage
+                return nil
+            }
+            lock = taken
+        } catch {
+            lastRefusal = "the cleanup lock can't be taken: \(error)"
+            return nil
+        }
+        lastRefusal = nil
         isCleaningUp = true
-        defer { isCleaningUp = false }
+        isAutoRunning = byAutoMode
+        defer {
+            lock.release()
+            isCleaningUp = false
+            isAutoRunning = false
+        }
         return await body()
+    }
+
+    /// Quit asked for: running cleanups stop before their next item, nothing new starts. Returns once no
+    /// cleanup runs, so the removal in progress finishes and logs first.
+    public func prepareToQuit() async {
+        isQuitting = true
+        while isCleaningUp {
+            try? await Task.sleep(for: .milliseconds(50), tolerance: nil, clock: SuspendingClock())
+        }
     }
 }

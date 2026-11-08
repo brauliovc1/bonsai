@@ -13,6 +13,16 @@ public final class DiskSpaceModel {
     /// The volume's name in Finder ("Macintosh HD").
     public private(set) var volumeName: String?
 
+    /// What one reading of a volume found.
+    struct Reading: Sendable {
+        var free: Int64?
+        var total: Int64?
+        var name: String?
+    }
+
+    /// Test seam: reads the volume holding a folder that exists.
+    @ObservationIgnored var read: @Sendable (URL) -> Reading = { DiskSpaceModel.readVolume($0) }
+
     public init(folder: URL? = nil) {
         self.folder = folder
         refresh()
@@ -43,10 +53,19 @@ public final class DiskSpaceModel {
         while !FileManager.default.fileExists(atPath: probe.path), probe.path != "/" {
             probe = probe.deletingLastPathComponent()
         }
+        let reading = read(probe)
+        freeBytes = reading.free
+        totalBytes = reading.total
+        volumeName = reading.name
+    }
+
+    nonisolated static func readVolume(_ folder: URL) -> Reading {
         let keys: Set<URLResourceKey> = [.volumeAvailableCapacityKey, .volumeTotalCapacityKey, .volumeLocalizedNameKey]
-        let values = try? probe.resourceValues(forKeys: keys)
-        freeBytes = values?.volumeAvailableCapacity.map(Int64.init)
-        totalBytes = values?.volumeTotalCapacity.map(Int64.init)
-        volumeName = values?.volumeLocalizedName
+        let values = try? folder.resourceValues(forKeys: keys)
+        return Reading(
+            free: values?.volumeAvailableCapacity.map(Int64.init),
+            total: values?.volumeTotalCapacity.map(Int64.init),
+            name: values?.volumeLocalizedName
+        )
     }
 }

@@ -112,9 +112,7 @@ public final class SettingsModel {
     private func update(_ change: (inout Settings) -> Void) -> Bool {
         let store = SettingsStore(environment: app.environment)
         do {
-            var settings = try store.load()
-            change(&settings)
-            try store.save(settings)
+            let settings = try store.update(change)
             apply(settings)
             app.reloadSettings()
             error = nil

@@ -17,6 +17,8 @@ struct AutoCommand: AsyncParsableCommand {
 
     func run() async throws {
         let context = try CommandContext.load()
+        let lock = try CommandContext.holdCleanupLock(if: yes, environment: context.environment)
+        defer { lock?.release() }
         let git = try context.requireGit()
         let scan = try await context.scan(rootOptions, includeSizes: false)
         let settings = context.settings
@@ -44,16 +46,15 @@ struct AutoCommand: AsyncParsableCommand {
             .run(plan, ignoringReportOnly: true, knownWorktrees: scan.worktrees)
         print(text.render(outcome))
         saveSummary(outcome.summary(date: context.environment.now()), context: context)
-        if !outcome.failed.isEmpty { throw ExitCode.failure }
+        if !outcome.failed.isEmpty || !outcome.refused.isEmpty { throw ExitCode.failure }
     }
 
-    /// Records the run as `lastAutoRun`, re-reading the settings first so nothing else is overwritten.
+    /// Records the run as `lastAutoRun`, re-reading the settings under `settings.lock` so nothing else is
+    /// overwritten (auto mode turned off in the app meanwhile stays off).
     private func saveSummary(_ summary: AutoRunSummary, context: CommandContext) {
         let store = SettingsStore(environment: context.environment)
         do {
-            var settings = try store.load()
-            settings.lastAutoRun = summary
-            try store.save(settings)
+            try store.update { $0.lastAutoRun = summary }
         } catch {
             StandardError.write("warning: could not record the run in \(store.fileURL.path): \(error)")
         }

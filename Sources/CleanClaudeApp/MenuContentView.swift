@@ -5,6 +5,7 @@ import SwiftUI
 /// The menu-bar window: free space, what can be reclaimed now, the last scan, and the app's commands.
 struct MenuContentView: View {
     let app: AppModel
+    let autoMode: AutoModeModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -22,6 +23,14 @@ struct MenuContentView: View {
             ScanTimeText(app: app)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Text(autoMode.isRunning ? "Auto mode is running…" : autoMode.statusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if app.isQuitting && app.isCleaningUp {
+                Label("Finishing the current removal…", systemImage: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             if let problem = app.problem {
                 Text(problem)
                     .font(.caption)

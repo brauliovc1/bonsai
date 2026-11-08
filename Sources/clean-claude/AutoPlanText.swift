@@ -48,10 +48,13 @@ struct AutoPlanText {
             lines.append("removed \(paths.string(result.entry.path)): freed \(freed); log id \(result.entry.id.uuidString)")
             result.warnings.forEach { lines.append("  warning: \($0)") }
         }
+        for refusal in outcome.refused {
+            lines.append("left alone \(paths.string(refusal.worktree.url)): \(refusal.reason)")
+        }
         for failure in outcome.failed {
             lines.append("failed \(paths.string(failure.worktree.url)): \(failure.reason)")
         }
-        lines.append("Removed \(outcome.removed.count), failed \(outcome.failed.count), freed "
+        lines.append("Removed \(outcome.removed.count), left alone \(outcome.refused.count), failed \(outcome.failed.count), freed "
             + "\(ByteFormatting.string(outcome.freedBytes)) (measured), \(outcome.notified.count) with local work kept.")
         return lines.joined(separator: "\n")
     }

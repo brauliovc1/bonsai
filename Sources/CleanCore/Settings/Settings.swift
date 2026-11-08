@@ -23,6 +23,8 @@ public struct Settings: Sendable, Codable, Equatable {
     /// Auto mode skips Claude-app worktrees unless this is on.
     public var includeClaudeInAuto: Bool
     public var lastAutoRun: AutoRunSummary?
+    /// When the app last showed the low-disk-space notification (at most one a day).
+    public var lowSpaceNotifiedAt: Date?
 
     public init(
         scanRoots: [String] = [],
@@ -32,7 +34,8 @@ public struct Settings: Sendable, Codable, Equatable {
         autoEnabledAt: Date? = nil,
         reportOnlyDays: Int = 7,
         includeClaudeInAuto: Bool = false,
-        lastAutoRun: AutoRunSummary? = nil
+        lastAutoRun: AutoRunSummary? = nil,
+        lowSpaceNotifiedAt: Date? = nil
     ) {
         self.scanRoots = scanRoots
         self.idleThresholdDays = idleThresholdDays
@@ -42,11 +45,12 @@ public struct Settings: Sendable, Codable, Equatable {
         self.reportOnlyDays = reportOnlyDays
         self.includeClaudeInAuto = includeClaudeInAuto
         self.lastAutoRun = lastAutoRun
+        self.lowSpaceNotifiedAt = lowSpaceNotifiedAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case scanRoots, idleThresholdDays, lowSpaceWarningGB, autoEnabled, autoEnabledAt, reportOnlyDays
-        case includeClaudeInAuto, lastAutoRun
+        case includeClaudeInAuto, lastAutoRun, lowSpaceNotifiedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -63,6 +67,7 @@ public struct Settings: Sendable, Codable, Equatable {
         includeClaudeInAuto = try container.decodeIfPresent(Bool.self, forKey: .includeClaudeInAuto)
             ?? defaults.includeClaudeInAuto
         lastAutoRun = try container.decodeIfPresent(AutoRunSummary.self, forKey: .lastAutoRun)
+        lowSpaceNotifiedAt = try container.decodeIfPresent(Date.self, forKey: .lowSpaceNotifiedAt)
     }
 
     /// What makes these settings unusable; empty when they are fine. A threshold below 7 days would make

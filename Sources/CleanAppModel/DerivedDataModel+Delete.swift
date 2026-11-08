@@ -62,7 +62,7 @@ extension DerivedDataModel {
         deletesDone = 0
         let cleaner = DerivedDataCleaner(environment: app.environment)
         let deletion = await app.cleaningUp { await cleaner.delete(items.compactMap(\.orphan)) }
-        let report = Self.report(for: items, deletion: deletion)
+        let report = Self.report(for: items, deletion: deletion, busy: app.busyReason)
         cleanupReport = report
         selection.subtract(report.outcomes.filter(\.isDeleted).map(\.id))
         isDeleting = false
@@ -73,10 +73,15 @@ extension DerivedDataModel {
         return report
     }
 
-    private static func report(for items: [DerivedDataConfirmation.Item], deletion: DerivedDataDeletion?) -> DerivedDataCleanupReport {
+    /// `busy`: why nothing ran when `deletion` is nil (another cleanup holds the guard).
+    private static func report(
+        for items: [DerivedDataConfirmation.Item],
+        deletion: DerivedDataDeletion?,
+        busy: String
+    ) -> DerivedDataCleanupReport {
         guard let deletion else {
             let outcomes = items.map {
-                DerivedDataOutcome(item: $0, status: .refused("another cleanup is still running; nothing was deleted"))
+                DerivedDataOutcome(item: $0, status: .refused("\(busy); nothing was deleted"))
             }
             return DerivedDataCleanupReport(outcomes: outcomes, measuredFreedBytes: nil, warnings: [])
         }

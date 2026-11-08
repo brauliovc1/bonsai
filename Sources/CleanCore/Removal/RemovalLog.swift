@@ -92,7 +92,8 @@ public struct RemovalLog: Sendable {
         let descriptor = open(lockURL.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
         guard descriptor >= 0 else { throw LogError(description: "cannot open \(lockURL.path): \(Self.errnoText())") }
         defer { close(descriptor) }
-        let clock = ContinuousClock()
+        // A clock that doesn't count sleep: a wait across a sleep must not give up on wake.
+        let clock = SuspendingClock()
         let deadline = clock.now.advanced(by: lockTimeout)
         while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
             guard errno == EWOULDBLOCK || errno == EINTR else {

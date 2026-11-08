@@ -36,6 +36,8 @@ struct DerivedDataCommand: AsyncParsableCommand {
 
     func run() async throws {
         let context = try CommandContext.load()
+        let lock = try CommandContext.holdCleanupLock(if: yes, environment: context.environment)
+        defer { lock?.release() }
         let environment = context.environment
         let report: DerivedDataReport
         if let location {

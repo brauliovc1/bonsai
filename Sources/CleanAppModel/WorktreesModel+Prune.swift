@@ -64,9 +64,10 @@ extension WorktreesModel {
             }
             return outcomes
         }
+        let busy = app.busyReason
         let outcomes = finished ?? repos.map {
             PruneOutcome(repoPath: $0.repoPath, pruned: [], refusals: [],
-                         error: "another cleanup is still running; nothing was cleared", warnings: [])
+                         error: "\(busy); nothing was cleared", warnings: [])
         }
         pruneOutcomes = outcomes
         isPruning = false

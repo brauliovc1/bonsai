@@ -80,7 +80,7 @@ struct OverviewModelTests {
         #expect(simulators.bytes == 323_456)
         #expect(simulators.detail == "2 devices")
 
-        #expect(OverviewModel.autoModeText == "Auto mode: off")
+        #expect(world.overview.autoModeText == "Auto mode: off")
         #expect(world.overview.disk.freeBytes != nil)
     }
 
