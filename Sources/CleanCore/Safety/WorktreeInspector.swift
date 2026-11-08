@@ -13,6 +13,44 @@ public struct WorktreeInspector: Sendable {
         self.nestedSearch = nestedSearch
     }
 
+    /// Whose folder it is now.
+    public enum Identity: Sendable, Hashable {
+        /// The folder's `.git` leads back to this repo; `gitDir` is the git dir git uses there.
+        case this(gitDir: URL)
+        /// The folder's `.git` leads to a git dir that is not this repo's (the path).
+        case staleRecord(leadsTo: String)
+        /// git could not say (no `.git` of its own, or a git command failed).
+        case unreadable(String)
+    }
+
+    /// Whether the folder at `worktree.path` is still this repo's worktree. Without its own `.git` file,
+    /// git commands in the folder would describe an enclosing repo; and a linked worktree's `.git` file
+    /// must lead back to one of this repo's records (`<common dir>/worktrees/`). When it leads to
+    /// another repo's, the record is stale (another repo's worktree now lives at the path) and every fact
+    /// read there would describe that other worktree. A main checkout's `.git` must be this repo's git dir.
+    public func identity(of worktree: Worktree) async -> Identity {
+        let folder = worktree.url
+        do {
+            let topLevel = try await git.gitString(["rev-parse", "--show-toplevel"], in: folder)
+            guard CanonicalPath.same(URL(fileURLWithPath: topLevel), folder) else {
+                return .unreadable("git sees \(topLevel) here, not this worktree; its .git file is missing or broken")
+            }
+            let gitDir = URL(fileURLWithPath: try await git.gitString(["rev-parse", "--absolute-git-dir"], in: folder))
+            let commonDir = URL(fileURLWithPath: try await git.gitString(
+                ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+                in: worktree.repoURL
+            ))
+            let leadsHome = if worktree.isMain {
+                CanonicalPath.same(gitDir, commonDir)
+            } else {
+                CanonicalPath.isInside(gitDir, directory: commonDir.appending(path: "worktrees", directoryHint: .isDirectory))
+            }
+            return leadsHome ? .this(gitDir: gitDir) : .staleRecord(leadsTo: gitDir.path)
+        } catch {
+            return .unreadable("\(error)")
+        }
+    }
+
     /// `knownWorktrees`: every registered worktree of every scanned repo; any inside this one counts as a
     /// nested checkout.
     public func inspect(_ worktree: Worktree, knownWorktrees: [Worktree] = []) async -> WorktreeState {
@@ -22,32 +60,14 @@ public struct WorktreeInspector: Sendable {
         else { return .missing }
 
         var state = WorktreeState()
-        // Without its own `.git` file, git commands in the folder would describe an enclosing repo.
         let gitDir: URL
-        do {
-            let topLevel = try await git.gitString(["rev-parse", "--show-toplevel"], in: folder)
-            guard CanonicalPath.same(URL(fileURLWithPath: topLevel), folder) else {
-                state.gitErrors.append("git sees \(topLevel) here, not this worktree; its .git file is missing or broken")
-                return state
-            }
-            gitDir = URL(fileURLWithPath: try await git.gitString(["rev-parse", "--absolute-git-dir"], in: folder))
-            // The folder's `.git` file must lead back to one of this repo's records (`<common dir>/worktrees/`).
-            // When it leads to another repo's, this record is stale (another repo's worktree now lives at the
-            // path) and every fact below would describe that other worktree.
-            let commonDir = try await git.gitString(
-                ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-                in: worktree.repoURL
-            )
-            let records = URL(fileURLWithPath: commonDir).appending(path: "worktrees", directoryHint: .isDirectory)
-            guard CanonicalPath.isInside(gitDir, directory: records) else {
-                state.gitErrors.append(
-                    "its .git file leads to \(gitDir.path), not to a record of \(worktree.repoPath); this record is "
-                        + "stale and the folder belongs to another repo"
-                )
-                return state
-            }
-        } catch {
-            state.gitErrors.append("\(error)")
+        switch await identity(of: worktree) {
+        case .this(let found): gitDir = found
+        case .staleRecord(let leadsTo):
+            state.staleRecord = leadsTo
+            return state
+        case .unreadable(let message):
+            state.gitErrors.append(message)
             return state
         }
 

@@ -19,6 +19,9 @@ public struct SimulatorReport: Sendable, Codable, Equatable {
     public var runtimes: [SimulatorRuntime]
     /// Things that went wrong without stopping the scan.
     public var warnings: [String]
+    /// Why `unavailableDevices` is empty although Xcode is there: `simctl list devices` failed or could not be
+    /// read. Without it, an empty list means "none", with it "unknown".
+    public var deviceListFailure: String?
 
     public init(
         state: State,
@@ -26,7 +29,8 @@ public struct SimulatorReport: Sendable, Codable, Equatable {
         cachesBytes: Int64? = nil,
         unavailableDevices: [SimulatorDevice] = [],
         runtimes: [SimulatorRuntime] = [],
-        warnings: [String] = []
+        warnings: [String] = [],
+        deviceListFailure: String? = nil
     ) {
         self.state = state
         self.devicesBytes = devicesBytes
@@ -34,6 +38,7 @@ public struct SimulatorReport: Sendable, Codable, Equatable {
         self.unavailableDevices = unavailableDevices
         self.runtimes = runtimes
         self.warnings = warnings
+        self.deviceListFailure = deviceListFailure
     }
 
     /// What `simctl delete unavailable` would remove, from the devices' own data sizes.

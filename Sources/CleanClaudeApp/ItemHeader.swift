@@ -1,25 +1,17 @@
 import CleanAppModel
 import SwiftUI
 
-/// Repo, branch, estimated size and path.
+/// Repo, branch, estimated size and path of one removal item.
 struct ItemHeader: View {
     let item: RemovalConfirmation.Item
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(item.repoName).fontWeight(.semibold)
-                Text(item.branchText)
-                Badge(kind: item.worktree.kind)
-                Spacer()
-                Text(DisplayText.bytes(item.estimatedBytes)).monospacedDigit()
-            }
-            Text(item.worktree.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
+        WorktreeHeader(
+            repoName: item.repoName,
+            branchText: item.branchText,
+            kind: item.worktree.kind,
+            path: item.worktree.path,
+            sizeText: DisplayText.bytes(item.estimatedBytes)
+        )
     }
 }

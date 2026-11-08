@@ -18,6 +18,8 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
     /// Not a folder this worktree's light clean may touch: found in another worktree, a name outside the
     /// list, or a symlinked folder on the way down.
     case notACandidate(String)
+    /// The folder is no longer this repo's worktree, so nothing read there is about it (`LightCleaner` only).
+    case wrongFolder(String)
     /// A process has its working folder inside the worktree (`LightCleaner` only).
     case inUse([ProcessCwdIndex.Entry])
     /// Running processes could not be checked (`LightCleaner` only).
@@ -35,6 +37,7 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
         case .gitError: "git error"
         case .gone: "gone"
         case .notACandidate: "not a candidate"
+        case .wrongFolder: "not this repo's"
         case .inUse(let processes): "in use (\(processes.map(\.command).uniqued().joined(separator: ", ")))"
         case .inUseUnknown: "in use: unknown"
         }
@@ -61,6 +64,8 @@ public enum LightCleanSkipReason: Sendable, Hashable, Codable {
             return "It no longer exists or is no longer a folder."
         case .notACandidate(let why):
             return "It is not a light-clean folder of this worktree: \(why)."
+        case .wrongFolder(let why):
+            return "The folder is no longer this repo's worktree: \(why)"
         case .inUse(let processes):
             return "A running process has its working folder inside the worktree: \(Self.list(processes.map(\.description)))."
         case .inUseUnknown(let why):

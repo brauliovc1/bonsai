@@ -31,6 +31,10 @@ struct LightCleanCommand: AsyncParsableCommand {
             throw ExitCode.failure
         }
         let name = context.paths(for: scan).string(worktree.url)
+        if let blocker = await SafetyCheck(git: git).identityBlocker(of: worktree) {
+            StandardError.write("error: \(name): \(blocker.sentence)")
+            throw ExitCode.failure
+        }
 
         let findings = await LightCleanFinder(git: git, du: context.environment.tools.du)
             .candidates(in: worktree, knownWorktrees: scan.worktrees)
@@ -53,7 +57,12 @@ struct LightCleanCommand: AsyncParsableCommand {
         let cleaner = LightCleaner(git: git, environment: context.environment)
         let result: LightCleanResult
         do {
-            result = try await cleaner.clean(worktree, candidates: findings.candidates, knownWorktrees: scan.worktrees)
+            result = try await cleaner.clean(
+                worktree,
+                candidates: findings.candidates,
+                knownWorktrees: scan.worktrees,
+                expectation: LightCleanExpectation(worktree: worktree)
+            )
         } catch {
             StandardError.write("error: \(name): \(error)")
             throw ExitCode.failure

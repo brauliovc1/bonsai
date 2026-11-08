@@ -177,6 +177,25 @@ struct DockerScannerTests {
         #expect(report.state == .running)
         #expect(report.usage.isEmpty)
         #expect(report.warnings.first?.contains("boom") == true)
+        // Wave 4: an empty table that means "unknown", not "nothing".
+        #expect(report.usageFailure?.contains("boom") == true, "\(report.usageFailure ?? "nil")")
+    }
+
+    @Test func aDfThatPrintsNothingReadableIsAFailureAndAGoodDfIsNot() async throws {
+        let home = try FakeHome()
+        defer { home.remove() }
+        let silent = script(info: ScriptedCommandRunner.result(stdout: "27.3.1"), df: ScriptedCommandRunner.result(stdout: "garbage\n"))
+        let report = await DockerScanner(environment: home.environment(docker: Self.docker), runner: silent.runner).scan()
+        #expect(report.usage.isEmpty)
+        #expect(report.usageFailure?.contains("nothing that could be read") == true)
+
+        let good = script(
+            info: ScriptedCommandRunner.result(stdout: "27.3.1"),
+            df: ScriptedCommandRunner.result(stdout: #"{"Active":"1","Reclaimable":"1GB","Size":"2GB","TotalCount":"3","Type":"Images"}"#)
+        )
+        let fine = await DockerScanner(environment: home.environment(docker: Self.docker), runner: good.runner).scan()
+        #expect(fine.usage.count == 1)
+        #expect(fine.usageFailure == nil)
     }
 
     @Test func neverRunsAnythingButReadOnlyInfoAndDf() async throws {

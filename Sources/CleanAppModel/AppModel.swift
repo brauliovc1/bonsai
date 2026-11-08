@@ -134,11 +134,18 @@ public final class AppModel {
     // MARK: - After a cleanup
 
     /// Re-reads the log and the free space, then scans again (always a fresh scan, also when one was
-    /// running when the cleanup ended).
-    public func cleanupFinished() async {
+    /// running when the cleanup ended). `rescanWorktrees: false` for a cleanup that doesn't touch
+    /// worktrees (DerivedData, Docker, Simulators): the log and the free space are re-read, nothing is scanned.
+    public func cleanupFinished(rescanWorktrees: Bool = true) async {
         reloadLog()
         disk.refresh()
-        await refresh()
+        if rescanWorktrees { await refresh() }
+    }
+
+    /// Re-reads `settings.json` after a settings screen saved it, without scanning. A file that can't be
+    /// read leaves the settings as they were (the next scan reports it).
+    public func reloadSettings() {
+        if let loaded = try? SettingsStore(environment: environment).load() { settings = loaded }
     }
 
     public func reloadLog() {

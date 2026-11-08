@@ -1,0 +1,164 @@
+import CleanAppModel
+import CleanCore
+import SwiftUI
+
+/// Confirms a light clean. It first looks at the selected worktrees afresh, then lists every folder that
+/// will be deleted (relative path and size), the folders left alone with their reasons, and the worktrees
+/// that can't be cleaned now. After it runs, the same sheet shows what happened to each folder.
+struct LightCleanSheet: View {
+    let model: WorktreesModel
+
+    var body: some View {
+        Group {
+            if let report = model.lightCleanReport {
+                LightCleanReportView(report: report) { model.dismissLightClean() }
+            } else if let confirmation = model.lightCleanConfirmation {
+                confirmPage(confirmation)
+            } else {
+                SheetProgress(text: "Looking at the selected worktrees…") { model.dismissLightClean() }
+            }
+        }
+        .padding(20)
+        .frame(width: 640)
+        .frame(minHeight: 300, idealHeight: 520, maxHeight: 720)
+        .interactiveDismissDisabled(model.isLightCleaning)
+    }
+
+    private func confirmPage(_ confirmation: LightCleanConfirmation) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(confirmation.cleanable.isEmpty ? "Nothing to delete" : "\(confirmation.deleteButtonTitle)?")
+                .font(.title2.weight(.semibold))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(confirmation.cleanable) { item in
+                        CleanableItemView(item: item)
+                    }
+                    if !confirmation.others.isEmpty {
+                        Text("Nothing is deleted here")
+                            .font(.headline)
+                            .padding(.top, 4)
+                        ForEach(confirmation.others) { item in
+                            LeftAloneItemView(item: item)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Divider()
+            if !confirmation.cleanable.isEmpty {
+                HStack {
+                    Text("Estimated total")
+                    Spacer()
+                    Text(DisplayText.bytes(confirmation.estimatedTotalBytes)
+                        + (confirmation.hasUnknownSizes ? " (some sizes unknown)" : ""))
+                        .monospacedDigit()
+                        .fontWeight(.semibold)
+                }
+                Text(LightCleanConfirmation.permanentLine)
+                    .foregroundStyle(.secondary)
+                Text(LightCleanConfirmation.nextTimeLine)
+                    .foregroundStyle(.secondary)
+            }
+            buttons(confirmation)
+        }
+    }
+
+    private func buttons(_ confirmation: LightCleanConfirmation) -> some View {
+        HStack {
+            if model.isLightCleaning {
+                ProgressView().controlSize(.small)
+                Text("Cleaning \(min(model.lightCleansDone + 1, confirmation.cleanable.count)) of \(confirmation.cleanable.count)…")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Cancel", role: .cancel) { model.dismissLightClean() }
+                .keyboardShortcut(.cancelAction)
+                .disabled(model.isLightCleaning)
+            if !confirmation.cleanable.isEmpty {
+                // Deliberately not the default button: Return never deletes anything.
+                Button(confirmation.deleteButtonTitle, role: .destructive) {
+                    Task { await model.confirmLightClean(confirmation) }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(model.isLightCleaning || model.app.isCleaningUp)
+            }
+        }
+    }
+}
+
+/// One worktree with folders to delete: each folder, then the ones left alone.
+private struct CleanableItemView: View {
+    let item: LightCleanConfirmation.Item
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            WorktreeHeader(
+                repoName: item.repoName, branchText: item.branchText, kind: item.worktree.kind,
+                path: item.worktree.path, sizeText: DisplayText.bytes(item.estimatedBytes)
+            )
+            ForEach(item.candidates, id: \.relativePath) { candidate in
+                HStack(alignment: .firstTextBaseline) {
+                    Label(candidate.relativePath, systemImage: "folder")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Text(DisplayText.bytes(candidate.estimatedBytes)).monospacedDigit()
+                }
+                if !candidate.packageClones.isEmpty {
+                    Label(
+                        "Goes with \(candidate.packageClones.count) package "
+                            + "\(candidate.packageClones.count == 1 ? "clone" : "clones") that can be fetched again.",
+                        systemImage: "info.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            SkippedList(skipped: item.skipped, unreadable: item.unreadable)
+        }
+    }
+}
+
+/// A worktree where nothing is deleted, with why.
+private struct LeftAloneItemView: View {
+    let item: LightCleanConfirmation.Item
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            WorktreeHeader(
+                repoName: item.repoName, branchText: item.branchText, kind: item.worktree.kind,
+                path: item.worktree.path
+            )
+            if let reason = item.leftAloneReason {
+                Label(reason, systemImage: "nosign")
+            }
+            SkippedList(skipped: item.skipped, unreadable: item.unreadable)
+        }
+        .foregroundStyle(.secondary)
+        .opacity(0.85)
+    }
+}
+
+/// Folders found by name and left alone, one line each with the reason, and folders that couldn't be read.
+private struct SkippedList: View {
+    let skipped: [LightCleanSkip]
+    let unreadable: [String]
+
+    var body: some View {
+        ForEach(skipped, id: \.relativePath) { skip in
+            Label {
+                Text("\(skip.relativePath) is left alone: \(skip.reason.sentence)")
+            } icon: {
+                Image(systemName: "nosign")
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        ForEach(unreadable, id: \.self) { folder in
+            Label("\(folder) couldn't be read; nothing below it was looked at.", systemImage: "exclamationmark.triangle")
+                .font(.callout)
+                .foregroundStyle(.orange)
+        }
+    }
+}

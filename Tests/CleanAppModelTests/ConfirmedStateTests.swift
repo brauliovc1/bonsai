@@ -107,9 +107,11 @@ struct ConfirmedStateTests {
         let real = try #require(rows.first { $0.repoName == "bravo" })
         #expect(!stale.canRemove)
         #expect(stale.reasons.contains { reason in
-            if case .gitError(let message) = reason { return message.contains("stale") }
+            if case .staleRecord = reason { return true }
             return false
         })
+        #expect(stale.statusLabel == "BLOCKED: stale record")
+        #expect(stale.statusDetail == "stale record")
         #expect(real.canRemove)
 
         let confirmation = await model.prepareRemoval([real.id])

@@ -2,44 +2,40 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The menu-bar app: a menu-bar window with the disk summary, the main window, and an empty Settings
-/// scene (P6 fills it). No Dock icon (LSUIElement) except while the main window is open.
+/// The menu-bar app: a menu-bar window with the disk summary, the main window (it opens on the Overview),
+/// and the Settings window. No Dock icon (LSUIElement) except while the main window is open.
 @main
 struct CleanClaudeApp: App {
-    @State private var app: AppModel
-    @State private var worktrees: WorktreesModel
-    @State private var removals: RemovalsModel
+    @State private var models: ScreenModels
 
     init() {
         let app = AppModel(environment: .live())
-        _app = State(initialValue: app)
-        _worktrees = State(initialValue: WorktreesModel(app: app))
-        _removals = State(initialValue: RemovalsModel(app: app))
+        _models = State(initialValue: ScreenModels(app: app))
         app.requestRefresh()
     }
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(app: app)
+            MenuContentView(app: models.app)
         } label: {
             Image(systemName: "internaldrive")
         }
         .menuBarExtraStyle(.window)
 
         Window(AppInfo.name, id: AppInfo.mainWindowID) {
-            MainWindowView(app: app, worktrees: worktrees, removals: removals)
+            MainWindowView(models: models)
         }
         .defaultSize(width: 1040, height: 640)
 
         Settings {
-            EmptyView()
+            SettingsView(model: models.settings)
         }
     }
 }
 
 enum AppInfo {
-    /// From Info.plist, so renaming the app (PLAN D1) needs no code change. "Clean Claude" when run
+    /// From Info.plist, so renaming the app (PLAN D1) needs no code change. "Bonsai" when run
     /// outside the bundle (`swift run`).
-    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Clean Claude"
+    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Bonsai"
     static let mainWindowID = "main"
 }

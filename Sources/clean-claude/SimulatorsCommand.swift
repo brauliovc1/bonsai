@@ -42,7 +42,20 @@ struct SimulatorsCommand: AsyncParsableCommand {
             print("Running: \(cleaner.commandLine)")
         }
         // Without --yes this returns nil and starts nothing.
-        guard let result = try await cleaner.run(ifConfirmed: yes, estimatedBytes: report.unavailableDevicesBytes) else {
+        let ran: CleanupCommandResult?
+        do {
+            // The command can't be limited to the devices listed above, so it looks again right before and
+            // refuses if they are not the same.
+            ran = try await cleaner.run(
+                ifConfirmed: yes,
+                estimatedBytes: report.unavailableDevicesBytes,
+                onlyDeleting: report.unavailableDevices
+            )
+        } catch let refusal as SimulatorCleaner.Refusal {
+            StandardError.write("error: \(refusal)")
+            throw ExitCode.failure
+        }
+        guard let result = ran else {
             print("Would run: \(cleaner.commandLine)")
             let count = report.unavailableDevices.count
             print("It would remove \(count) unavailable device(s), about \(ByteFormatting.string(report.unavailableDevicesBytes)).")

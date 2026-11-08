@@ -26,6 +26,11 @@ public enum DisplayText {
         count == 1 ? "1 worktree" : "\(count) worktrees"
     }
 
+    /// "1 folder", "3 folders".
+    public static func folders(_ count: Int) -> String {
+        count == 1 ? "1 folder" : "\(count) folders"
+    }
+
     /// Where a running scan is. nil progress while scanning = the safety checks after the listing.
     public static func progress(_ progress: ScanProgress?) -> String {
         switch progress {

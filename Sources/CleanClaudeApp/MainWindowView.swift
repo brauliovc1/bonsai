@@ -1,16 +1,19 @@
 import CleanAppModel
 import SwiftUI
 
-/// The main window: the sidebar sections and the selected screen.
+/// The main window: the sidebar sections and the selected screen. It opens on the Overview.
 struct MainWindowView: View {
-    let app: AppModel
-    let worktrees: WorktreesModel
-    let removals: RemovalsModel
-    @State private var section: SidebarSection? = .worktrees
+    let models: ScreenModels
+    @Bindable private var navigation: NavigationModel
+
+    init(models: ScreenModels) {
+        self.models = models
+        navigation = models.navigation
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarSection.allCases, selection: $section) { section in
+            List(SidebarSection.allCases, selection: $navigation.section) { section in
                 Label(section.title, systemImage: section.systemImage)
                     .tag(section)
             }
@@ -24,9 +27,13 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private var detail: some View {
-        switch section ?? .worktrees {
-        case .worktrees: WorktreesView(model: worktrees)
-        case .recentlyRemoved: RecentlyRemovedView(model: removals)
+        switch navigation.section ?? .overview {
+        case .overview: OverviewView(model: models.overview)
+        case .worktrees: WorktreesView(model: models.worktrees)
+        case .derivedData: DerivedDataView(model: models.derivedData)
+        case .dockerSimulators: DockerSimulatorsView(model: models.dockerSimulators)
+        case .claudeUsage: ClaudeUsageView(model: models.claudeUsage)
+        case .recentlyRemoved: RecentlyRemovedView(model: models.removals)
         }
     }
 }

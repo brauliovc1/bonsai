@@ -21,17 +21,44 @@ struct StaleRecordTests {
         let stale = try await fixture.worktree(at: shared, in: alpha)
         #expect(!stale.isPrunable, "git doesn't see it: the folder exists")
         let report = await check.check(stale, idle: .idle(days: 40), settings: Settings(), cwdIndex: ProcessCwdIndex(entries: []))
+        // Both modes are blocked, by a reason of its own (not "git error").
         #expect(!report.manualAllowed)
         #expect(!report.autoEligible)
-        let message = report.blockers.compactMap { reason -> String? in
-            if case .gitError(let message) = reason { return message }
+        let leadsTo = report.blockers.compactMap { reason -> String? in
+            if case .staleRecord(let leadsTo) = reason { return leadsTo }
             return nil
         }.first
-        #expect(message?.contains("stale") == true, "\(report.blockers)")
-        #expect(message?.contains(alpha.lastPathComponent) == true)
+        #expect(leadsTo?.contains("bravo") == true, "\(report.blockers)")
+        #expect(!report.blockers.contains { if case .gitError = $0 { true } else { false } }, "\(report.blockers)")
+        #expect(report.autoBlockers.contains { if case .staleRecord = $0 { true } else { false } })
+        #expect(report.status.label == "BLOCKED: stale record")
+        let reason = try #require(report.blockers.first)
+        #expect(reason.label == "stale record")
+        #expect(reason.sentence.contains("another repo's folder"))
+        #expect(reason.sentence.contains(leadsTo ?? "?"))
 
         let real = try await fixture.worktree(at: shared, in: bravo)
         let realReport = await check.check(real, idle: .idle(days: 40), settings: Settings(), cwdIndex: ProcessCwdIndex(entries: []))
         #expect(realReport.manualAllowed, "\(realReport.blockers)")
+    }
+}
+
+@Suite("Stale records and auto mode")
+struct StaleRecordAutoTests {
+    /// Idle for 40 days and nothing else wrong: a stale record is still never removed, and never reported
+    /// as "kept only because of local work" either.
+    @Test func autoModeNeitherRemovesNorNotifiesForAStaleRecord() {
+        let worktree = Worktree(path: "/tmp/shared", repoPath: "/tmp/alpha", head: "abc", branch: "a-task", isMain: false, kind: .sibling)
+        let state = WorktreeState(staleRecord: "/tmp/bravo/.git/worktrees/shared")
+        let safety = SafetyCheck.evaluate(
+            worktree: worktree, state: state, idle: .idle(days: 40), settings: Settings(),
+            cwdIndex: ProcessCwdIndex(entries: [])
+        )
+        #expect(!safety.manualAllowed && !safety.autoEligible)
+        let assessment = WorktreeAssessment(worktree: worktree, idle: .idle(days: 40), safety: safety)
+        let plan = AutoPlanner.plan([assessment], settings: Settings(), now: Date())
+        #expect(plan.remove.isEmpty)
+        #expect(plan.notifyLocalWork.isEmpty)
+        #expect(plan.skipped.count == 1)
     }
 }

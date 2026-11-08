@@ -37,6 +37,9 @@ public struct DockerReport: Sendable, Codable, Equatable {
     public var usage: [DockerUsageRow]
     /// Things that went wrong without stopping the scan (a failed `docker system df`, a skipped line).
     public var warnings: [String]
+    /// Why `usage` is empty although the daemon is running: `docker system df` failed or printed nothing
+    /// readable. Without it, an empty `usage` means "nothing", with it "unknown".
+    public var usageFailure: String?
 
     public init(
         state: State,
@@ -45,7 +48,8 @@ public struct DockerReport: Sendable, Codable, Equatable {
         notRunningReason: String? = nil,
         diskImage: DiskImage? = nil,
         usage: [DockerUsageRow] = [],
-        warnings: [String] = []
+        warnings: [String] = [],
+        usageFailure: String? = nil
     ) {
         self.state = state
         self.serverVersion = serverVersion
@@ -54,6 +58,7 @@ public struct DockerReport: Sendable, Codable, Equatable {
         self.diskImage = diskImage
         self.usage = usage
         self.warnings = warnings
+        self.usageFailure = usageFailure
     }
 
     /// The daemon identified itself as Docker Desktop, the only daemon clean-claude prunes (PLAN §7).

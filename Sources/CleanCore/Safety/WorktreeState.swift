@@ -27,6 +27,9 @@ public struct WorktreeState: Sendable, Hashable {
     public var nestedSearchIncomplete: String?
     /// Every git command that failed. Any error blocks removal.
     public var gitErrors: [String]
+    /// The git dir the folder's `.git` file leads to when that is not one of this repo's records: git's
+    /// record of this worktree is stale and the folder belongs to another repo.
+    public var staleRecord: String?
 
     public init(
         folderExists: Bool = true,
@@ -41,7 +44,8 @@ public struct WorktreeState: Sendable, Hashable {
         nestedCheckouts: [String] = [],
         nestedClones: [String] = [],
         nestedSearchIncomplete: String? = nil,
-        gitErrors: [String] = []
+        gitErrors: [String] = [],
+        staleRecord: String? = nil
     ) {
         self.folderExists = folderExists
         self.changedFiles = changedFiles
@@ -56,6 +60,7 @@ public struct WorktreeState: Sendable, Hashable {
         self.nestedClones = nestedClones
         self.nestedSearchIncomplete = nestedSearchIncomplete
         self.gitErrors = gitErrors
+        self.staleRecord = staleRecord
     }
 
     public static let missing = WorktreeState(folderExists: false)

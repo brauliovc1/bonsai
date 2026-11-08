@@ -24,6 +24,10 @@ public enum SafetyReason: Sendable, Hashable, Codable {
     case recentlyActive(days: Int)
     case idleUnknown
     case gitError(String)
+    /// git's record of this worktree belongs to another repo's folder: the folder's `.git` file leads to the
+    /// git dir given here, not to a record of this repo. Every fact read in the folder would describe the
+    /// other repo's worktree, so nothing about it can be trusted (blocks both modes).
+    case staleRecord(leadsTo: String)
 
     /// PLAN §4.1, exact copy.
     public static let claudeSessionWarning = "This worktree belongs to a Claude session. Removing it deletes "
@@ -52,6 +56,7 @@ public enum SafetyReason: Sendable, Hashable, Codable {
         case .recentlyActive(let days): "active \(days)d ago"
         case .idleUnknown: "idle unknown"
         case .gitError: "git error"
+        case .staleRecord: "stale record"
         }
     }
 
@@ -108,6 +113,10 @@ public enum SafetyReason: Sendable, Hashable, Codable {
             return "When it was last used could not be worked out, so auto mode leaves it alone."
         case .gitError(let message):
             return "git failed: \(message)"
+        case .staleRecord(let leadsTo):
+            return "This record belongs to another repo's folder: the folder's .git file leads to \(leadsTo), "
+                + "not to a record of this repo, so everything read there would describe someone else's "
+                + "worktree. It is left alone, by hand and in auto mode."
         }
     }
 
