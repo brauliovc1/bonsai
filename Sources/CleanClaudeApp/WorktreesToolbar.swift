@@ -50,7 +50,8 @@ struct WorktreesMoreMenu: View {
     var body: some View {
         let folders = model.openableSelection
         Button("Prune missing folders…") { Task { await model.beginPrune() } }
-            .disabled(model.missingFolderRows.isEmpty || model.app.isCleaningUp)
+            .disabled(model.pruneDisabledReason != nil)
+            .help(model.pruneDisabledReason ?? "Clear git's records of worktrees whose folders are gone (you confirm first)")
         Button(cleanTitle) { Task { await model.beginLightClean() } }
             .disabled(!model.canCleanDependencies)
         Divider()

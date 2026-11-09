@@ -114,26 +114,26 @@ public final class OverviewModel {
         case .toolCaches:
             let count = summary.count(.toolCaches)
             return "\(count) \(count == 1 ? "cache" : "caches") the tools download again when needed"
-        case .docker:
-            return "Stopped containers, unused images and build cache"
-        case .xcode:
+        case .dockerSimulators:
             var parts: [String] = []
-            let folders = summary.count(.derivedData)
             let devices = summary.count(.simulators)
-            if summary.bytes(.derivedData) > 0 { parts.append("\(DisplayText.folders(folders)) of deleted projects' DerivedData") }
+            if summary.bytes(.docker) > 0 { parts.append("Docker's stopped containers, unused images and build cache") }
             if summary.bytes(.simulators) > 0 { parts.append("\(devices) unavailable \(devices == 1 ? "simulator" : "simulators")") }
             return parts.joined(separator: " and ")
+        case .derivedData:
+            return "\(DisplayText.folders(summary.count(.derivedData))) of deleted projects' DerivedData"
         }
     }
 
     // MARK: - Lines under the cards
 
-    /// "Nothing to clean in Docker, Xcode DerivedData or Simulators."; nil when every part has something, or is
-    /// still unknown.
+    /// "Nothing to clean in Tool caches or Xcode DerivedData.": the screens whose parts are all measured and empty;
+    /// nil when there is none (a part not measured, or not counted, is not "nothing").
     public var nothingText: String? {
-        let empty = summary.emptyParts
+        let summary = summary
+        let empty = OverviewCategory.allCases.filter { category in category.parts.allSatisfy(summary.emptyParts.contains) }
         guard !empty.isEmpty else { return nil }
-        return "Nothing to clean in \(ReclaimSummary.names(empty))."
+        return "Nothing to clean in \(OverviewCategory.names(empty))."
     }
 
     /// Why some parts aren't counted ("Docker isn't running, so its space isn't counted."); nil when all are.
@@ -142,11 +142,12 @@ public final class OverviewModel {
         return reasons.isEmpty ? nil : reasons.joined(separator: " ")
     }
 
-    /// "Measuring Project folders…" while parts aren't known yet; nil once they all are.
+    /// "Measuring Project folders…" while a screen's parts aren't known yet; nil once they all are.
     public var measuringText: String? {
         let pending = summary.pendingParts
-        guard !pending.isEmpty else { return nil }
-        return "Measuring \(pending.map(\.title).joined(separator: ", "))…"
+        let screens = OverviewCategory.allCases.filter { $0.parts.contains(where: pending.contains) }
+        guard !screens.isEmpty else { return nil }
+        return "Measuring \(screens.map(\.title).joined(separator: ", "))…"
     }
 
     /// The auto clean row.
@@ -155,8 +156,8 @@ public final class OverviewModel {
     // MARK: - Opening a screen
 
     /// Opens the card's screen showing what the card counted: Worktrees on "Can remove", Project folders on
-    /// "Ready to clean", Tool caches with the ready ones selected, Xcode DerivedData with the orphans selected
-    /// (Docker & Simulators when only simulators count), Docker & Simulators for Docker.
+    /// "Ready to clean", Tool caches with the ready ones selected, Xcode DerivedData with the orphans selected,
+    /// Docker & Simulators as it is (one prune and one delete, each for everything it counts).
     public func open(_ category: OverviewCategory) {
         switch category {
         case .worktrees:
@@ -168,15 +169,11 @@ public final class OverviewModel {
         case .toolCaches:
             caches.selectAllReady()
             navigation.show(.caches)
-        case .docker:
+        case .dockerSimulators:
             navigation.show(.dockerSimulators)
-        case .xcode:
-            if summary.bytes(.derivedData) > 0 {
-                derivedData.selection = derivedData.selectableIDs
-                navigation.show(.derivedData)
-            } else {
-                navigation.show(.dockerSimulators)
-            }
+        case .derivedData:
+            derivedData.selection = derivedData.selectableIDs
+            navigation.show(.derivedData)
         }
     }
 

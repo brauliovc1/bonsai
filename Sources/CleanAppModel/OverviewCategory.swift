@@ -1,42 +1,34 @@
-/// One card the Overview can show (PLAN §8.3), made of one or more parts of the "can free" total. Xcode puts
-/// orphaned DerivedData and unavailable simulators together.
+/// One card the Overview can show (PLAN §8.3): one per clean-up screen of the sidebar, with that screen's name,
+/// icon and parts of the "can free" total, so a card's number is its screen's badge and its button opens it.
 public enum OverviewCategory: String, CaseIterable, Identifiable, Sendable {
     case worktrees
     case projectFolders
     case toolCaches
-    case docker
-    case xcode
+    case dockerSimulators
+    case derivedData
 
     public var id: String { rawValue }
 
-    public var parts: [ReclaimSummary.Part] {
+    /// The screen it stands for and opens.
+    public var section: SidebarSection {
         switch self {
-        case .worktrees: [.worktrees]
-        case .projectFolders: [.projectFolders]
-        case .toolCaches: [.toolCaches]
-        case .docker: [.docker]
-        case .xcode: [.derivedData, .simulators]
+        case .worktrees: .worktrees
+        case .projectFolders: .projects
+        case .toolCaches: .caches
+        case .dockerSimulators: .dockerSimulators
+        case .derivedData: .derivedData
         }
     }
 
-    public var title: String {
-        switch self {
-        case .worktrees: "Worktrees"
-        case .projectFolders: "Project folders"
-        case .toolCaches: "Tool caches"
-        case .docker: "Docker"
-        case .xcode: "Xcode"
-        }
-    }
+    /// The screen's parts: the card adds up exactly what the screen's badge does.
+    public var parts: [ReclaimSummary.Part] { section.reclaimParts }
+    public var title: String { section.title }
+    public var systemImage: String { section.systemImage }
 
-    /// The SF Symbol of the screen it opens.
-    public var systemImage: String {
-        switch self {
-        case .worktrees: SidebarSection.worktrees.systemImage
-        case .projectFolders: SidebarSection.projects.systemImage
-        case .toolCaches: SidebarSection.caches.systemImage
-        case .docker: SidebarSection.dockerSimulators.systemImage
-        case .xcode: SidebarSection.derivedData.systemImage
-        }
+    /// "Worktrees", "Worktrees or Docker & Simulators", "Worktrees, Tool caches or Xcode DerivedData".
+    public static func names(_ categories: [OverviewCategory]) -> String {
+        let titles = categories.map(\.title)
+        guard titles.count > 1 else { return titles.first ?? "" }
+        return titles.dropLast().joined(separator: ", ") + " or " + (titles.last ?? "")
     }
 }

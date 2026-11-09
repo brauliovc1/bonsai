@@ -6,7 +6,9 @@ import CleanCore
 ///
 /// The chip of a row: green when it can be removed ("Ready · auto clean", "Ready to remove"), or the words of
 /// the reason that stops it. A removable worktree whose note needs your attention (ignored files that would be
-/// deleted with it) shows that note's orange words instead of green. "Needs attention" = the orange chips.
+/// deleted with it) shows that note's orange words instead of green. "Needs attention" = every worktree with an
+/// orange reason, also when its chip shows another one first ("Locked" with unsaved changes); those orange reasons
+/// are then among the notes next to the chip.
 public enum WorktreeStatusText {
     /// The chip for one worktree.
     public static func chip(for assessment: WorktreeAssessment) -> StatusWords {
@@ -23,15 +25,24 @@ public enum WorktreeStatusText {
         }
     }
 
-    /// True for the rows the "Needs attention" filter shows: exactly the orange chips.
+    /// True for the rows the "Needs attention" filter shows: any of its reasons is orange (local work, other repos
+    /// inside, ignored files that would be deleted), whatever the chip shows first.
     public static func needsAttention(_ assessment: WorktreeAssessment) -> Bool {
-        chip(for: assessment).tone == .orange
+        reasons(of: assessment).contains { words(for: $0).tone == .orange }
     }
 
-    /// The quiet notes next to the chip, in the verdict's order: "1 commit not pushed" (on a branch, which keeps
-    /// it), "2 stashes kept", "Claude session".
+    /// The notes next to the chip, in the verdict's order: orange reasons the chip doesn't already show ("2 unsaved
+    /// changes" next to "Locked"), then the quiet notes: "1 commit not pushed" (on a branch, which keeps it),
+    /// "2 stashes kept", "Claude session".
     public static func notes(for assessment: WorktreeAssessment) -> [String] {
-        (assessment.safety.blockers + assessment.safety.notes).map(words(for:)).filter(\.isNote).map(\.text)
+        let all = reasons(of: assessment).map(words(for:))
+        let chipText = chip(for: assessment).text
+        let attention = all.filter { $0.tone == .orange && !$0.isNote && $0.text != chipText }.map(\.text)
+        return attention + all.filter(\.isNote).map(\.text)
+    }
+
+    private static func reasons(of assessment: WorktreeAssessment) -> [SafetyReason] {
+        assessment.safety.blockers + assessment.safety.notes
     }
 
     /// The §8.4 words and color of one reason.

@@ -34,7 +34,7 @@ extension ReclaimSummary {
     @MainActor
     private static func projectFolders(_ projects: ProjectsModel) -> State {
         guard projects.report != nil else { return projects.isScanning ? .measuring : .notMeasured }
-        let total = projects.reclaimableTotal
+        let total = projects.idleTotal
         return .measured(bytes: total.bytes, count: total.count)
     }
 
@@ -52,9 +52,11 @@ extension ReclaimSummary {
         case .notInstalled:
             return .measured(bytes: 0, count: 0)
         case .notRunning:
-            return .unavailable("Docker isn't running, so its space isn't counted.")
+            return .unavailable("Docker isn't running, so Docker & Simulators counts only the simulators.")
         case .running:
-            if let failure = model.dockerReadFailure { return .unavailable("Couldn't read Docker's space: \(failure).") }
+            if let failure = model.dockerReadFailure {
+                return .unavailable("Couldn't read Docker's space (\(failure)), so Docker & Simulators counts only the simulators.")
+            }
             return .measured(bytes: model.dockerReclaimableBytes ?? 0, count: 0)
         }
     }
@@ -70,7 +72,9 @@ extension ReclaimSummary {
     private static func simulators(_ model: DockerSimulatorsModel) -> State {
         guard model.simulators != nil else { return model.isScanning ? .measuring : .notMeasured }
         if model.noXcode { return .measured(bytes: 0, count: 0) }
-        if let failure = model.deviceListFailure { return .unavailable("Couldn't read the simulators: \(failure).") }
+        if let failure = model.deviceListFailure {
+            return .unavailable("Couldn't read the simulators (\(failure)), so Docker & Simulators counts only Docker.")
+        }
         return .measured(bytes: model.unavailableBytes ?? 0, count: model.unavailableDevices.count)
     }
 }

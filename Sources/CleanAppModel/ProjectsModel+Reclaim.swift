@@ -15,10 +15,6 @@ extension ProjectsModel {
         }
     }
 
-    public var reclaimableTotal: ProjectFoldersReport.Total {
-        ProjectFoldersReport.total(reclaimableRows.map(\.project))
-    }
-
     /// Shows what the Overview's Project folders card counted.
     public func showReclaimable() {
         filter = .canFree

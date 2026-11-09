@@ -139,10 +139,12 @@ struct WorktreeStatusTextTests {
         #expect(ignored.status == .safe)
         #expect(WorktreeStatusText.chip(for: ignored).text == "Has ignored files")
         #expect(WorktreeStatusText.needsAttention(ignored))
-        // Grey and blue are not "Needs attention": only orange is.
+        // Grey and blue are not "Needs attention": only orange is, wherever it is in the list.
         for reason in Self.samples {
             let blocked = assessment(blockers: [reason])
             #expect(WorktreeStatusText.needsAttention(blocked) == (WorktreeStatusText.chip(for: blocked).tone == .orange), "\(reason)")
+            let behindLocked = assessment(blockers: [.locked(reason: ""), reason])
+            #expect(WorktreeStatusText.needsAttention(behindLocked) == (Self.expected(reason).tone == .orange), "\(reason)")
         }
         #expect(!WorktreeStatusText.needsAttention(assessment(blockers: [.missingFolder])))
         #expect(!WorktreeStatusText.needsAttention(assessment(blockers: [.inUse([Self.process])])))
@@ -171,7 +173,29 @@ struct WorktreeStatusTextTests {
         #expect(WorktreeFix.allCases.filter { $0 != .none }.allSatisfy { !$0.title.isEmpty })
     }
 
-    /// "Needs attention" is exactly the orange chips, on the demo world's real verdicts.
+    /// Review item 6: local work counts even when the chip shows another reason first. A locked worktree with an
+    /// unsaved file keeps its grey "Locked" chip, is under "Needs attention", and says why next to the chip.
+    @Test @MainActor func aLockedWorktreeWithUnsavedChangesNeedsAttention() async throws {
+        let fixture = try GitFixture()
+        defer { fixture.remove() }
+        let aged = AgedRepos(fixture: fixture)
+        let repo = try await aged.repo("kilo", days: 20, gitignore: "node_modules/\n")
+        let wip = fixture.scanRoot.appending(path: "kilo-wip", directoryHint: .isDirectory)
+        try await aged.git(["worktree", "add", "--quiet", "-b", "wip", wip.path], in: repo, days: 20)
+        try fixture.write("draft\n", to: "draft.md", in: wip)
+        try await aged.git(["worktree", "lock", wip.path], in: repo, days: 20)
+        let app = makeApp(fixture)
+        await app.refresh()
+        let model = WorktreesModel(app: app)
+        let row = try #require(model.row(wip))
+        #expect(row.chip.text == "Locked" && row.chip.tone == .grey)
+        #expect(row.needsAttention)
+        #expect(row.notesText == "1 unsaved change")
+        model.filter = .needsAttention
+        #expect(model.rows.map(\.id) == [row.id])
+    }
+
+    /// "Needs attention" is every row with an orange reason, on the demo world's real verdicts (one reason each).
     @Test @MainActor func needsAttentionIsExactlyTheOrangeOnes() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }

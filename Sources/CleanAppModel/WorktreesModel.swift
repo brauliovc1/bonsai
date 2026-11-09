@@ -124,9 +124,15 @@ public final class WorktreesModel {
         groups.compactMap(\.main).filter { selection.contains($0.id) }
     }
 
-    /// Shown rows whose folder is gone ("Prune missing folders…" covers their repos).
+    /// Every worktree whose folder is gone, shown or not ("Prune missing folders…" covers their repos).
     public var missingFolderRows: [WorktreeRow] {
-        rows.filter(\.isMissingFolder)
+        linkedRows.filter(\.isMissingFolder)
+    }
+
+    /// The More menu's tooltip for Prune when there is nothing to prune; nil when there is.
+    public var pruneDisabledReason: String? {
+        if !missingFolderRows.isEmpty { return app.isCleaningUp ? app.busySentence : nil }
+        return "No worktree's folder is missing, so there is nothing to prune."
     }
 
     /// The root of the volume holding `url` (or its nearest existing parent).

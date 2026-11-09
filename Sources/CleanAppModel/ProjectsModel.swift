@@ -133,10 +133,10 @@ public final class ProjectsModel {
         }
     }
 
-    /// Selects the projects idle at least the threshold, idle known, with nothing stopping a clean (whatever
-    /// the filter shows).
+    /// Selects the projects ready to clean (`reclaimableRows`: idle at least the threshold, idle known, nothing
+    /// stopping a clean, not a worktree that can be removed whole), whatever the filter shows.
     public func selectAllIdle() {
-        let ready = allRows.filter(\.isReady)
+        let ready = reclaimableRows
         for row in ready { collapsedRepos.remove(row.worktree.repoPath) }
         selection = Set(ready.map(\.id))
         autoPicked = selection
@@ -146,9 +146,10 @@ public final class ProjectsModel {
 
     // MARK: - Totals
 
-    /// What "Select all idle" picks: count and size.
+    /// "Ready to clean": what "Select all idle" picks, the "Ready to clean" filter shows and the Overview's Project
+    /// folders card and sidebar badge count (`reclaimableRows`). One number under one name.
     public var idleTotal: ProjectFoldersReport.Total {
-        ProjectFoldersReport.total(allRows.filter(\.isReady).map(\.project))
+        ProjectFoldersReport.total(reclaimableRows.map(\.project))
     }
 
     public var allTotal: ProjectFoldersReport.Total { ProjectFoldersReport.total(allRows.map(\.project)) }

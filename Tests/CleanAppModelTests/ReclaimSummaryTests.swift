@@ -59,7 +59,14 @@ struct ReclaimSummaryTests {
         #expect(repoFolders >= 256 * 1024)
         #expect(summary.state(.projectFolders) == .measured(bytes: repoFolders, count: 1))
         #expect(summary.totalBytes == doneBytes + repoFolders, "each byte once")
-        #expect(projects.idleTotal.bytes > repoFolders, "the plain idle total would have counted india-done's twice")
+        #expect(projects.allRows.filter(\.isReady).map(\.sizeBytes).reduce(0, +) > repoFolders,
+                "counting every idle project would have counted india-done's folders twice")
+        // The screen says the same number: its footer's Ready to clean, its filter and Select all idle.
+        #expect(projects.idleTotal == .init(count: 1, bytes: repoFolders))
+        projects.filter = .canFree
+        #expect(projects.rows.map(\.sizeBytes).reduce(0, +) == repoFolders)
+        projects.selectAllIdle()
+        #expect(projects.selectedRows.map(\.url.lastPathComponent) == ["india"], "the removable worktree isn't picked")
 
         // Once the worktree is gone, nothing of it is counted anywhere.
         await world.models.app.cleanupFinished(rescanWorktrees: false, removed: [done.worktree])

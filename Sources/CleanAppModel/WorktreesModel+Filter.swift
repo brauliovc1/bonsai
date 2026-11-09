@@ -7,7 +7,7 @@ extension WorktreesModel {
     public enum Filter: String, CaseIterable, Sendable, Identifiable {
         /// What a removal by hand would accept (the Overview's Worktrees card counts the same ones).
         case canRemove
-        /// The orange chips: local work, unreachable commits, other repos inside, ignored files.
+        /// Worktrees with an orange reason: local work, unreachable commits, other repos inside, ignored files.
         case needsAttention
         case all
 

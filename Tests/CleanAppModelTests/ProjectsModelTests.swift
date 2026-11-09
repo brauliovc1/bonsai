@@ -284,8 +284,7 @@ struct ProjectsModelTests {
 
         await world.projects.loadIfNeeded()
         let card = try #require(overview.card(.projectFolders))
-        #expect(card.bytes == world.projects.reclaimableTotal.bytes)
-        #expect(world.projects.reclaimableTotal == world.projects.idleTotal, "no idle project here is a removable worktree")
+        #expect(card.bytes == world.projects.idleTotal.bytes, "the footer's Ready to clean is the card's number")
         #expect(card.bytes >= 10 * 1024 * 1024)
         #expect(card.detail == "Dependency and build folders of 3 projects idle 30+ days")
         overview.open(.projectFolders)

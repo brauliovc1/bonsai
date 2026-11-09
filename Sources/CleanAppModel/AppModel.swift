@@ -48,6 +48,9 @@ public final class AppModel {
     @ObservationIgnored private var logObservers: [@MainActor () -> Void] = []
     /// Run after a cleanup changed some checkouts' folders (see `whenCheckoutsChange`).
     @ObservationIgnored var checkoutObservers: [@MainActor (Set<String>) async -> Void] = []
+    /// Scans begun since launch; `cleanupFacts` tells by it which scan may have looked before a cleanup.
+    @ObservationIgnored var scanGeneration = 0
+    @ObservationIgnored var cleanupFacts = CleanupFacts()
 
     private var scanTask: Task<Void, Never>?
     private var rescanRequested = false
@@ -101,6 +104,8 @@ public final class AppModel {
     }
 
     private func scanOnce() async {
+        scanGeneration += 1
+        let generation = scanGeneration
         let loaded: Settings
         do {
             loaded = try SettingsStore(environment: environment).load()
@@ -124,6 +129,7 @@ public final class AppModel {
         let verdicts = await WorktreeAssessor(git: git, settings: loaded, environment: environment).assess(result)
         scan = result
         assessments = verdicts
+        scanFinished(generation: generation)
         problem = nil
         lastScanAt = environment.now()
         scanCount += 1
@@ -153,16 +159,13 @@ public final class AppModel {
     ///
     /// `removed`: worktrees a removal took away; they leave the rows at once, before the rescan ends.
     /// `touched`: checkouts whose folders a cleanup changed; their sizes are measured again right away (just
-    /// those, PLAN §8.5), and the screens that keep their own sizes of them are told.
+    /// those, PLAN §8.5), and the screens that keep their own sizes of them are told. A scan already running
+    /// ends with both applied again (`AppModel+Sizes`).
     public func cleanupFinished(rescanWorktrees: Bool = true, touched: [Worktree] = [], removed: [Worktree] = []) async {
         reloadLog()
         disk.refresh()
         forget(removed)
-        if !touched.isEmpty {
-            let paths = Set(touched.map(\.path))
-            for observer in checkoutObservers { await observer(paths) }
-            await remeasureSizes(of: touched)
-        }
+        if !touched.isEmpty { await measureAgain(touched) }
         if rescanWorktrees { await refresh() }
     }
 

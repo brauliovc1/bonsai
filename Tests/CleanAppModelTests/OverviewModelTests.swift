@@ -76,12 +76,16 @@ struct OverviewModelTests {
         defer { world.demo.remove() }
         await world.overview.refresh()
         let cards = world.overview.cards
-        #expect(cards.map(\.category) == [.docker, .worktrees, .xcode])
+        #expect(cards.map(\.category) == [.dockerSimulators, .worktrees, .derivedData])
+        #expect(cards.map(\.title) == ["Docker & Simulators", "Worktrees", "Xcode DerivedData"])
         #expect(cards.map(\.bytes) == cards.map(\.bytes).sorted(by: >))
         #expect(cards.allSatisfy { $0.bytes > 0 })
-        let xcode = try #require(world.overview.card(.xcode))
-        #expect(xcode.bytes == world.overview.summary.bytes([.derivedData, .simulators]))
-        #expect(xcode.detail == "2 folders of deleted projects' DerivedData and 2 unavailable simulators")
+        let docker = try #require(world.overview.card(.dockerSimulators))
+        #expect(docker.bytes == 6_200_000_000 + 323_456)
+        #expect(docker.detail == "Docker's stopped containers, unused images and build cache and 2 unavailable simulators")
+        let derived = try #require(world.overview.card(.derivedData))
+        #expect(derived.bytes == world.overview.summary.bytes(.derivedData))
+        #expect(derived.detail == "2 folders of deleted projects' DerivedData")
         #expect(world.overview.card(.worktrees)?.detail == "7 worktrees you can remove; branches are kept")
         #expect(world.overview.card(.projectFolders) == nil && world.overview.card(.toolCaches) == nil)
         #expect(world.overview.nothingText == "Nothing to clean in Project folders or Tool caches.")
@@ -93,8 +97,8 @@ struct OverviewModelTests {
         }))
         #expect(world.overview.cards.isEmpty)
         #expect(world.overview.canFreeText == "Nothing to clean right now")
-        #expect(world.overview.nothingText == "Nothing to clean in Worktrees, Project folders, Tool caches, Docker, "
-            + "Xcode DerivedData or Simulators.")
+        #expect(world.overview.nothingText == "Nothing to clean in Worktrees, Project folders, Tool caches, "
+            + "Docker & Simulators or Xcode DerivedData.")
     }
 
     /// Each card's button opens its screen already filtered to what the card counted.
@@ -120,22 +124,45 @@ struct OverviewModelTests {
         #expect(navigation.section == .caches)
         #expect(world.models.caches.selection == Set(world.models.caches.readyRows.map(\.id)))
 
-        world.overview.open(.docker)
+        world.overview.open(.dockerSimulators)
         #expect(navigation.section == .dockerSimulators)
 
         world.models.derivedData.selection = []
-        world.overview.open(.xcode)
+        world.overview.open(.derivedData)
         #expect(navigation.section == .derivedData)
         #expect(world.models.derivedData.selection == world.models.derivedData.selectableIDs)
         #expect(world.models.derivedData.selectedOrphans.count == 2)
 
-        // Xcode with only simulators to free opens Docker & Simulators.
-        world.overview.summaryOverride = ReclaimSummary([
-            .derivedData: .measured(bytes: 0, count: 0), .simulators: .measured(bytes: 1_000, count: 1),
+        // Every card opens the screen it is named after.
+        for category in OverviewCategory.allCases {
+            navigation.show(.overview)
+            world.overview.open(category)
+            #expect(navigation.section == category.section, "\(category)")
+        }
+    }
+
+    /// PLAN §8.3: one card per sidebar screen, with that screen's name and the number of its badge.
+    @Test func everyCardIsItsScreensBadge() async throws {
+        let world = try await makeWorld()
+        defer { world.demo.remove() }
+        await world.overview.refresh()
+        let gib: Int64 = 1024 * 1024 * 1024
+        let full = ReclaimSummary([
+            .worktrees: .measured(bytes: 56 * gib, count: 83), .projectFolders: .measured(bytes: 57 * gib, count: 50),
+            .toolCaches: .measured(bytes: 15 * gib, count: 14), .docker: .measured(bytes: 11 * gib, count: 0),
+            .derivedData: .measured(bytes: 3 * gib, count: 12), .simulators: .measured(bytes: gib, count: 3),
         ])
-        navigation.show(.overview)
-        world.overview.open(.xcode)
-        #expect(navigation.section == .dockerSimulators)
+        for summary in [world.overview.summary, full] {
+            world.overview.summaryOverride = summary
+            #expect(!world.overview.cards.isEmpty)
+            for card in world.overview.cards {
+                #expect(card.title == card.category.section.title)
+                #expect(card.sizeText == card.category.section.badge(in: summary), "\(card.category)")
+            }
+            let badged = SidebarSection.allCases.filter { $0.badge(in: summary) != nil }
+            #expect(Set(world.overview.cards.map(\.category.section)) == Set(badged), "a card for every badge, no more")
+        }
+        #expect(Set(OverviewCategory.allCases.map(\.section)) == Set(SidebarSection.Group.cleanUp.sections.filter { $0 != .overview }))
     }
 
     @Test func partsThatCantBeCountedSayWhy() async throws {
@@ -149,9 +176,11 @@ struct OverviewModelTests {
         #expect(world.overview.canFreeText == "Looking for space to free…")
 
         await world.overview.refresh()
-        #expect(world.overview.summary.state(.docker) == .unavailable("Docker isn't running, so its space isn't counted."))
-        #expect(world.overview.notCountedText == "Docker isn't running, so its space isn't counted.")
-        #expect(world.overview.card(.docker) == nil)
+        let notRunning = "Docker isn't running, so Docker & Simulators counts only the simulators."
+        #expect(world.overview.summary.state(.docker) == .unavailable(notRunning))
+        #expect(world.overview.notCountedText == notRunning)
+        #expect(world.overview.card(.dockerSimulators)?.bytes == 323_456, "the simulators still count")
+        #expect(world.overview.card(.dockerSimulators)?.detail == "2 unavailable simulators")
         #expect(world.overview.nothingText?.contains("Docker") == false, "not counted is not nothing")
     }
 
