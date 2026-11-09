@@ -112,7 +112,7 @@ struct CachesModelTests {
         #expect(pub.keeps.contains("~/.pub-cache/bin") && pub.note.contains("flutter pub get"))
         #expect(confirmation.allowed.first { $0.id == "mongodb-binaries" }?.note == "Tests download it again, ~300 MB.")
         #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.note.hasPrefix("Cursor's spare copy from ") == true)
-        #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.keeps.first?.hasSuffix("/state.vscdb") == true)
+        #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.keeps == ["state.vscdb", "state.vscdb-wal", "state.vscdb-shm"])
         #expect(confirmation.cleanButtonTitle == "Clean 3 items")
         #expect(CachesConfirmation.downloadsLine.contains("fetch or rebuild"))
 

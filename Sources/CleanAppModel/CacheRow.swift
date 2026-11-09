@@ -68,14 +68,25 @@ public struct CacheRow: Identifiable, Hashable, Sendable {
     }
 
     /// What cleaning leaves alone, as the confirmation lists it: "the rest of ~/.npm", "~/.pub-cache/bin", the
-    /// versions Cursor keeps.
+    /// versions Cursor keeps. A long path is shown from the folder it shares with the target ("state.vscdb").
     public var keeps: [String] {
         let targets = finding.entry.targets
         let never = finding.entry.never.map { path -> String in
             let shown = "~/" + path
-            return targets.contains { $0.hasPrefix(path + "/") } ? "the rest of \(shown)" : shown
+            if targets.contains(where: { $0.hasPrefix(path + "/") }) { return "the rest of \(shown)" }
+            return shown.count <= 40 ? shown : Self.belowSharedFolder(path, targets.first ?? path)
         }
         return never + finding.kept.map { "version \($0.name) (\($0.reason))" }
+    }
+
+    /// `path` from below the folder it shares with `other`: `…/globalStorage/state.vscdb` next to
+    /// `…/globalStorage/state.vscdb.backup` is `state.vscdb`.
+    static func belowSharedFolder(_ path: String, _ other: String) -> String {
+        let parts = path.split(separator: "/")
+        let otherParts = other.split(separator: "/")
+        var shared = 0
+        while shared < parts.count - 1, shared < otherParts.count, parts[shared] == otherParts[shared] { shared += 1 }
+        return parts[shared...].joined(separator: "/")
     }
 
     /// The first letter in upper case.
