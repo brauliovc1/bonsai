@@ -6,7 +6,9 @@ import Testing
 /// PLAN §4.1 "Package copies" (added 11-09, P12b): Xcode's and SwiftPM's copies inside an ignored build folder
 /// are build output, broken ones included, decided without running git in them. Every other nested repo keeps
 /// today's rule, and one git can't read is "couldn't read", not local work.
-@Suite("Package copies")
+/// Cases run one at a time: each builds real repos, and together they load the machine past what the timing tests
+/// (ProcessRunner, lock timeouts) tolerate.
+@Suite("Package copies", .serialized)
 struct PackageCopyTests {
     /// A worktree of a repo whose `build/` is ignored (through `.git/info/exclude`, shared by its worktrees).
     private func flutterLike(_ world: SafetyWorld, _ name: String = "flutter") async throws -> URL {

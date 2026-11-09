@@ -6,7 +6,9 @@ import Testing
 /// PLAN §4.8 "Remove anyway", for each blocker it may override: offered with the exact list, one
 /// `git worktree remove --force <path>` (never two), the branch kept, one log entry holding the list, and
 /// Restore bringing the worktree back without what was lost.
-@Suite("Remove anyway")
+/// Cases run one at a time: each builds real repos, and together they load the machine past what the timing tests
+/// (ProcessRunner, lock timeouts) tolerate.
+@Suite("Remove anyway", .serialized)
 struct RemoveAnywayTests {
     enum Blocker: String, CaseIterable {
         case uncommitted, hiddenEdits, repoWithLocalWork, unreadableRepo, submodules, detachedUnpushed, reflogOnly

@@ -5,7 +5,9 @@ import Testing
 
 /// PLAN §4.2 "Flutter-generated" (added 11-09, P12b): what Flutter writes again is not an ignored user file
 /// (§4.1); the user's own ignored files still are.
-@Suite("Flutter-generated files")
+/// Cases run one at a time: each builds real repos, and together they load the machine past what the timing tests
+/// (ProcessRunner, lock timeouts) tolerate.
+@Suite("Flutter-generated files", .serialized)
 struct FlutterFilesTests {
     /// The ignore rules a Flutter project's template has, for the files below.
     static let flutterIgnores = """

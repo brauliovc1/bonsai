@@ -6,7 +6,9 @@ import Testing
 /// PLAN §4.8: where Remove anyway is never offered, and refused even when called directly; and the re-check
 /// right before the delete, which refuses on any change since the confirmation. Nothing is deleted, nothing is
 /// logged and git never sees `--force` in any of them.
-@Suite("Remove anyway: refusals")
+/// Cases run one at a time: each builds real repos, and together they load the machine past what the timing tests
+/// (ProcessRunner, lock timeouts) tolerate.
+@Suite("Remove anyway: refusals", .serialized)
 struct RemoveAnywayRefusalTests {
     enum Never: String, CaseIterable {
         case mainCheckout, missingFolder, locked, inUse, maybeInUse, operationInProgress, gitError, registeredWorktreeInside
