@@ -2,16 +2,26 @@ import CleanCore
 import Foundation
 import Observation
 
-/// The menu-bar label: free space next to the drive symbol, a warning triangle below the low-space
-/// warning, and at most one low-space notification a day (the date is kept in `settings.json`).
+/// The menu-bar label: the bonsai glyph and a bar showing how full the disk is (orange below the low-space
+/// warning, red under half of it), the exact numbers in the tooltip and the accessibility label, and at most
+/// one low-space notification a day (the date is kept in `settings.json`).
 @MainActor
 @Observable
 public final class MenuBarModel {
     public static let refreshInterval: Duration = .seconds(5 * 60)
-    public static let normalSymbol = "internaldrive"
-    public static let lowSymbol = "exclamationmark.triangle"
     /// At most one low-space notification per this many seconds.
     public static let noticeInterval: TimeInterval = 86_400
+
+    /// How the bar is drawn.
+    public enum Level: Sendable, Equatable {
+        /// Free space not known yet: an empty bar.
+        case unknown
+        case normal
+        /// Free below the low-space warning: orange.
+        case low
+        /// Free below half the warning: red.
+        case veryLow
+    }
 
     public let app: AppModel
     let notifier: any Notifier
@@ -28,12 +38,30 @@ public final class MenuBarModel {
 
     public var freeSpaceText: String { FreeSpaceText.label(app.disk.freeBytes) }
     public var isLow: Bool { FreeSpaceText.isLow(app.disk.freeBytes, warningGB: app.settings.lowSpaceWarningGB) }
-    public var symbolName: String { isLow ? Self.lowSymbol : Self.normalSymbol }
 
+    /// The bar's fill: the part of the disk in use, 0...1; 0 when unknown.
+    public var fillFraction: Double { min(max(app.disk.usedFraction ?? 0, 0), 1) }
+
+    /// Low and very low need only the free space; normal needs the disk's size too (to fill the bar).
+    public var level: Level {
+        let free = app.disk.freeBytes
+        guard free != nil else { return .unknown }
+        let warning = app.settings.lowSpaceWarningGB
+        if FreeSpaceText.isVeryLow(free, warningGB: warning) { return .veryLow }
+        if FreeSpaceText.isLow(free, warningGB: warning) { return .low }
+        return app.disk.usedFraction == nil ? .unknown : .normal
+    }
+
+    /// "Bonsai: 23 GB free of 460 GB"; read by VoiceOver for the menu-bar item.
+    public var accessibilityText: String {
+        guard app.disk.freeBytes != nil else { return "\(appName): free space unknown" }
+        return "\(appName): \(freeSpaceText) free of \(FreeSpaceText.label(app.disk.totalBytes))"
+    }
+
+    /// The tooltip: the accessibility text, and the warning when space is low.
     public var helpText: String {
-        let volume = app.disk.volumeName.map { " on \($0)" } ?? ""
-        let warning = isLow ? " (below your \(app.settings.lowSpaceWarningGB) GB warning)" : ""
-        return "\(freeSpaceText) free\(volume)\(warning)"
+        guard isLow else { return accessibilityText }
+        return "\(accessibilityText), below your \(app.settings.lowSpaceWarningGB) GB warning"
     }
 
     /// Measures the free space again and warns when it is low.

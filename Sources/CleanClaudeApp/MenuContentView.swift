@@ -2,15 +2,25 @@ import AppKit
 import CleanAppModel
 import SwiftUI
 
-/// The menu-bar window: free space, what can be reclaimed now, the last scan, and the app's commands.
+/// The menu-bar window: free space, what can be reclaimed now, the last scan, and the app's commands. In
+/// test mode (CLEAN_CLAUDE_SCAN_ROOTS) a line says which folder it scans.
 struct MenuContentView: View {
     let app: AppModel
     let autoMode: AutoModeModel
+    let menuBar: MenuBarModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            DiskSummaryView(disk: app.disk)
+            if let folders = app.testModeFolders, let testMode = app.testModeText {
+                HStack(spacing: 5) {
+                    Image(systemName: "testtube.2").foregroundStyle(.orange)
+                    TestModeSentence(folders: folders)
+                }
+                .font(.caption)
+                .help(testMode)
+            }
+            DiskSummaryView(disk: app.disk, level: menuBar.level)
             Divider()
             HStack {
                 Text("Reclaimable now")

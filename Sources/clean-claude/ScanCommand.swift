@@ -31,7 +31,10 @@ struct ScanCommand: AsyncParsableCommand {
 
     func run() async throws {
         let context = try CommandContext.load()
-        let result = try await context.scan(rootOptions, includeSizes: !noSizes, includeDependencies: deps)
+        // The last commits and remotes go only into the JSON; the table stays as it is.
+        let result = try await context.scan(
+            rootOptions, includeSizes: !noSizes, includeDependencies: deps, includeGitDetails: json
+        )
 
         var assessments: [WorktreeAssessment] = []
         if let git = WorktreeAssessor.git(for: context.environment), !result.worktrees.isEmpty {

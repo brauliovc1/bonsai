@@ -16,6 +16,11 @@ public struct ScanResult: Sendable, Codable, Equatable {
     /// not asked for (`Scanner.scan(includeDependencies:)`); a worktree is missing when it has no
     /// candidates with an estimate.
     public var dependencyBytes: [String: Int64]?
+    /// The commit each worktree's HEAD points at, by worktree path (`GitInfoReader.lastCommits`). nil when
+    /// not asked for (`Scanner.scan(includeGitDetails:)`); a worktree is missing when git couldn't say.
+    public var lastCommits: [String: CommitSummary]?
+    /// Each repo's remotes, by repo path, URLs without credentials. nil when not asked for.
+    public var remotes: [String: [GitRemote]]?
     public var issues: [ScanIssue]
     public var startedAt: Date
     /// Seconds.
@@ -29,7 +34,9 @@ public struct ScanResult: Sendable, Codable, Equatable {
         issues: [ScanIssue],
         startedAt: Date,
         duration: TimeInterval,
-        dependencyBytes: [String: Int64]? = nil
+        dependencyBytes: [String: Int64]? = nil,
+        lastCommits: [String: CommitSummary]? = nil,
+        remotes: [String: [GitRemote]]? = nil
     ) {
         self.roots = roots
         self.repos = repos
@@ -39,6 +46,8 @@ public struct ScanResult: Sendable, Codable, Equatable {
         self.startedAt = startedAt
         self.duration = duration
         self.dependencyBytes = dependencyBytes
+        self.lastCommits = lastCommits
+        self.remotes = remotes
     }
 
     public func size(of worktree: Worktree) -> Int64? {
@@ -47,6 +56,15 @@ public struct ScanResult: Sendable, Codable, Equatable {
 
     public func dependencyBytes(of worktree: Worktree) -> Int64? {
         dependencyBytes?[worktree.path]
+    }
+
+    public func lastCommit(of worktree: Worktree) -> CommitSummary? {
+        lastCommits?[worktree.path]
+    }
+
+    /// The remotes of the worktree's repo ("origin" first).
+    public func remotes(of worktree: Worktree) -> [GitRemote] {
+        remotes?[worktree.repoPath] ?? []
     }
 
     /// At least one root was an existing folder. A scan where every root is missing found nothing on

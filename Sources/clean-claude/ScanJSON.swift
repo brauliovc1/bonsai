@@ -1,7 +1,8 @@
 import CleanCore
 import Foundation
 
-/// `scan --json`: the scan result (worktrees filtered by `--status`) plus one verdict per worktree.
+/// `scan --json`: the scan result (worktrees filtered by `--status`) plus one verdict per worktree, with
+/// the worktree's last commit and its repo's remotes (URLs without credentials).
 struct ScanJSON: Encodable {
     struct Verdict: Encodable {
         var path: String
@@ -14,6 +15,8 @@ struct ScanJSON: Encodable {
         var blockers: [String]
         var notes: [String]
         var autoBlockers: [String]
+        var lastCommit: CommitSummary?
+        var remotes: [GitRemote]
     }
 
     var scan: ScanResult
@@ -23,6 +26,9 @@ struct ScanJSON: Encodable {
         var filtered = scan
         let shown = Set(assessments.map(\.worktree.path))
         filtered.worktrees = scan.worktrees.filter { shown.contains($0.path) }
+        // Each verdict carries these; not twice.
+        filtered.lastCommits = nil
+        filtered.remotes = nil
         self.scan = filtered
         self.verdicts = assessments.map { assessment in
             Verdict(
@@ -35,7 +41,9 @@ struct ScanJSON: Encodable {
                 autoEligible: assessment.safety.autoEligible,
                 blockers: assessment.safety.blockers.map(\.label),
                 notes: assessment.safety.notes.map(\.label),
-                autoBlockers: assessment.safety.autoBlockers.map(\.label)
+                autoBlockers: assessment.safety.autoBlockers.map(\.label),
+                lastCommit: scan.lastCommit(of: assessment.worktree),
+                remotes: scan.remotes(of: assessment.worktree)
             )
         }
     }

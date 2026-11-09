@@ -83,21 +83,52 @@ struct NotificationContentTests {
         return (fixture, MenuBarModel(app: app, notifier: notifier), notifier)
     }
 
-    @Test func theLabelWarnsBelowTheLowSpaceSetting() async throws {
+    @Test func theLabelShowsHowFullTheDiskIsAndWarnsBelowTheSetting() async throws {
         let clock = TestClock(date)
-        let (fixture, model, notifier) = try menuBar(free: 50 * gib, clock: clock)
+        let (fixture, model, notifier) = try menuBar(free: 300 * gib, clock: clock)
         defer { fixture.remove() }
-        await model.refresh()
-        #expect(model.freeSpaceText == "50 GB")
-        #expect(model.symbolName == "internaldrive" && !model.isLow)
-        #expect(notifier.posted.isEmpty)
-        #expect(model.helpText == "50 GB free on Macintosh HD")
+        func show(free: Int64?, total: Int64? = 500 * 1024 * 1024 * 1024) async {
+            model.app.disk.read = { _ in DiskSpaceModel.Reading(free: free, total: total, name: "Macintosh HD") }
+            await model.refresh()
+        }
 
-        model.app.disk.read = { _ in DiskSpaceModel.Reading(free: 8 * self.gib + self.gib / 5, total: nil, name: nil) }
         await model.refresh()
-        #expect(model.freeSpaceText == "8.2 GB")
-        #expect(model.symbolName == "exclamationmark.triangle" && model.isLow)
-        #expect(model.helpText == "8.2 GB free (below your 10 GB warning)")
+        #expect(model.fillFraction == 0.4)
+        #expect(model.level == .normal && !model.isLow)
+        #expect(model.accessibilityText == "Bonsai: 300 GB free of 500 GB")
+        #expect(model.helpText == model.accessibilityText)
+        #expect(notifier.posted.isEmpty)
+
+        await show(free: 100 * gib)
+        #expect(model.fillFraction == 0.8)
+        #expect(model.level == .normal)
+
+        await show(free: 8 * gib + gib / 5)
+        #expect(model.level == .low && model.isLow)
+        #expect(abs(model.fillFraction - (1 - 8.2 / 500)) < 0.0001)
+        #expect(model.accessibilityText == "Bonsai: 8.2 GB free of 500 GB")
+        #expect(model.helpText == "Bonsai: 8.2 GB free of 500 GB, below your 10 GB warning")
+
+        await show(free: 5 * gib)
+        #expect(model.level == .low, "half the warning exactly is not below it")
+        await show(free: 5 * gib - 1)
+        #expect(model.level == .veryLow)
+        await show(free: 4 * gib, total: nil)
+        #expect(model.level == .veryLow, "low space shows without the disk's size")
+        #expect(model.fillFraction == 0)
+
+        await show(free: nil, total: nil)
+        #expect(model.level == .unknown)
+        #expect(model.accessibilityText == "Bonsai: free space unknown")
+        await show(free: 50 * gib, total: nil)
+        #expect(model.level == .unknown, "plenty of space but nothing to fill the bar with")
+    }
+
+    @Test func theMenuWindowLineHasTheExactNumbers() {
+        #expect(FreeSpaceText.summary(free: 23 * gib, total: 460 * gib) == "23.0 GB free of 460 GB (95% used)")
+        #expect(FreeSpaceText.summary(free: 23 * gib, total: nil) == "23.0 GB free")
+        #expect(FreeSpaceText.summary(free: nil, total: 460 * gib) == "Free space unknown")
+        #expect(FreeSpaceText.isVeryLow(4 * gib, warningGB: 10) && !FreeSpaceText.isVeryLow(6 * gib, warningGB: 10))
     }
 
     @Test func theLowSpaceNotificationFiresAtMostOncePerDay() async throws {

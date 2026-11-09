@@ -106,7 +106,7 @@ public final class AppModel {
         roots = Scanner.resolveRoots(explicit: [], environment: environment, settings: loaded)
         disk.point(at: roots.first ?? environment.homeDirectory)
 
-        let result = await Scanner(environment: environment, settings: loaded).scan { [weak self] step in
+        let result = await Scanner(environment: environment, settings: loaded).scan(includeGitDetails: true) { [weak self] step in
             Task { @MainActor in self?.receive(step) }
         }
         guard let git else {

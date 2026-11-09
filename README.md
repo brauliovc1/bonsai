@@ -19,7 +19,7 @@ Bonsai needs macOS 14 or newer, on Intel or Apple silicon.
 
 1. Download `Bonsai-<version>.dmg` from [Releases](https://github.com/brauliovc1/clean-claude/releases).
 2. Open it and drag Bonsai to Applications.
-3. Open Bonsai. It lives in the menu bar: click its icon, then **Open Bonsai**.
+3. Open Bonsai. It lives in the menu bar as a small bonsai next to a bar that shows how full the disk is (orange when free space is below your warning, red under half of it): click it, then **Open Bonsai**.
 
 The app is not signed with an Apple Developer ID, so macOS blocks it the first time. After the block message, open **System Settings > Privacy & Security**, scroll down to the message about Bonsai, click **Open Anyway**, and confirm. (On macOS 14 you can instead Control-click the app and choose Open.) If that doesn't work, remove the download mark in Terminal:
 
@@ -41,7 +41,7 @@ make install
 
 This builds Bonsai, signs it ad hoc, puts `Bonsai.app` in `/Applications` and the `clean-claude` command in `~/.local/bin`. It needs no `sudo`. If `~/.local/bin` is not on your `PATH`, `make install` prints the line to add. It refuses to run while Bonsai is running from `/Applications`: quit it first. A build you make yourself doesn't get the "Open Anyway" block.
 
-Other targets: `make app` builds `build/Bonsai.app` without installing, `make test` runs the tests, and `make dist` builds the release files (the `.dmg`, the command-line zip and `SHA256SUMS`, for Intel and Apple silicon) in `dist/`.
+Other targets: `make app` builds `build/Bonsai.app` without installing, `make test` runs the tests, and `make dist` builds the release files (the `.dmg`, the command-line zip and `SHA256SUMS`, for Intel and Apple silicon) in `dist/`. `make icon` redraws `Resources/AppIcon.icns` from `Resources/Icon/MakeIcon.swift` (the icon is committed, so builds don't need it).
 
 ## Command line
 

@@ -14,11 +14,35 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public let scanOrder: Int
     /// The Deps column: what light clean could delete here (not part of the safety verdict).
     public let dependencies: DependencySize
+    /// The commit HEAD points at, from the scan (`ScanResult.lastCommits`).
+    public let lastCommit: CommitSummary?
+    /// The repo's remotes, "origin" first, URLs without credentials.
+    public let remotes: [GitRemote]
+    /// The folder with "~" for the home folder.
+    public let folderText: String
+    /// The main repo folder with "~".
+    public let repoFolderText: String
+    /// When the row was made, for "3d ago".
+    public let now: Date
 
-    public init(assessment: WorktreeAssessment, scanOrder: Int, dependencies: DependencySize = .notMeasured) {
+    public init(
+        assessment: WorktreeAssessment,
+        scanOrder: Int,
+        dependencies: DependencySize = .notMeasured,
+        lastCommit: CommitSummary? = nil,
+        remotes: [GitRemote] = [],
+        home: URL? = nil,
+        now: Date = Date()
+    ) {
         self.assessment = assessment
         self.scanOrder = scanOrder
         self.dependencies = dependencies
+        self.lastCommit = lastCommit
+        self.remotes = remotes
+        let worktree = assessment.worktree
+        self.folderText = home.map { TildePath.abbreviate(worktree.path, home: $0) } ?? worktree.path
+        self.repoFolderText = home.map { TildePath.abbreviate(worktree.repoPath, home: $0) } ?? worktree.repoPath
+        self.now = now
     }
 
     /// Repo and path together: two repos can list the same folder (one repo's stale record and another
