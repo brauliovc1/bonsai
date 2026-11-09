@@ -43,8 +43,10 @@ struct NestedCloneCheck: Sendable {
         return Dictionary(zip(relativePaths, verdicts), uniquingKeysWith: { first, _ in first })
     }
 
-    func verdict(_ repo: URL) async -> Verdict {
-        if NestedCheckoutSearch.isBareRepo(repo) {
+    /// `submoduleGitDir`: for a submodule's checkout (its `.git` is a file), the git dir that file leads to; the
+    /// same rules run through it.
+    func verdict(_ repo: URL, submoduleGitDir: URL? = nil) async -> Verdict {
+        if submoduleGitDir == nil, NestedCheckoutSearch.isBareRepo(repo) {
             switch await NestedRepoConfig.read(gitDir: repo, git: git) {
             case .failure(let error): return .unreadable(error.message)
             case .success(let config):
@@ -52,9 +54,9 @@ struct NestedCloneCheck: Sendable {
                 return config.isMirror ? .clean : .localWork(["a bare repo that is not a mirror"])
             }
         }
-        let gitDir = repo.appending(path: ".git", directoryHint: .isDirectory)
+        let gitDir = submoduleGitDir ?? repo.appending(path: ".git", directoryHint: .isDirectory)
         guard DirectoryEntries.kind(ofItemAt: gitDir.path) == .directory else {
-            return .unreadable("its .git is not a folder")
+            return .unreadable(submoduleGitDir == nil ? "its .git is not a folder" : "its git dir is not a folder")
         }
         switch await NestedRepoConfig.read(gitDir: gitDir, git: git) {
         case .failure(let error): return .unreadable(error.message)

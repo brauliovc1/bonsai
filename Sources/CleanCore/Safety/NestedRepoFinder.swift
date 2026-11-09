@@ -9,9 +9,13 @@ import Foundation
 /// The search goes on inside every repo the check lets go of: package copies, clean clones, and their own submodules
 /// (P12b review, 11-09: a repo with work at `.build/checkouts/x/vendor/mine`, or below a clean clone whose own
 /// `.gitignore` hides it, was invisible, and Remove and light clean deleted it). Each search skips that repo's own
-/// `.git`. A repo found there is not a copy and keeps the rule above; a `.git` file that leads into the let-go repo's
-/// own modules (`.git/modules`) is its submodule, let go and searched in turn. A bare repo is all git's own data and
-/// isn't searched. The entry cap counts every folder searched; hitting it makes the search incomplete.
+/// `.git`. What that repo tracks is its content, not a nested repo: a bare-shaped folder whose `HEAD` it tracks
+/// (libgit2-style committed fixtures), asked with its own `git ls-files -z` only when such a folder is found and its
+/// config runs nothing; when git can't list them, the folder keeps the rule (the safe side). A `.git` file that
+/// leads into the let-go repo's own modules is its submodule: a package copy's is let go as build output; a clean
+/// clone's goes through `NestedCloneCheck` by its git dir (round 3: a commit on a branch only in
+/// `lib/.git/modules/sub` was deleted). Any other repo found keeps the rule above. A bare repo is all git's own data
+/// and isn't searched. The entry cap counts every folder searched; hitting it makes the search incomplete.
 struct NestedRepoFinder: Sendable {
     var git: Git
     var search: NestedCheckoutSearch
@@ -25,10 +29,27 @@ struct NestedRepoFinder: Sendable {
         var incomplete: String?
     }
 
-    /// A repo the check let go of, to search inside: its path and where its own submodules' git dirs live.
+    /// A repo the check let go of, to search inside: its path, its git dir, where its own submodules' git dirs live,
+    /// and whether it is a package copy (or one's submodule), whose submodules are build output too.
     private struct LetGo {
         var path: String
+        var gitDir: URL
         var modules: URL
+        var isCopy: Bool
+
+        init(path: String, in folder: URL, isCopy: Bool) {
+            self.path = path
+            gitDir = folder.appending(path: path + "/.git", directoryHint: .isDirectory)
+            modules = gitDir.appending(path: "modules", directoryHint: .isDirectory)
+            self.isCopy = isCopy
+        }
+
+        init(submodule path: String, gitDir: URL, isCopy: Bool) {
+            self.path = path
+            self.gitDir = gitDir
+            modules = gitDir.appending(path: "modules", directoryHint: .isDirectory)
+            self.isCopy = isCopy
+        }
     }
 
     /// `prefix`: `folder` relative to `worktree` (the checkout whose git answers), "" when it is the checkout itself.
@@ -45,18 +66,26 @@ struct NestedRepoFinder: Sendable {
         var bare = Set(top.bareRepos)
         var used = top.entries
         var toCheck = candidates.filter { !copies.contains($0) }
-        var letGo = copies.map { LetGo(path: $0, modules: Self.ownModules(of: $0, in: folder)) }
+        var letGo = copies.map { LetGo(path: $0, in: folder, isCopy: true) }
+        var submodulesToCheck: [(path: String, gitDir: URL)] = []
         var others: [(path: String, verdict: NestedCloneCheck.Verdict)] = []
+        let check = NestedCloneCheck(git: git)
         while true {
             if !toCheck.isEmpty {
-                let verdicts = await NestedCloneCheck(git: git).verdicts(toCheck, in: folder)
+                let verdicts = await check.verdicts(toCheck, in: folder)
                 for path in toCheck.sorted() {
                     guard let verdict = verdicts[path] else { continue }
                     others.append((path, verdict))
-                    if verdict == .clean { letGo.append(LetGo(path: path, modules: Self.ownModules(of: path, in: folder))) }
+                    if verdict == .clean { letGo.append(LetGo(path: path, in: folder, isCopy: false)) }
                 }
                 toCheck = []
             }
+            for (path, gitDir) in submodulesToCheck {
+                let verdict = await check.verdict(folder.appending(path: path, directoryHint: .isDirectory), submoduleGitDir: gitDir)
+                others.append((path, verdict))
+                if verdict == .clean { letGo.append(LetGo(submodule: path, gitDir: gitDir, isCopy: false)) }
+            }
+            submodulesToCheck = []
             guard findings.incomplete == nil, !letGo.isEmpty else { break }
             let repo = letGo.removeFirst()
             if bare.contains(repo.path) { continue }
@@ -64,18 +93,26 @@ struct NestedRepoFinder: Sendable {
             let inside = NestedCheckoutSearch(limit: max(0, search.limit - used)).search(url)
             used += inside.entries
             if let why = inside.incomplete { findings.incomplete = "inside \(repo.path): \(why)" }
+            let tracked = inside.bareRepos.isEmpty ? [] : await trackedFiles(in: url, gitDir: repo.gitDir)
             for found in inside.checkouts {
                 let path = repo.path + "/" + found
                 if registered.contains(path) { continue }
+                // Committed test fixtures shaped like a bare repo: the let-go repo's own content.
+                if inside.bareRepos.contains(found), tracked.contains(found + "/HEAD") { continue }
                 guard inside.gitFiles.contains(found) else {
                     if inside.bareRepos.contains(found) { bare.insert(path) }
                     toCheck.append(path)
                     continue
                 }
-                // The let-go repo's own submodule: let go too, and searched; any other `.git` file blocks.
+                // The let-go repo's own submodule: a copy's is build output, a clean clone's is checked through its git
+                // dir; any other `.git` file blocks.
                 if let target = Self.gitFileTarget(url.appending(path: found + "/.git")),
                    CanonicalPath.isInside(target, directory: repo.modules) {
-                    letGo.append(LetGo(path: path, modules: target.appending(path: "modules", directoryHint: .isDirectory)))
+                    if repo.isCopy {
+                        letGo.append(LetGo(submodule: path, gitDir: target, isCopy: true))
+                    } else {
+                        submodulesToCheck.append((path, target))
+                    }
                 } else {
                     gitFiles.append(path)
                 }
@@ -86,9 +123,13 @@ struct NestedRepoFinder: Sendable {
         return findings
     }
 
-    /// Where the git dirs of `path`'s own submodules live: `<path>/.git/modules`.
-    private static func ownModules(of path: String, in folder: URL) -> URL {
-        folder.appending(path: path + "/.git/modules", directoryHint: .isDirectory)
+    /// What the repo at `url` tracks (`git ls-files -z`, run inside it), relative to it. Empty when its config could
+    /// run something or git can't list them: then nothing counts as its content (the safe side).
+    private func trackedFiles(in url: URL, gitDir: URL) async -> Set<String> {
+        guard case .success(let config) = await NestedRepoConfig.read(gitDir: gitDir, git: git), config.commandKeys.isEmpty,
+              let listing = try? await git.git(["ls-files", "-z"], in: url)
+        else { return [] }
+        return Set(listing.split(separator: 0).map { String(decoding: $0, as: UTF8.self) })
     }
 
     /// Where a `.git` file leads ("gitdir: <path>", relative to the file's folder); nil when it can't be read.
