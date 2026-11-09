@@ -150,7 +150,7 @@ struct RemoveAnywayLastMomentTests {
         remover.afterInspection = {
             switch moved {
             case .detachedCommit:
-                try? fixture.write("late\n", to: "late.txt", in: wt)
+                _ = try? fixture.write("late\n", to: "late.txt", in: wt)
                 _ = try? await fixture.run(["add", "late.txt"], in: wt)
                 _ = try? await fixture.run(["commit", "--quiet", "-m", "Late"], in: wt)
             case .branchSwitched:
