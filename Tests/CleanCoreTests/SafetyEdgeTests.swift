@@ -55,7 +55,7 @@ struct SafetyEdgeTests {
         #expect(report.manualAllowed && !report.autoEligible)
 
         let search = IgnoredFolderSearch(limit: 1)
-        #expect(search.holdsUserFiles(wt.appending(path: "packages")), "a capped search counts as user files")
+        #expect(search.holdsUserFiles("packages/", in: wt), "a capped search counts as user files")
         #expect(IgnoredFolderSearch.topmost(["a/", "a/b/", "a/b/c.txt", "ab/", "d.txt"]) == ["a/", "ab/", "d.txt"])
     }
 

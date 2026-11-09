@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The top of the details panel: the status chip and its notes, the status in one plain sentence, and the one
 /// action that does the job or fixes what stops it. For a repo folder, Remove… is there but disabled, and says
-/// why (PLAN §8.5).
+/// why (PLAN §8.5). A blocked worktree whose blockers Bonsai can all list gets "Remove anyway…" next to its fix
+/// (PLAN §4.8); one that also has a blocker Remove anyway never overrides says what to do instead.
 struct DetailsStatusBox: View {
     let model: WorktreesModel
     let row: WorktreeRow
@@ -31,6 +32,19 @@ struct DetailsStatusBox: View {
                         .disabled(true)
                         .help(WorktreeStatusText.repoFolderSentence)
                 }
+                if row.offersRemoveAnyway {
+                    Button(RemoveAnywayText.actionTitle, role: .destructive) { Task { await model.beginRemoveAnyway() } }
+                        .foregroundStyle(Palette.red)
+                        .disabled(!model.canRemoveAnyway || model.removeAnywayRow?.id != row.id)
+                        .help(model.removeAnywayHelp)
+                }
+            }
+            if let instead = row.removeAnywayUnavailableText {
+                Label(instead, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(12)

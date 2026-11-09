@@ -14,6 +14,9 @@ public struct Restorer: Sendable {
     }
 
     public static let dependenciesNote = "Dependencies were not reinstalled; run your package manager in the folder if it needs them."
+    /// For a worktree removed anyway (PLAN §4.8).
+    public static let lostFilesNote = "What was deleted with Remove anyway doesn't come back: only the branch "
+        + "or commit is checked out again."
 
     /// What `restore` would run, once every precondition holds.
     public struct Plan: Sendable, Hashable {
@@ -28,7 +31,11 @@ public struct Restorer: Sendable {
         /// The branch, or the commit for a detached worktree.
         public var ref: String
         public var warnings: [String]
-        public var note: String { Restorer.dependenciesNote }
+        public var note: String {
+            entry.action == .worktreeRemoveAnyway
+                ? Restorer.lostFilesNote + " " + Restorer.dependenciesNote
+                : Restorer.dependenciesNote
+        }
     }
 
     public enum RestoreError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -60,7 +67,7 @@ public struct Restorer: Sendable {
     /// Checks every precondition without changing anything.
     public func plan(entryID: UUID) async throws -> Plan {
         guard let entry = try log.entry(id: entryID) else { throw RestoreError.notFound(entryID.uuidString) }
-        guard entry.action == .worktreeRemove else { throw RestoreError.notAWorktreeRemoval(entry.action) }
+        guard entry.action.isWorktreeRemoval else { throw RestoreError.notAWorktreeRemoval(entry.action) }
         if let restoredAt = entry.restoredAt { throw RestoreError.alreadyRestored(restoredAt) }
         guard !Remover.itemExists(at: entry.path) else { throw RestoreError.pathExists(entry.path) }
 

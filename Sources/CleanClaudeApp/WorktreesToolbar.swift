@@ -54,6 +54,10 @@ struct WorktreesMoreMenu: View {
             .help(model.pruneDisabledReason ?? "Clear git's records of worktrees whose folders are gone (you confirm first)")
         Button(cleanTitle) { Task { await model.beginLightClean() } }
             .disabled(!model.canCleanDependencies)
+        // PLAN §4.8: one blocked worktree at a time, never from Remove… or the Delete key.
+        Button(RemoveAnywayText.actionTitle) { Task { await model.beginRemoveAnyway() } }
+            .disabled(!model.canRemoveAnyway)
+            .help(model.removeAnywayHelp)
         Divider()
         Button("Show in Finder") { FolderActions.reveal(folders) }
             .disabled(folders.isEmpty)

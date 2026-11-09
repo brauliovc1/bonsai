@@ -18,6 +18,7 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
     public var actionText: String {
         let labels: [RemovalAction: String] = [
             .worktreeRemove: "Removed worktree",
+            .worktreeRemoveAnyway: "Removed anyway",
             .worktreePrune: "Cleared missing folders",
             .lightClean: "Light clean",
             .derivedDataDelete: "Deleted orphaned DerivedData",
@@ -27,6 +28,11 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
         ]
         let action = labels[entry.action] ?? entry.action.rawValue
         return entry.mode == .auto ? "\(action) (auto)" : action
+    }
+
+    /// For a worktree removed anyway (PLAN §4.8): what was lost, in one line ("Lost: 3 uncommitted files.").
+    public var lossLine: String? {
+        entry.action == .worktreeRemoveAnyway ? entry.notes.first : nil
     }
 
     /// The kept branch, "detached at 1a2b3c4d", or "–".

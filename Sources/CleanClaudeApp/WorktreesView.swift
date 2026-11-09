@@ -36,6 +36,9 @@ struct WorktreesView: View {
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
         }
+        .sheet(isPresented: $model.isShowingRemoveAnywaySheet, onDismiss: { model.dismissRemoveAnyway() }) {
+            RemoveAnywaySheet(model: model)
+        }
         .sheet(isPresented: $model.isShowingLightCleanSheet, onDismiss: { model.dismissLightClean() }) {
             LightCleanSheet(model: model)
         }

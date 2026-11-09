@@ -139,6 +139,16 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     }
 
     public var canRemove: Bool { assessment.safety.manualAllowed }
+    /// Blocked, and every blocker is one Remove anyway (PLAN §4.8) can list exactly: the details panel offers it.
+    public var offersRemoveAnyway: Bool { assessment.removeAnyway.lossList != nil }
+    /// For a blocked row that holds something Remove anyway could list, but also a blocker it never overrides:
+    /// "Remove anyway isn't available: <what to do instead>". nil otherwise (its explanation already says it).
+    public var removeAnywayUnavailableText: String? {
+        guard case .unavailable(let reason) = assessment.removeAnyway else { return nil }
+        let overridable = assessment.safety.blockers.contains { RemoveAnyway.isOverridable($0, isBlocker: true) }
+        guard overridable else { return nil }
+        return "Remove anyway isn't available: " + RemoveAnywayText.instead(for: reason)
+    }
     /// git still lists it but its folder is gone: `git worktree prune` clears the record.
     public var isMissingFolder: Bool { assessment.safety.blockers.contains(.missingFolder) }
     /// git's record belongs to another repo's folder: nothing is read from, or done to, that folder as this row.

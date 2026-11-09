@@ -32,30 +32,33 @@ extension WorktreeInspector {
         }
     }
 
-    /// How many commits named in this worktree's own `logs/HEAD` (deleted with the worktree) no branch, tag
-    /// or remote ref reaches. Commits git already collected don't count: nothing is left to lose.
-    func reflogOnlyCommits(gitDir: URL, in folder: URL) async throws -> Int {
+    /// The commits named in this worktree's own `logs/HEAD` (deleted with the worktree) that no branch, tag or
+    /// remote ref reaches, each once (full shas). Commits git already collected don't count: nothing is left to
+    /// lose.
+    func reflogOnlyCommits(gitDir: URL, in folder: URL) async throws -> [String] {
         let reflog = gitDir.appending(path: "logs/HEAD")
         let data: Data
         do {
             data = try Data(contentsOf: reflog)
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            return 0
+            return []
         }
         let commits = Self.reflogCommits(data)
-        var total = 0
+        var found: [String] = []
+        var seen: Set<String> = []
         var start = commits.startIndex
         while start < commits.endIndex {
             let chunk = commits[start..<min(start + 2_000, commits.endIndex)]
-            let count = try await git.gitString(
-                ["rev-list", "--count", "--ignore-missing"] + chunk + ["--not", "--branches", "--tags", "--remotes"],
+            let listed = try await git.gitString(
+                ["rev-list", "--ignore-missing"] + chunk + ["--not", "--branches", "--tags", "--remotes"],
                 in: folder
             )
-            guard let value = Int(count) else { throw GitError(exitCode: 0, stderr: count, arguments: ["rev-list"]) }
-            total += value
+            for sha in listed.split(separator: "\n").map(String.init) where seen.insert(sha).inserted {
+                found.append(sha)
+            }
             start += 2_000
         }
-        return total
+        return found
     }
 
     /// The old and new object names of every reflog line, without the all-zero name, each once.

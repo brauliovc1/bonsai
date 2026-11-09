@@ -120,7 +120,7 @@ struct WorktreesModelTests {
         let blockedPython = try #require(confirmation.blocked.first { $0.worktree.url.lastPathComponent == "cobalt-py" })
         #expect(blockedPython.blockers.contains { if case .nestedCheckouts = $0 { true } else { false } })
         let packageClones = try #require(confirmation.allowed.first { $0.worktree.url.lastPathComponent == "cobalt-swift" })
-        #expect(packageClones.notes.contains { if case .nestedClones = $0 { true } else { false } })
+        #expect(packageClones.notes.contains { if case .packageCopies = $0 { true } else { false } })
     }
 
     @Test func claudeWarningAndIgnoredFiles() async throws {

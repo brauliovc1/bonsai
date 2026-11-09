@@ -1,7 +1,8 @@
 import Foundation
 
 /// Removes one worktree the safe way (PLAN §4.1): re-reads its state, re-runs `SafetyCheck`, then runs
-/// `git -C <repo> worktree remove <path>`, never with `--force`. The branch is never deleted.
+/// `git -C <repo> worktree remove <path>`, without `--force`. The branch is never deleted. The one exception is
+/// Remove anyway (PLAN §4.8, `Remover+Anyway`): by hand, one worktree, exactly one `--force`.
 ///
 /// This is the only code that removes a worktree folder.
 public struct Remover: Sendable {
@@ -64,12 +65,34 @@ public struct Remover: Sendable {
         let allowed = mode == .manual ? safety.manualAllowed : safety.autoEligible
         guard allowed else { throw RemovalError.refused(mode: mode, report: safety) }
 
+        return try await removeAndLog(
+            fresh,
+            mode: mode,
+            action: .worktreeRemove,
+            safety: safety,
+            notes: Self.logNotes(safety),
+            estimatedBytes: estimatedBytes,
+            stillAllowed: stillAllowed
+        )
+    }
+
+    /// Runs `git worktree remove` (with one `--force` for Remove anyway), checks what it did and logs one entry.
+    /// Called only after a fresh re-check said yes.
+    func removeAndLog(
+        _ fresh: Worktree,
+        mode: RemovalMode,
+        action: RemovalAction,
+        safety: SafetyReport,
+        notes: [String],
+        estimatedBytes: Int64?,
+        stillAllowed: (@Sendable () async -> RemovalStop?)?
+    ) async throws -> RemovalResult {
         let volumeFolder = fresh.url.deletingLastPathComponent()
         let freeBefore = Self.availableCapacity(at: volumeFolder)
 
         if let stillAllowed, let stop = await stillAllowed() { throw RemovalError.stopped(stop) }
         await beforeGitRemove()
-        let (arguments, directory) = Self.removeCommand(for: fresh)
+        let (arguments, directory) = Self.removeCommand(for: fresh, force: action == .worktreeRemoveAnyway)
         do {
             try await git.git(arguments, in: directory)
         } catch let error as GitError {
@@ -95,7 +118,7 @@ public struct Remover: Sendable {
         var entry = RemovalLogEntry(
             date: now(),
             mode: mode,
-            action: .worktreeRemove,
+            action: action,
             repoPath: fresh.repoPath,
             path: fresh.path,
             branch: fresh.branch,
@@ -103,7 +126,7 @@ public struct Remover: Sendable {
             kind: fresh.kind,
             estimatedBytes: estimatedBytes,
             freedBytes: freed,
-            notes: Self.logNotes(safety) + warnings
+            notes: notes + warnings
         )
         var logged = true
         do {
@@ -122,15 +145,19 @@ public struct Remover: Sendable {
     /// emoji), so it would not find a worktree registered composed. From inside, git takes the path from
     /// `getcwd`, which returns the folder's name exactly as it is stored. git's own checks (dirty, locked,
     /// main checkout) are the same either way.
-    static func removeCommand(for worktree: Worktree) -> (arguments: [String], directory: URL) {
+    ///
+    /// `force` (Remove anyway, PLAN §4.8 only) adds exactly one `--force`: it removes a worktree with changes,
+    /// untracked files or submodules. A second one would also override a lock, so there is never a second.
+    static func removeCommand(for worktree: Worktree, force: Bool = false) -> (arguments: [String], directory: URL) {
+        let command = force ? ["worktree", "remove", "--force"] : ["worktree", "remove"]
         if worktree.path.utf8.allSatisfy({ $0 < 0x80 }) {
-            return (["worktree", "remove", worktree.path], worktree.repoURL)
+            return (command + [worktree.path], worktree.repoURL)
         }
-        return (["worktree", "remove", "."], worktree.url)
+        return (command + ["."], worktree.url)
     }
 
     /// The worktree's porcelain record as git lists it now, plus the repo's other worktrees.
-    private func reread(_ worktree: Worktree, mode: RemovalMode) async throws -> (Worktree, [Worktree]) {
+    func reread(_ worktree: Worktree, mode: RemovalMode) async throws -> (Worktree, [Worktree]) {
         let listing: [Worktree]
         do {
             listing = try await WorktreeScanner(git: git, cursorWorktreesDirectory: cursorWorktreesDirectory)

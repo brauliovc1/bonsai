@@ -72,20 +72,32 @@ public struct WorktreeInspector: Sendable {
         }
 
         state.hasSubmodules = FileManager.default.fileExists(atPath: folder.appending(path: ".gitmodules").path)
+        if state.hasSubmodules { state.submodulePaths = await submodulePaths(in: folder) }
         state.operationsInProgress = Self.operationsInProgress(gitDir: gitDir)
 
         var errors: [String] = []
-        state.changedFiles = await attempt(&errors) {
-            Self.countStatusEntries(try await git.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], in: folder))
-        } ?? 0
+        let status = await attempt(&errors) {
+            try await git.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], in: folder)
+        }
+        state.changedFiles = status.map(Self.countStatusEntries) ?? 0
+        state.changedPaths = status.map(GitStatusEntry.parse) ?? []
         state.hiddenEdits = await attempt(&errors) { try await hiddenEdits(in: folder) } ?? []
-        state.localOnlyCommits = await attempt(&errors) {
-            let count = try await git.gitString(["rev-list", "--count", "HEAD", "--not", "--remotes"], in: folder)
-            guard let value = Int(count) else { throw GitError(exitCode: 0, stderr: count, arguments: ["rev-list"]) }
-            return value
-        } ?? 0
         if worktree.isDetached {
-            state.reflogOnlyCommits = await attempt(&errors) { try await reflogOnlyCommits(gitDir: gitDir, in: folder) } ?? 0
+            // The commits themselves: a detached worktree can't be removed with them, except by Remove anyway,
+            // which lists each one.
+            state.localOnlyShas = await attempt(&errors) {
+                try await git.gitString(["rev-list", "HEAD", "--not", "--remotes"], in: folder)
+                    .split(separator: "\n").map(String.init)
+            } ?? []
+            state.localOnlyCommits = state.localOnlyShas.count
+            state.reflogOnlyShas = await attempt(&errors) { try await reflogOnlyCommits(gitDir: gitDir, in: folder) } ?? []
+            state.reflogOnlyCommits = state.reflogOnlyShas.count
+        } else {
+            state.localOnlyCommits = await attempt(&errors) {
+                let count = try await git.gitString(["rev-list", "--count", "HEAD", "--not", "--remotes"], in: folder)
+                guard let value = Int(count) else { throw GitError(exitCode: 0, stderr: count, arguments: ["rev-list"]) }
+                return value
+            } ?? 0
         }
         if let branch = worktree.branch {
             state.branchStashes = await attempt(&errors) {
@@ -101,18 +113,9 @@ public struct WorktreeInspector: Sendable {
             return await IgnoredFileFilter(git: git, folder: folder, searchLimit: ignoredSearchLimit).userFiles(ignored)
         } ?? []
         state.gitErrors += errors
+        state.pathStamps = Self.stamps(of: state.changedPaths.map(\.path) + state.hiddenEdits + state.ignoredUserFiles, in: folder)
 
-        // Registered worktrees (of any scanned repo) and `.git` files always block; a plain clone blocks
-        // unless it holds no local work.
-        let search = nestedSearch.search(folder)
-        let registered = knownWorktrees
-            .filter { CanonicalPath.isInside($0.url, directory: folder) }
-            .compactMap { CanonicalPath.relativePath(of: $0.url, to: folder) }
-        let candidates = search.checkouts.filter { !registered.contains($0) && !search.gitFiles.contains($0) }
-        let clean = await NestedCloneCheck(git: git).clonesWithoutLocalWork(candidates, in: folder)
-        state.nestedCheckouts = (registered + search.checkouts.filter { !clean.contains($0) }).uniqued().sorted()
-        state.nestedClones = candidates.filter(clean.contains).sorted()
-        state.nestedSearchIncomplete = search.incomplete
+        await findNested(in: folder, knownWorktrees: knownWorktrees, into: &state)
         return state
     }
 

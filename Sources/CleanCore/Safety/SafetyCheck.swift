@@ -91,7 +91,9 @@ public struct SafetyCheck: Sendable {
         if state.reflogOnlyCommits > 0 { blockers.append(.reflogOnlyCommits(count: state.reflogOnlyCommits)) }
         if state.hasSubmodules { blockers.append(.submodules) }
         if !state.nestedCheckouts.isEmpty { blockers.append(.nestedCheckouts(state.nestedCheckouts)) }
+        if !state.nestedUnreadable.isEmpty { blockers.append(.nestedUnreadable(state.nestedUnreadable)) }
         if !state.nestedClones.isEmpty { notes.append(.nestedClones(state.nestedClones)) }
+        if !state.packageCopies.isEmpty { notes.append(.packageCopies(state.packageCopies)) }
         if let why = state.nestedSearchIncomplete {
             notes.append(.nestedSearchIncomplete(why))
             autoOnly.append(.nestedSearchIncomplete(why))

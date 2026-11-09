@@ -22,7 +22,7 @@ extension WorktreesModel {
             return selectedRepos.isEmpty ? "Select the worktrees to remove." : WorktreeStatusText.repoFolderSentence
         }
         if selectedRows.count == 1, let row = selectedRows.first {
-            return "It can't be removed: \(row.explanation)"
+            return "It can't be removed: \(row.explanation)" + (row.offersRemoveAnyway ? " " + RemoveAnywayText.detailsHint : "")
         }
         return "None of the selected worktrees can be removed. Their details say why."
     }

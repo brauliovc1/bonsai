@@ -1,14 +1,11 @@
 import Foundation
 
-/// The PLAN §4.2 light-clean conditions for one folder, plus the nested-checkout rule of §4.1. Read-only.
-/// `LightCleanFinder` runs it for every folder whose name matched, and `LightCleaner` runs it again right
-/// before deleting each candidate.
+/// The PLAN §4.2 light-clean conditions for one folder, plus the nested-checkout rule of §4.1 (package copies
+/// included). Read-only. `LightCleanFinder` runs it for every folder whose name matched, and `LightCleaner`
+/// runs it again right before deleting each candidate.
 ///
-/// `check-ignore` and `ls-files` run in the folder's parent with the folder's name: run inside the folder,
-/// git would apply the folder's own `.gitignore` to the folder itself. The names in `RegenerableNames` are
-/// ASCII, so they reach git unchanged; the parent's path only goes to `-C` (a chdir, which matches names
-/// whatever their Unicode form). `ls-files` matches the name case-insensitively (`:(icase)`), and the
-/// worktree's `git status` must list nothing under the folder.
+/// git must ignore the folder and track nothing in it (`IgnoredOutputCheck`, asked from the folder's parent),
+/// and the worktree's `git status` must list nothing under the folder.
 struct LightCleanCheck: Sendable {
     var git: Git
     var nestedSearch: NestedCheckoutSearch
@@ -42,7 +39,7 @@ struct LightCleanCheck: Sendable {
         }
         let changed = status.paths(under: relative)
         if !changed.isEmpty { return Verdict(reason: .uncommittedFiles(changed)) }
-        var verdict = await nestedVerdict(folder, knownWorktrees: knownWorktrees)
+        var verdict = await nestedVerdict(folder, relative: relative, in: worktree, knownWorktrees: knownWorktrees)
         verdict.identity = identity
         return verdict
     }
@@ -66,40 +63,28 @@ struct LightCleanCheck: Sendable {
         return nil
     }
 
-    /// Tracked files, then ignored, as git sees them from the folder's parent. A git failure is a reason
-    /// too. Tracked files are asked first: git calls a folder with tracked files in it "not ignored".
+    /// Tracked files, then ignored, as git sees them from the folder's parent (`IgnoredOutputCheck`).
     private func gitReason(name: String, parent: URL, worktree: URL) async -> LightCleanSkipReason? {
-        do {
-            // git must answer for this worktree, not for a repo around it (a broken `.git` file).
-            let topLevel = try await git.gitString(["rev-parse", "--show-toplevel"], in: parent)
-            guard CanonicalPath.same(URL(fileURLWithPath: topLevel), worktree) else {
-                return .gitError("git sees \(topLevel) here, not this worktree")
-            }
-            if !(try await git.git(["ls-files", "-z", "--", ":(icase)\(name)"], in: parent)).isEmpty { return .hasTrackedFiles }
-            let ignore = try await git.result(["check-ignore", "-q", "--", name], in: parent)
-            if ignore.timedOut { return .gitError("git check-ignore timed out") }
-            switch ignore.exitCode {
-            case 0: return nil
-            case 1: return .notIgnored
-            default:
-                let message = ignore.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-                return .gitError("git check-ignore failed (exit \(ignore.exitCode))" + (message.isEmpty ? "" : ": \(message)"))
-            }
-        } catch {
-            return .gitError("\(error)")
-        }
+        await IgnoredOutputCheck(git: git).reason(name: name, parent: parent, worktree: worktree)
     }
 
-    /// `.git` files and registered worktrees always keep the folder; a plain clone or bare repo keeps it
-    /// unless it holds no local work (`NestedCloneCheck`). A search that can't finish keeps it too.
-    private func nestedVerdict(_ folder: URL, knownWorktrees: [Worktree]) async -> Verdict {
+    /// `.git` files and registered worktrees always keep the folder. A plain clone or bare repo goes with it
+    /// when it is a package copy (`PackageCopyRule`, decided without running git in it) or holds no local work
+    /// (`NestedCloneCheck`); any other keeps it. A search that can't finish keeps it too.
+    private func nestedVerdict(_ folder: URL, relative: String, in worktree: URL, knownWorktrees: [Worktree]) async -> Verdict {
         let search = nestedSearch.search(folder)
         let registered = knownWorktrees.compactMap { CanonicalPath.relativePath(of: $0.url, to: folder) }
         let plain = search.checkouts.filter { !registered.contains($0) && !search.gitFiles.contains($0) }
-        let clean = await NestedCloneCheck(git: git).clonesWithoutLocalWork(plain, in: folder)
-        let blocking = (registered + search.gitFiles + plain.filter { !clean.contains($0) }).uniqued().sorted()
+        // The rule reads paths from the worktree root: the build folder may be this folder or one above it.
+        let fromRoot = await PackageCopyRule(git: git, worktree: worktree)
+            .copies(among: plain.map { relative + "/" + $0 })
+        let copies = plain.filter { fromRoot.contains(relative + "/" + $0) }
+        let others = plain.filter { !copies.contains($0) }
+        let verdicts = await NestedCloneCheck(git: git).verdicts(others, in: folder)
+        let clean = others.filter { verdicts[$0] == .clean }
+        let blocking = (registered + search.gitFiles + others.filter { verdicts[$0] != .clean }).uniqued().sorted()
         if !blocking.isEmpty { return Verdict(reason: .nestedCheckout(blocking)) }
         if let why = search.incomplete { return Verdict(reason: .nestedSearchIncomplete(why)) }
-        return Verdict(reason: nil, packageClones: plain.filter(clean.contains).sorted())
+        return Verdict(reason: nil, packageClones: (copies + clean).sorted())
     }
 }

@@ -1,8 +1,8 @@
 import Foundation
 
-/// Decides which nested repos hold no local work (PLAN §4.1 "Nested checkouts"): package managers' clones
-/// (SwiftPM `.build/checkouts`, Xcode `SourcePackages/checkouts`) and mirrors (their `repositories/`) can be
-/// fetched again, so they count like §4.2 build output.
+/// What a nested repo holds (PLAN §4.1 "Nested checkouts"): no local work (counts like §4.2 build output),
+/// local work (each thing found, for the Remove anyway list, §4.8), or a repo git can't read. Package copies
+/// never get here: `PackageCopyRule` decides them from their path, without running git in them.
 ///
 /// First the repo's own config is read without running anything (`NestedRepoConfig`): a key that makes git
 /// run a command or read another file is local work, and git is not run there.
@@ -16,8 +16,9 @@ import Foundation
 /// - no hidden local edits (`ls-files -v`: assume-unchanged or skip-worktree files on disk);
 /// - no operation in progress, no reflog-only commits in its own `logs/HEAD`;
 /// - no ignored files other than §4.2 build output.
-/// Any git error or timeout counts as local work, and so does a clone where git answers for some other
-/// folder (a broken `.git` directory makes git fall back to an enclosing repo).
+/// Every check runs, so the list of what was found is whole. A git error or timeout makes the repo
+/// unreadable (git's first error line), and so does a clone where git answers for some other folder (a broken
+/// `.git` directory makes git fall back to an enclosing repo).
 struct NestedCloneCheck: Sendable {
     var git: Git
     /// Clones checked at the same time.
@@ -25,48 +26,127 @@ struct NestedCloneCheck: Sendable {
     /// Entries of each collapsed ignored folder looked at on disk.
     var ignoredSearchLimit = 10_000
 
-    /// The repos among `relativePaths` (inside `folder`) that hold no local work.
-    func clonesWithoutLocalWork(_ relativePaths: [String], in folder: URL) async -> Set<String> {
-        let verdicts = await BoundedConcurrency.map(relativePaths, limit: maxConcurrent) { relative in
-            await holdsNoLocalWork(folder.appending(path: relative, directoryHint: .isDirectory))
-        }
-        return Set(zip(relativePaths, verdicts).filter(\.1).map(\.0))
+    enum Verdict: Sendable, Hashable {
+        /// No local work: it can be fetched again.
+        case clean
+        /// What was found, in words ("2 unsaved changes", "no remote").
+        case localWork([String])
+        /// git couldn't read it: git's first error line.
+        case unreadable(String)
     }
 
-    func holdsNoLocalWork(_ repo: URL) async -> Bool {
+    /// The verdict for each repo among `relativePaths` (inside `folder`).
+    func verdicts(_ relativePaths: [String], in folder: URL) async -> [String: Verdict] {
+        let verdicts = await BoundedConcurrency.map(relativePaths, limit: maxConcurrent) { relative in
+            await verdict(folder.appending(path: relative, directoryHint: .isDirectory))
+        }
+        return Dictionary(zip(relativePaths, verdicts), uniquingKeysWith: { first, _ in first })
+    }
+
+    func verdict(_ repo: URL) async -> Verdict {
         if NestedCheckoutSearch.isBareRepo(repo) {
-            guard let config = await NestedRepoConfig.read(gitDir: repo, git: git) else { return false }
-            return config.commandKeys.isEmpty && config.isMirror
+            switch await NestedRepoConfig.read(gitDir: repo, git: git) {
+            case .failure(let error): return .unreadable(error.message)
+            case .success(let config):
+                if let key = config.commandKeys.first { return .localWork([Self.commandKeyFinding(key)]) }
+                return config.isMirror ? .clean : .localWork(["a bare repo that is not a mirror"])
+            }
         }
         let gitDir = repo.appending(path: ".git", directoryHint: .isDirectory)
-        guard DirectoryEntries.kind(ofItemAt: gitDir.path) == .directory,
-              let config = await NestedRepoConfig.read(gitDir: gitDir, git: git),
-              config.commandKeys.isEmpty
-        else { return false }
+        guard DirectoryEntries.kind(ofItemAt: gitDir.path) == .directory else {
+            return .unreadable("its .git is not a folder")
+        }
+        switch await NestedRepoConfig.read(gitDir: gitDir, git: git) {
+        case .failure(let error): return .unreadable(error.message)
+        case .success(let config):
+            if let key = config.commandKeys.first { return .localWork([Self.commandKeyFinding(key)]) }
+        }
         do {
-            return try await cloneHoldsNoLocalWork(repo, gitDir: gitDir)
+            let found = try await localWork(in: repo, gitDir: gitDir)
+            return found.isEmpty ? .clean : .localWork(found)
+        } catch let error as GitError {
+            return .unreadable(Self.firstLine(of: error))
+        } catch let error as Unreadable {
+            return .unreadable(error.message)
         } catch {
-            return false
+            return .unreadable("\(error)")
         }
     }
 
-    private func cloneHoldsNoLocalWork(_ clone: URL, gitDir: URL) async throws -> Bool {
+    private struct Unreadable: Error {
+        var message: String
+    }
+
+    private func localWork(in clone: URL, gitDir: URL) async throws -> [String] {
         let topLevel = try await git.gitString(["rev-parse", "--show-toplevel"], in: clone)
-        guard CanonicalPath.same(URL(fileURLWithPath: topLevel), clone) else { return false }
-        guard WorktreeInspector.operationsInProgress(gitDir: gitDir).isEmpty else { return false }
-        guard !(try await git.gitString(["remote"], in: clone)).isEmpty else { return false }
-        guard (try await git.gitString(["status", "--porcelain", "--untracked-files=all"], in: clone)).isEmpty else {
-            return false
+        guard CanonicalPath.same(URL(fileURLWithPath: topLevel), clone) else {
+            throw Unreadable(message: "git answers for \(topLevel) here, not for this repo")
         }
-        let ahead = try await git.gitString(["rev-list", "--count", "HEAD", "--branches", "--not", "--remotes", "--tags"], in: clone)
-        guard ahead == "0" else { return false }
-        guard (try await git.gitString(["stash", "list"], in: clone)).isEmpty else { return false }
+        var found: [String] = []
+        if let marker = WorktreeInspector.operationsInProgress(gitDir: gitDir).first {
+            found.append("\(Self.operationName(marker)) in progress")
+        }
+        if (try await git.gitString(["remote"], in: clone)).isEmpty { found.append("no remote") }
+        let changes = WorktreeInspector.countStatusEntries(
+            try await git.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], in: clone)
+        )
+        if changes > 0 { found.append(Self.count(changes, "unsaved change", "unsaved changes")) }
+        let head = try await git.result(["rev-parse", "--verify", "--quiet", "HEAD"], in: clone)
+        if head.succeeded {
+            let ahead = try await git.gitString(
+                ["rev-list", "--count", "HEAD", "--branches", "--not", "--remotes", "--tags"], in: clone
+            )
+            guard let commits = Int(ahead) else { throw Unreadable(message: "git rev-list said \(ahead)") }
+            if commits > 0 { found.append(Self.count(commits, "commit not on a remote", "commits not on a remote")) }
+        } else if head.exitCode == 1, head.stderr.isEmpty {
+            found.append("no commits yet")
+        } else {
+            throw GitError(exitCode: head.exitCode, stderr: head.stderr, arguments: ["rev-parse"], timedOut: head.timedOut)
+        }
+        let stashes = (try await git.gitString(["stash", "list"], in: clone)).split(separator: "\n").count
+        if stashes > 0 { found.append(Self.count(stashes, "stash", "stashes")) }
 
         let inspector = WorktreeInspector(git: git)
-        guard try await inspector.hiddenEdits(in: clone).isEmpty else { return false }
-        guard try await inspector.reflogOnlyCommits(gitDir: gitDir, in: clone) == 0 else { return false }
+        let hidden = try await inspector.hiddenEdits(in: clone)
+        if !hidden.isEmpty { found.append("hidden edits: " + hidden.joined(separator: ", ")) }
+        if head.succeeded {
+            let reflogOnly = try await inspector.reflogOnlyCommits(gitDir: gitDir, in: clone)
+            if !reflogOnly.isEmpty {
+                found.append(Self.count(reflogOnly.count, "commit only in its reflog", "commits only in its reflog"))
+            }
+        }
         let ignored = try await git.git(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"], in: clone)
         let entries = ignored.split(separator: 0).map { String(decoding: $0, as: UTF8.self) }
-        return await IgnoredFileFilter(git: git, folder: clone, searchLimit: ignoredSearchLimit).userFiles(entries).isEmpty
+        let userFiles = await IgnoredFileFilter(git: git, folder: clone, searchLimit: ignoredSearchLimit).userFiles(entries)
+        if !userFiles.isEmpty { found.append("ignored files: " + userFiles.joined(separator: ", ")) }
+        return found
+    }
+
+    /// git's first error line ("fatal: bad tree object HEAD"), or what happened when it said nothing.
+    static func firstLine(of error: GitError) -> String {
+        if error.timedOut { return "git timed out" }
+        let line = error.stderr.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+        return line ?? "git failed (exit \(error.exitCode))"
+    }
+
+    private static func commandKeyFinding(_ key: String) -> String {
+        "its config sets \(key), so git was not run there"
+    }
+
+    private static func count(_ number: Int, _ one: String, _ many: String) -> String {
+        "\(number) \(number == 1 ? one : many)"
+    }
+
+    private static func operationName(_ marker: String) -> String {
+        switch marker {
+        case "rebase-merge", "rebase-apply": "a rebase"
+        case "MERGE_HEAD": "a merge"
+        case "CHERRY_PICK_HEAD": "a cherry-pick"
+        case "REVERT_HEAD": "a revert"
+        case "BISECT_LOG": "a bisect"
+        default: "a git operation"
+        }
     }
 }

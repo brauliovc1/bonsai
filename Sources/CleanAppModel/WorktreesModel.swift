@@ -6,8 +6,9 @@ import Observation
 /// that is the repo's main checkout (`WorktreesModel+Groups`), the "Can remove / Needs attention / All" filter
 /// and search (`+Filter`), selection and what Remove… may do with it (`+Actions`), the details panel
 /// (`details`), the dependency sizes (`+Dependencies`), and the remove, prune and clean-dependencies flows
-/// (`+Remove`, `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune only through
-/// `Pruner`, cleaning dependencies only through `LightCleaner`. A main checkout is never offered for removal.
+/// (`+Remove`, `+RemoveAnyway`, `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune
+/// only through `Pruner`, cleaning dependencies only through `LightCleaner`. A main checkout is never offered for
+/// removal.
 @MainActor
 @Observable
 public final class WorktreesModel {
@@ -45,6 +46,18 @@ public final class WorktreesModel {
     /// Test seams: the volume a folder is on, and a volume's free bytes.
     @ObservationIgnored var volumeOf: (URL) -> URL? = WorktreesModel.volume(of:)
     @ObservationIgnored var freeBytes: (URL) -> Int64? = { FreeSpaceProbe.volume(containing: $0).availableBytes() }
+
+    // Remove anyway sheet (WorktreesModel+RemoveAnyway, PLAN §4.8): one worktree at a time.
+    public var isShowingRemoveAnywaySheet = false
+    public internal(set) var isPreparingRemoveAnyway = false
+    public internal(set) var removeAnywayConfirmation: RemoveAnywayConfirmation?
+    /// The fresh look found it can't be removed anyway (or no longer needs to be): why, and what to do.
+    public internal(set) var removeAnywayRefusal: String?
+    /// The sheet's checkbox: "I understand these are deleted for good".
+    public var removeAnywayUnderstood = false
+    public internal(set) var isRemovingAnyway = false
+    public internal(set) var removeAnywayOutcome: RemoveAnywayOutcome?
+    @ObservationIgnored var removeAnywaySheetToken = 0
 
     // Dependency sizes (WorktreesModel+Dependencies).
     public internal(set) var dependencySizes: [WorktreeRow.ID: DependencySize] = [:]

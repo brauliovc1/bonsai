@@ -27,9 +27,18 @@ struct RecentlyRemovedView: View {
             }
             .width(min: 120, ideal: 140, max: 180)
             TableColumn("Action") { row in
-                Text(row.actionText)
+                if let loss = row.lossLine {
+                    // Removed anyway: what was lost, in one line under the action.
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.actionText)
+                        Text(loss).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                    }
+                    .help(row.notesHelp)
+                } else {
+                    Text(row.actionText)
+                }
             }
-            .width(min: 110, ideal: 130, max: 190)
+            .width(min: 110, ideal: 170, max: 260)
             TableColumn("Path") { row in
                 Text(row.path)
                     .lineLimit(1)
