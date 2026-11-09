@@ -3,7 +3,8 @@ import CleanCore
 import SwiftUI
 
 /// The Worktrees screen (PLAN §8.4): the toolbar's "Can remove · Needs attention · All" filter, search,
-/// Remove… and More; the worktrees grouped under their repo folder; the details panel; the selection bar.
+/// Remove… and More; "Sort: … · Group by repo" above the list; the worktrees grouped under their repo folder or
+/// in one flat list; the details panel; the selection bar.
 /// Keyboard: Delete opens the removal confirmation, Space shows or hides the details, ⌘R scans again.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
@@ -16,6 +17,8 @@ struct WorktreesView: View {
             if let problem = model.app.problem {
                 ProblemBanner(text: problem)
             }
+            WorktreesSortBar(model: model)
+            Divider()
             list
             Divider()
             bottomBar
@@ -60,14 +63,22 @@ struct WorktreesView: View {
 
     private var list: some View {
         List(selection: $model.selection) {
-            ForEach(model.groups) { group in
-                RepoGroupHeader(model: model, group: group)
-                    .tag(group.main?.id ?? WorktreeRow.ID(repoPath: group.repoPath, path: group.repoPath))
-                if model.isExpanded(group.repoPath) {
-                    ForEach(group.rows) { row in
-                        WorktreeListRow(row: row, showsActivity: showsActivity)
-                            .tag(row.id)
+            if model.groupsByRepo {
+                ForEach(model.groups) { group in
+                    RepoGroupHeader(model: model, group: group)
+                        .tag(group.main?.id ?? WorktreeRow.ID(repoPath: group.repoPath, path: group.repoPath))
+                    if model.isExpanded(group.repoPath) {
+                        ForEach(group.rows) { row in
+                            WorktreeListRow(row: row, showsActivity: showsActivity)
+                                .tag(row.id)
+                        }
                     }
+                }
+            } else {
+                // One list across repos, each row with its repo's name.
+                ForEach(model.flatRows) { row in
+                    WorktreeListRow(row: row, showsActivity: showsActivity, showsRepo: true)
+                        .tag(row.id)
                 }
             }
         }

@@ -3,17 +3,14 @@ import Foundation
 
 extension WorktreesModel {
     /// The shown worktrees grouped by repo, each under its main checkout. A repo shows when the filter and search
-    /// leave at least one of its linked worktrees. Groups are in name order (reversed when the sort's first key is
-    /// the repo or branch name, descending); inside a group the sort applies and ties keep scan order.
+    /// leave at least one of its linked worktrees. Rows and groups follow "Sort by" (`WorktreesModel+Sort`).
     public var groups: [WorktreeGroup] {
-        let all = allRows
-        let comparators = sortOrder + [KeyPathComparator(\WorktreeRow.scanOrder)]
         var order: [String] = []
         var mains: [String: WorktreeRow] = [:]
         var totals: [String: Int] = [:]
         var sizes: [String: Int64] = [:]
         var byRepo: [String: [WorktreeRow]] = [:]
-        for row in all {
+        for row in allRows {
             let repo = row.worktree.repoPath
             if row.worktree.isMain {
                 mains[repo] = row
@@ -30,26 +27,14 @@ extension WorktreesModel {
             WorktreeGroup(
                 repoPath: repo,
                 main: mains[repo],
-                rows: (byRepo[repo] ?? []).sorted(using: comparators),
+                rows: (byRepo[repo] ?? []).sorted { rowPrecedes($0, $1, flat: false) },
                 totalCount: totals[repo] ?? 0,
                 worktreeBytes: sizes[repo],
                 remotes: app.scan?.remotes?[repo] ?? [],
                 home: home
             )
         }
-        let descending = groupNameOrder == .reverse
-        return groups.sorted { lhs, rhs in
-            let names = lhs.name.localizedStandardCompare(rhs.name)
-            if names != .orderedSame { return descending ? names == .orderedDescending : names == .orderedAscending }
-            return descending ? lhs.repoPath > rhs.repoPath : lhs.repoPath < rhs.repoPath
-        }
-    }
-
-    /// The direction of the repo order: the sort's when it starts with the repo or branch name.
-    var groupNameOrder: SortOrder {
-        guard let first = sortOrder.first else { return .forward }
-        let byName: [PartialKeyPath<WorktreeRow>] = [\WorktreeRow.repoName, \WorktreeRow.branchText]
-        return byName.contains(first.keyPath) ? first.order : .forward
+        return groups.sorted(by: groupPrecedes)
     }
 
     public func isExpanded(_ repoPath: String) -> Bool {

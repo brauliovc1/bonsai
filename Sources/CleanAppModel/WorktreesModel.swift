@@ -14,8 +14,10 @@ import Observation
 public final class WorktreesModel {
     public let app: AppModel
 
-    /// The order inside each group (groups stay in repo name order): biggest first.
-    public var sortOrder = [KeyPathComparator(\WorktreeRow.sizeSortKey, order: .reverse)]
+    /// "Sort by" (`WorktreesModel+Sort`): largest first when the screen first opens; kept while the app runs.
+    public var sortKey: SortKey = .size
+    /// Rows under their repo folder (on), or one flat list across repos (off); kept while the app runs.
+    public var groupsByRepo = true
     /// The segmented filter; "Can remove" when the screen opens.
     public var filter: Filter = .canRemove
     public var searchText = ""
@@ -121,10 +123,10 @@ public final class WorktreesModel {
     /// Every linked worktree of the last scan (the rows the filter chooses from).
     public var linkedRows: [WorktreeRow] { allRows.filter { !$0.worktree.isMain } }
 
-    /// The linked worktrees shown (filtered and searched), in list order: group by group. Rows of collapsed
-    /// groups are included. Never a main checkout.
+    /// The linked worktrees shown (filtered and searched), in list order: group by group (rows of collapsed groups
+    /// included), or the flat list. Never a main checkout.
     public var rows: [WorktreeRow] {
-        groups.flatMap(\.rows)
+        groupsByRepo ? groups.flatMap(\.rows) : flatRows
     }
 
     /// The shown worktrees that are selected (repo headers are not among them).
@@ -132,9 +134,11 @@ public final class WorktreesModel {
         rows.filter { selection.contains($0.id) }
     }
 
-    /// The repo headers that are selected, as their main checkouts' rows.
+    /// The repo headers that are selected, as their main checkouts' rows (none in the flat list, which has no
+    /// headers; a header's selection waits there until grouping is back).
     public var selectedRepos: [WorktreeRow] {
-        groups.compactMap(\.main).filter { selection.contains($0.id) }
+        guard groupsByRepo else { return [] }
+        return groups.compactMap(\.main).filter { selection.contains($0.id) }
     }
 
     /// Every worktree whose folder is gone, shown or not ("Prune missing folders…" covers their repos).

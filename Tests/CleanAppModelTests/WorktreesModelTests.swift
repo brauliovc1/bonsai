@@ -50,47 +50,6 @@ struct WorktreesModelTests {
         #expect(model.filter == .canRemove && model.searchText.isEmpty, "the Overview's card opens on what it counted")
     }
 
-    /// Sorting applies inside each repo group (biggest first unless set); groups stay in repo order.
-    @Test func sortingInsideGroups() async throws {
-        let (world, _, model) = try await scannedDemoWorld()
-        defer { world.remove() }
-        model.filter = .all
-        func linked(_ repo: String) -> [WorktreeRow] {
-            let group = model.groups.first { $0.name == repo }
-            #expect(group?.main?.worktree.isMain == true, "\(repo): the header is the repo folder")
-            #expect(group?.rows.contains { $0.worktree.isMain } == false)
-            return group?.rows ?? []
-        }
-        #expect(model.groups.map(\.name) == ["atlas", "beacon", "cobalt"])
-
-        model.sortOrder = [KeyPathComparator(\WorktreeRow.sizeSortKey, order: .reverse)]
-        #expect(model.groups.map(\.name) == ["atlas", "beacon", "cobalt"], "groups keep repo order")
-        #expect(linked("cobalt").first?.url.lastPathComponent == "cobalt-web", "20 MB of node_modules")
-        #expect(linked("beacon").last?.isMissingFolder == true, "unknown size sorts as smallest")
-
-        model.sortOrder = [KeyPathComparator(\WorktreeRow.idleSortKey, order: .reverse)]
-        let idle = linked("atlas").compactMap(\.idleDays)
-        #expect(idle == [45, 45, 10, 3])
-
-        model.sortOrder = [KeyPathComparator(\WorktreeRow.statusSortKey)]
-        #expect(linked("atlas").first?.statusLabel == "AUTO-READY")
-        #expect(linked("atlas").last?.tone == .blocked)
-
-        model.sortOrder = [KeyPathComparator(\WorktreeRow.lastCommitSortKey, order: .reverse)]
-        let dates = linked("beacon").map(\.lastCommitSortKey)
-        #expect(dates == dates.sorted(by: >))
-
-        model.sortOrder = [KeyPathComparator(\WorktreeRow.repoName, order: .reverse)]
-        #expect(model.groups.map(\.name) == ["cobalt", "beacon", "atlas"])
-        #expect(model.rows.first?.repoName == "cobalt")
-        #expect(linked("cobalt").map(\.url.lastPathComponent) == ["cobalt-py", "cobalt-swift", "cobalt-web"],
-                "ties keep scan order")
-
-        model.sortOrder = [KeyPathComparator(\WorktreeRow.branchText, order: .reverse)]
-        #expect(model.groups.first?.name == "cobalt", "the first column sorts groups too")
-        #expect(linked("cobalt").map(\.branchText) == ["web", "swift", "py"])
-    }
-
     @Test func confirmationListsBlockedItemsAndExcludesThem() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }

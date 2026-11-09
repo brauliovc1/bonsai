@@ -4,10 +4,11 @@ import SwiftUI
 
 /// One worktree in the list (PLAN §8.4): its kind icon, two lines (branch or name; the folder inside the repo or
 /// with "~", cut in the middle), last activity, size and status chip with its notes. The activity column is the
-/// first to go in a narrow window.
+/// first to go in a narrow window. In the flat list (no repo headers) the second line starts with the repo's name.
 struct WorktreeListRow: View {
     let row: WorktreeRow
     let showsActivity: Bool
+    var showsRepo = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -17,7 +18,7 @@ struct WorktreeListRow: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(row.locationText)
+                (showsRepo ? Text(row.repoName).fontWeight(.semibold) + Text(" · " + row.locationText) : Text(row.locationText))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -46,7 +47,7 @@ struct WorktreeListRow: View {
             .frame(width: WorktreeColumns.status, alignment: .leading)
             .help(row.reasonsHelp)
         }
-        .padding(.leading, WorktreeColumns.indent)
+        .padding(.leading, showsRepo ? 0 : WorktreeColumns.indent)
         .padding(.vertical, 3)
     }
 }
