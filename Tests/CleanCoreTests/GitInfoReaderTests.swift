@@ -122,10 +122,14 @@ struct GitInfoReaderTests {
         let fixture = try GitFixture()
         defer { fixture.remove() }
         let repo = try await fixture.makeRepo("gamma")
-        let task = try await fixture.addSiblingWorktree(to: repo, name: "ramé", branch: "ramé")
+        // Created with precomposition on, so the branch is stored composed ("é" as one character)...
+        try await fixture.run(["config", "core.precomposeunicode", "true"], in: repo)
+        let task = try await fixture.addSiblingWorktree(to: repo, name: "ramé", branch: "ram\u{E9}")
         try await commit(fixture, in: task, file: "x.md", message: "x", author: "A")
         try await fixture.run(["push", "--quiet", "-u", "origin", "HEAD"], in: task)
         try await commit(fixture, in: task, file: "y.md", message: "y", author: "A")
+        // ...then read with it off: a "refs/heads/ramé" argument now reaches git decomposed and matches nothing.
+        try await fixture.run(["config", "core.precomposeunicode", "false"], in: repo)
         let listed = try await WorktreeScanner(git: fixture.git, cursorWorktreesDirectory: fixture.home)
             .worktrees(in: repo)
         let worktree = try #require(listed.first { $0.branch?.hasPrefix("ram") == true })
