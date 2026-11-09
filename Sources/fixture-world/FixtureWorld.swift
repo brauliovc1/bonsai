@@ -2,9 +2,10 @@ import CleanCore
 import CleanTestSupport
 import Foundation
 
-/// `fixture-world <folder>`: builds `DemoWorld` in an empty folder inside the temp dir, then runs the
-/// assessment `clean-claude scan` runs (default settings) and exits 1 when any worktree didn't get the
-/// status it was built for. Dev tool only; it never touches anything outside `<folder>`.
+/// `fixture-world <folder>`: builds `DemoWorld` in an empty folder inside the temp dir, adds
+/// `ProjectFoldersDemo`'s idle projects with build folders, then runs the assessment `clean-claude scan` runs
+/// (default settings) and exits 1 when any worktree didn't get the status it was built for. Dev tool only; it
+/// never touches anything outside `<folder>`.
 @main
 struct FixtureWorld {
     static func main() async {
@@ -19,30 +20,35 @@ struct FixtureWorld {
         }
 
         let world: DemoWorld
+        let projects: ProjectFoldersDemo.Built
         do {
             world = try await DemoWorld.build(in: folder)
+            projects = try await ProjectFoldersDemo.add(to: world.fixture)
         } catch {
             fail("error: building the demo world failed: \(error)", code: 1)
         }
-        printBuilt(world)
-        let matched = await check(world)
+        let items = world.items + projects.items
+        printBuilt(world, projects: projects)
+        let matched = await check(world, items: items)
         print("")
         print("Run the app against it:")
         print("  CLEAN_CLAUDE_SETTINGS_DIR=$(mktemp -d) CLEAN_CLAUDE_SCAN_ROOTS=\"\(folder.path)\" make run")
         exit(matched ? 0 : 1)
     }
 
-    private static func printBuilt(_ world: DemoWorld) {
+    private static func printBuilt(_ world: DemoWorld, projects: ProjectFoldersDemo.Built) {
         print("Built a demo world in \(world.folder.path)")
-        print("  repos (bare remotes in remotes/): " + world.repos.map(world.relativePath).joined(separator: ", "))
-        let width = world.items.map { world.relativePath($0.url).count }.max() ?? 0
-        for item in world.items {
+        print("  repos (bare remotes in remotes/): " + (world.repos + projects.repos).map(world.relativePath).joined(separator: ", "))
+        print("  idle projects with build folders: delta (60 days), echo (45 days), foxtrot (90 days)")
+        let items = world.items + projects.items
+        let width = items.map { world.relativePath($0.url).count }.max() ?? 0
+        for item in items {
             print("  " + pad(world.relativePath(item.url), width) + "  " + item.purpose)
         }
     }
 
     /// Scans the world like `clean-claude scan` and compares each verdict with what was built.
-    private static func check(_ world: DemoWorld) async -> Bool {
+    private static func check(_ world: DemoWorld, items: [DemoWorld.Item]) async -> Bool {
         let environment = CleanEnvironment.live()
         let settings = Settings()
         let scan = await Scanner(environment: environment, settings: settings).scan(roots: [world.folder])
@@ -63,7 +69,7 @@ struct FixtureWorld {
             let check: String
             if assessment.worktree.isMain {
                 check = ""
-            } else if let item = world.item(for: assessment.worktree) {
+            } else if let item = items.first(where: { CanonicalPath.same($0.url, assessment.worktree.url) }) {
                 check = item.mismatch(assessment).map { "MISMATCH: \($0)" } ?? "ok"
             } else {
                 check = "MISMATCH: not built by fixture-world"
@@ -78,14 +84,14 @@ struct FixtureWorld {
         }
 
         var problems = rows.filter { $0[4].hasPrefix("MISMATCH") }.count
-        for item in world.items where !assessments.contains(where: { CanonicalPath.same($0.worktree.url, item.url) }) {
+        for item in items where !assessments.contains(where: { CanonicalPath.same($0.worktree.url, item.url) }) {
             print("  MISMATCH: \(world.relativePath(item.url)) was not found by the scan")
             problems += 1
         }
         if problems == 0 {
-            print("All \(world.items.count) worktrees have the status they were built for.")
+            print("All \(items.count) worktrees have the status they were built for.")
         } else {
-            print("\(problems) of \(world.items.count) worktrees do not have the intended status.")
+            print("\(problems) of \(items.count) worktrees do not have the intended status.")
         }
         return problems == 0
     }

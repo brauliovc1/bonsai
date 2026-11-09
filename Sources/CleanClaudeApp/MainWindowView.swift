@@ -30,6 +30,7 @@ struct MainWindowView: View {
         switch navigation.section ?? .overview {
         case .overview: OverviewView(model: models.overview)
         case .worktrees: WorktreesView(model: models.worktrees)
+        case .projects: ProjectsView(model: models.projects, navigation: models.navigation)
         case .derivedData: DerivedDataView(model: models.derivedData)
         case .dockerSimulators: DockerSimulatorsView(model: models.dockerSimulators)
         case .claudeUsage: ClaudeUsageView(model: models.claudeUsage)
