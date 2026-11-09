@@ -41,6 +41,12 @@ extension AppModel {
         }
     }
 
+    /// Runs `action` with the paths of the checkouts a cleanup changed (after a clean of their dependency
+    /// folders), so a screen that keeps its own sizes of them measures again.
+    public func whenCheckoutsChange(_ action: @escaping @MainActor (Set<String>) async -> Void) {
+        checkoutObservers.append(action)
+    }
+
     /// Takes worktrees a removal took away out of the scan and the verdicts (matched by repo and folder).
     func forget(_ removed: [Worktree]) {
         guard !removed.isEmpty else { return }

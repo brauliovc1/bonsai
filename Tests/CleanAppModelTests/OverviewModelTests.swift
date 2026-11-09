@@ -208,10 +208,13 @@ struct OverviewModelTests {
     /// The bar: used space, the part Bonsai can free inside it, free space; never more to free than is used.
     @Test func theBarSplitsUsedSpace() {
         let gib: Int64 = 1024 * 1024 * 1024
-        let space = try? #require(SpaceBreakdown(free: 22 * gib, total: 460 * gib, canFree: 140 * gib))
-        #expect(space?.usedBytes == 438 * gib)
-        #expect(abs((space?.usedFraction ?? 0) + (space?.canFreeFraction ?? 0) + (space?.freeFraction ?? 0) - 1) < 1e-9)
-        #expect(space?.canFreeText == "Can free 140.0 GB")
+        guard let space = SpaceBreakdown(free: 22 * gib, total: 460 * gib, canFree: 140 * gib) else {
+            Issue.record("a known disk has a breakdown")
+            return
+        }
+        #expect(space.usedBytes == 438 * gib)
+        #expect(abs(space.usedFraction + space.canFreeFraction + space.freeFraction - 1) < 1e-9)
+        #expect(space.canFreeText == "Can free 140.0 GB")
         #expect(SpaceBreakdown(free: 10 * gib, total: 20 * gib, canFree: 50 * gib)?.canFreeBytes == 10 * gib)
         #expect(SpaceBreakdown(free: nil, total: 20 * gib, canFree: 0) == nil)
     }

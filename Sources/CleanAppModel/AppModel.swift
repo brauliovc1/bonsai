@@ -166,12 +166,6 @@ public final class AppModel {
         if rescanWorktrees { await refresh() }
     }
 
-    /// Runs `action` with the paths of the checkouts a cleanup changed (after a clean of their dependency
-    /// folders), so a screen that keeps its own sizes of them measures again.
-    public func whenCheckoutsChange(_ action: @escaping @MainActor (Set<String>) async -> Void) {
-        checkoutObservers.append(action)
-    }
-
     /// Re-reads `settings.json` after a settings screen saved it, without scanning. A file that can't be
     /// read leaves the settings as they were (the next scan reports it).
     public func reloadSettings() {
