@@ -57,15 +57,27 @@ extension Remover {
     }
 
     /// The checks that are fast and change fastest, after the slow inspection and the process index (PLAN §4.8, P12b
-    /// review: a rebase and a file started during the slow part were deleted): an operation in progress, `git status`
-    /// path by path, hidden edits, the files of uninitialized submodule folders, and the stamp of every listed path.
-    /// Each sentence is a difference from `confirmed`; empty when there is none.
+    /// review: a rebase and a file started during the slow part were deleted): HEAD and the branch, an operation in
+    /// progress, `git status` path by path, hidden edits, the files of uninitialized submodule folders, the ignored
+    /// user files listed again, and the stamp of every listed path. `worktree` is git's record read at the start of the
+    /// re-check (already compared with the confirmation). Each sentence is a difference from `confirmed`; empty when
+    /// there is none.
     func lastMomentChanges(_ worktree: Worktree, confirmed: LossList) async -> [String] {
         let folder = worktree.url
         do {
             let gitDir = URL(fileURLWithPath: try await git.gitString(["rev-parse", "--absolute-git-dir"], in: folder))
             if let marker = WorktreeInspector.operationsInProgress(gitDir: gitDir).first {
                 return ["New: \(marker) in its git dir (an operation started)."]
+            }
+            // A commit made meanwhile (on a detached HEAD it would be lost unlisted), or another branch checked out.
+            let head = try await git.gitString(["rev-parse", "--verify", "HEAD"], in: folder)
+            if head != worktree.head {
+                return ["HEAD moved from \(RemovalExpectation.short(worktree.head)) to \(RemovalExpectation.short(head))."]
+            }
+            let symbolic = try await git.result(["symbolic-ref", "--quiet", "HEAD"], in: folder)
+            let branch = symbolic.succeeded ? symbolic.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+            if branch.map({ $0.hasPrefix("refs/heads/") ? String($0.dropFirst("refs/heads/".count)) : $0 }) != worktree.branch {
+                return ["The branch is now \(RemovalExpectation.name(branch)) (was \(RemovalExpectation.name(worktree.branch)))."]
             }
             let status = GitStatusEntry.parse(
                 try await git.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], in: folder)
@@ -74,7 +86,12 @@ extension Remover {
             let submodules = confirmed.entries(.submodules).map(\.text).filter { $0 != ".gitmodules" }
             let walk = SubmoduleFolderWalk.files(in: folder, submodules: submodules)
             if let incomplete = walk.incomplete { return ["Everything in \(incomplete) could no longer be listed."] }
-            let ignored = confirmed.entries(.ignoredFiles).map(\.text)
+            // Listed again, not only stamped again: an ignored `.env` written meanwhile would go unlisted.
+            let listing = try await git.git(
+                ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"], in: folder
+            )
+            let filter = IgnoredFileFilter(git: git, folder: folder, searchLimit: assessor.safetyCheck.inspector.ignoredSearchLimit)
+            let ignored = await filter.userFiles(listing.split(separator: 0).map { String(decoding: $0, as: UTF8.self) })
             let stamps = WorktreeInspector.stamps(of: status.map(\.path) + hidden + walk.files + ignored, in: folder)
             let now = LossList(sections: [
                 LossList.Section(category: .uncommittedFiles, entries: RemoveAnyway.uncommittedEntries(status, stamps: stamps)),

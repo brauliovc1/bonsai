@@ -11,12 +11,15 @@ import Testing
 struct RemoveAnywayLastMomentTests {
     enum During: String, CaseIterable {
         case rebaseStarted, fileWritten, both, listedFileEdited
+        /// An ignored `.env`: only listing the ignored files again sees it.
+        case ignoredFileWritten
         /// Only for the submodule world: a file appears in the uninitialized submodule's folder.
         case submoduleFileWritten
     }
 
-    /// A git that, the first time it is asked for the ignored files (in the middle of the re-check's slow inspection,
-    /// after its `git status` and operation markers), does what `during` says, as another process could.
+    /// A git that, right after the first time it lists the ignored files (in the middle of the re-check's slow
+    /// inspection, after its `git status`, operation markers and ignored listing), does what `during` says, as another
+    /// process could.
     private func triggerGit(_ fixture: GitFixture, worktree: URL, gitDir: URL, _ during: During) throws -> Git {
         let folder = fixture.url.appending(path: "trigger-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -25,15 +28,19 @@ struct RemoveAnywayLastMomentTests {
         let write = "printf 'written during the re-check\\n' > '\(worktree.path)/late.txt'"
         let edit = "printf 'draft, edited during the re-check\\n' > '\(worktree.path)/draft.md'"
         let submodule = "printf 'late\\n' > '\(worktree.path)/libs/library/Late.swift'"
+        let env = "printf 'API_KEY=written-during-the-recheck\\n' > '\(worktree.path)/.env'"
         let action = switch during {
         case .rebaseStarted: rebase
         case .fileWritten: write
         case .both: rebase + "\n      " + write
         case .listedFileEdited: edit
         case .submoduleFileWritten: submodule
+        case .ignoredFileWritten: env
         }
         let text = """
             #!/bin/sh
+            '\(fixture.git.executable.path)' "$@"
+            rc=$?
             case "$*" in
               *--others*--ignored*)
                 if [ ! -e '\(fired.path)' ]; then
@@ -41,7 +48,7 @@ struct RemoveAnywayLastMomentTests {
                   \(action)
                 fi ;;
             esac
-            exec '\(fixture.git.executable.path)' "$@"
+            exit $rc
 
             """
         let script = folder.appending(path: "git")
@@ -52,7 +59,7 @@ struct RemoveAnywayLastMomentTests {
         return git
     }
 
-    @Test(arguments: [During.rebaseStarted, .fileWritten, .both, .listedFileEdited])
+    @Test(arguments: [During.rebaseStarted, .fileWritten, .both, .listedFileEdited, .ignoredFileWritten])
     func aChangeDuringTheRecheckIsCaught(_ during: During) async throws {
         let world = try await RemoveAnywayWorld.make()
         defer { world.remove() }
@@ -117,6 +124,49 @@ struct RemoveAnywayLastMomentTests {
         )
         #expect(result.entry.notes.contains("  libs/library/MyPatch.swift"))
         #expect(!FileManager.default.fileExists(atPath: wt.path))
+    }
+
+    enum Moved: String, CaseIterable {
+        /// A commit on a detached HEAD: `git status` stays the same, the commit would be lost unlisted.
+        case detachedCommit
+        /// Another branch at the same commit checked out.
+        case branchSwitched
+    }
+
+    /// HEAD or the branch changed after the slow inspection read them: only the last-moment check sees it.
+    @Test(arguments: Moved.allCases)
+    func headMovedDuringTheRecheckIsCaught(_ moved: Moved) async throws {
+        let world = try await RemoveAnywayWorld.make()
+        defer { world.remove() }
+        let fixture = world.fixture
+        let wt = moved == .detachedCommit
+            ? try await fixture.addWorktree(to: world.repo, at: world.repo.deletingLastPathComponent()
+                .appending(path: "alpha-detached"), detached: true)
+            : try await world.safety.sibling("target")
+        try fixture.write("draft\n", to: "draft.md", in: wt)
+        let assessment = try await world.assess(wt)
+        let list = try #require(assessment.removeAnyway.lossList, "\(assessment.removeAnyway)")
+        var remover = world.remover()
+        remover.afterInspection = {
+            switch moved {
+            case .detachedCommit:
+                try? fixture.write("late\n", to: "late.txt", in: wt)
+                _ = try? await fixture.run(["add", "late.txt"], in: wt)
+                _ = try? await fixture.run(["commit", "--quiet", "-m", "Late"], in: wt)
+            case .branchSwitched:
+                _ = try? await fixture.run(["checkout", "--quiet", "-b", "other"], in: wt)
+            }
+        }
+        await #expect("\(moved)") {
+            try await remover.removeAnyway(
+                assessment.worktree, confirmed: list, expectation: RemovalExpectation(assessment: assessment),
+                estimatedBytes: nil, knownWorktrees: try await world.known()
+            )
+        } throws: { error in
+            (error as? RemovalExpectation.Mismatch)?.changes.contains { $0.hasPrefix("HEAD moved") || $0.hasPrefix("The branch is now") } == true
+        }
+        #expect(FileManager.default.fileExists(atPath: wt.appending(path: "draft.md").path))
+        #expect(world.removeCalls.isEmpty)
     }
 
     /// A file put in the uninitialized submodule's folder while the slow re-check runs (after it walked that folder):
