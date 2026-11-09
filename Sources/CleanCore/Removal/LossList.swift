@@ -59,12 +59,16 @@ public struct LossList: Sendable, Hashable {
         public var key: String?
         /// lstat of the path when it was read: an edit since then makes the entry differ.
         public var stamp: FileStamp?
+        /// For an uncommitted file: git's entry, so the app shows it like its other file lists.
+        public var status: GitStatusEntry?
 
-        public init(text: String, detail: String? = nil, key: String? = nil, stamp: FileStamp? = nil) {
+        public init(text: String, detail: String? = nil, key: String? = nil, stamp: FileStamp? = nil,
+                    status: GitStatusEntry? = nil) {
             self.text = text
             self.detail = detail
             self.key = key
             self.stamp = stamp
+            self.status = status
         }
     }
 

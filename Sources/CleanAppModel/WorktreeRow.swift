@@ -139,6 +139,12 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     }
 
     public var canRemove: Bool { assessment.safety.manualAllowed }
+    /// Its uncommitted and untracked files, every one, as the last scan's `git status` listed them (read-only; the
+    /// list is new with each scan). Each is looked at on disk, so ask for it only where it is shown.
+    public var unsavedFiles: [WorktreeFileRow] {
+        assessment.changedPaths.map { WorktreeFileRow($0, in: url) }
+    }
+
     /// Blocked, and every blocker is one Remove anyway (PLAN §4.8) can list exactly: the details panel offers it.
     public var offersRemoveAnyway: Bool { assessment.removeAnyway.lossList != nil }
     /// For a blocked row that holds something Remove anyway could list, but also a blocker it never overrides:

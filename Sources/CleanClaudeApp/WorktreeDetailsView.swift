@@ -29,7 +29,8 @@ struct WorktreeDetailsView: View {
 }
 
 /// One worktree or repo folder: what it is, its status in one plain sentence with the one action that does the
-/// job or fixes what stops it, then where it is, its history, size, activity and everything Bonsai found.
+/// job or fixes what stops it, every unsaved file, then where it is, its history, size, activity and everything
+/// Bonsai found.
 struct WorktreeDetailsContent: View {
     let model: WorktreesModel
     let row: WorktreeRow
@@ -46,6 +47,11 @@ struct WorktreeDetailsContent: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
                     .background(Palette.tint(.orange), in: RoundedRectangle(cornerRadius: 8))
+            }
+            let unsaved = row.worktree.isMain ? [] : row.unsavedFiles
+            if !unsaved.isEmpty {
+                // Read-only: Bonsai never discards or checks out anything here; the list is new with each scan.
+                DetailsSection("Unsaved changes (\(unsaved.count))") { WorktreeFileList(files: unsaved) }
             }
             DetailsSection("Repo and branch") { RepoBranchDetails(row: row, state: model.details.state(for: row)) }
             DetailsSection("Recent commits") { RecentCommitsDetails(row: row, state: model.details.state(for: row)) }

@@ -25,7 +25,7 @@ struct RemoveAnywayTests {
             try fixture.write("changed\n", to: "README.md", in: wt)
             try fixture.write("new\n", to: "added.txt", in: wt)
             try await fixture.run(["add", "added.txt"], in: wt)
-            return (wt, "dirty", [.uncommittedFiles: ["README.md (changed)", "added.txt (added)", "notes/draft.md (untracked)"]],
+            return (wt, "dirty", [.uncommittedFiles: ["README.md (Modified)", "added.txt (New)", "notes/draft.md (New)"]],
                     "notes/draft.md")
         case .hiddenEdits:
             let wt = try await world.safety.sibling("hidden")
@@ -136,7 +136,7 @@ struct RemoveAnywayTests {
 
         let list = try #require(try await world.assess(wt).removeAnyway.lossList)
         #expect(list.plain == [
-            .uncommittedFiles: ["draft.md (untracked)"],
+            .uncommittedFiles: ["draft.md (New)"],
             .ignoredFiles: [".env"],
             .commitsOnBranch: ["1 commit not pushed on claude/session"],
             .stashes: ["1 stash made on this branch"],
@@ -148,7 +148,7 @@ struct RemoveAnywayTests {
 
     /// The log keeps at most 200 entries and counts the rest.
     @Test func theLogKeepsTwoHundredEntries() {
-        let entries = (0..<250).map { LossList.Entry(text: "file\($0).txt", detail: "untracked", key: "??") }
+        let entries = (0..<250).map { LossList.Entry(text: "file\($0).txt", detail: "New", key: "??") }
         let list = LossList(sections: [LossList.Section(category: .uncommittedFiles, entries: entries)])
         let notes = list.logNotes
         #expect(notes.first == "Lost: 250 uncommitted files.")

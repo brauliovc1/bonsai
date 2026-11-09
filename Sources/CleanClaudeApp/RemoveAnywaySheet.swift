@@ -53,7 +53,7 @@ struct RemoveAnywaySheet: View {
                     .help(confirmation.worktree.path)
             }
             .font(.callout)
-            LossListView(list: confirmation.lossList)
+            LossListView(list: confirmation.lossList, worktree: confirmation.worktree.url)
             Toggle(RemoveAnywayText.checkbox, isOn: $model.removeAnywayUnderstood)
                 .toggleStyle(.checkbox)
                 .disabled(model.isRemovingAnyway)
@@ -91,9 +91,11 @@ struct RemoveAnywaySheet: View {
     }
 }
 
-/// Every category with every entry, in one scrolling list: what is deleted first, then what is only listed.
+/// Every category with every entry, in one scrolling list: what is deleted first, then what is only listed. Files
+/// use the details panel's row (`WorktreeFileRowView`), so both read the same.
 struct LossListView: View {
     let list: LossList
+    let worktree: URL
 
     var body: some View {
         ScrollView {
@@ -103,9 +105,15 @@ struct LossListView: View {
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(section.category.isLost ? Palette.red : Color.secondary)
                         .padding(.top, 8)
-                    ForEach(Array(section.entries.enumerated()), id: \.offset) { _, entry in
-                        EntryLine(entry: entry, detailBelow: section.category == .reposWithLocalWork
-                            || section.category == .unreadableRepos || section.category == .claudeSession)
+                    if let files = WorktreeFileRow.rows(for: section, in: worktree) {
+                        ForEach(files) { file in
+                            WorktreeFileRowView(file: file).padding(.horizontal, -10)
+                        }
+                    } else {
+                        ForEach(Array(section.entries.enumerated()), id: \.offset) { _, entry in
+                            EntryLine(entry: entry, detailBelow: section.category == .reposWithLocalWork
+                                || section.category == .unreadableRepos || section.category == .claudeSession)
+                        }
                     }
                 }
             }

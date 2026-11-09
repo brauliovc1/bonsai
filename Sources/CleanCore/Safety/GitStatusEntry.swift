@@ -9,6 +9,33 @@ public struct GitStatusEntry: Sendable, Hashable {
     /// A rename's or copy's original path.
     public var from: String?
 
+    /// What happened to the file, in one plain word (the app's file list, the Remove anyway list and its log).
+    public enum Change: String, Sendable, Hashable {
+        case modified = "Modified", new = "New", deleted = "Deleted", renamed = "Renamed", copied = "Copied",
+             conflict = "Conflict"
+    }
+
+    /// From git's two letters: untracked or added = new; a rename or copy in the index; deleted on either side;
+    /// both sides changed or a merge left it unmerged = conflict; anything else (changed, type changed) = modified.
+    public var change: Change {
+        let letters = Array(code)
+        let index = letters.first ?? " "
+        let tree = letters.count > 1 ? letters[1] : " "
+        if code == "??" { return .new }
+        if letters.contains("U") || code == "AA" || code == "DD" { return .conflict }
+        if index == "R" { return .renamed }
+        if index == "C" { return .copied }
+        if index == "D" || tree == "D" { return .deleted }
+        if index == "A" { return .new }
+        return .modified
+    }
+
+    /// "Modified", "Renamed from old.txt".
+    public var changeText: String {
+        guard let from, change == .renamed || change == .copied else { return change.rawValue }
+        return "\(change.rawValue) from \(from)"
+    }
+
     public init(code: String, path: String, from: String? = nil) {
         self.code = code
         self.path = path

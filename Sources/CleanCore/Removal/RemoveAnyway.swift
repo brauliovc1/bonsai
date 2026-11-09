@@ -71,7 +71,8 @@ public enum RemoveAnyway {
             sections.append(LossList.Section(category: category, entries: entries))
         }
         add(.uncommittedFiles, state.changedPaths.map { entry in
-            LossList.Entry(text: entry.path, detail: statusWord(entry), key: entry.code, stamp: stamp(entry.path))
+            LossList.Entry(text: entry.path, detail: statusWord(entry), key: entry.code, stamp: stamp(entry.path),
+                           status: entry)
         })
         add(.hiddenEdits, state.hiddenEdits.map { LossList.Entry(text: $0, stamp: stamp($0)) })
         add(.reposWithLocalWork, state.nestedLocalWork.map { LossList.Entry(text: $0.path, detail: $0.findings.joined(separator: ", ")) })
@@ -103,19 +104,8 @@ public enum RemoveAnyway {
         LossList.Entry(text: String(sha.prefix(12)), key: sha)
     }
 
-    /// git's two status letters in a word: "untracked", "modified", "renamed from old.txt".
+    /// git's two status letters in a word, as the app's file list says it: "New", "Modified", "Renamed from old.txt".
     static func statusWord(_ entry: GitStatusEntry) -> String {
-        let letters = Array(entry.code)
-        let index = letters.first ?? " "
-        let tree = letters.count > 1 ? letters[1] : " "
-        if entry.code == "??" { return "untracked" }
-        if entry.code == "!!" { return "ignored" }
-        if letters.contains("U") || entry.code == "AA" || entry.code == "DD" { return "conflict" }
-        if index == "R" { return "renamed from " + (entry.from ?? "?") }
-        if index == "C" { return "copied from " + (entry.from ?? "?") }
-        if index == "D" || tree == "D" { return "deleted" }
-        if index == "A" { return tree == " " ? "added" : "added, then changed" }
-        if index != " " && tree != " " { return "staged, then changed" }
-        return index != " " ? "staged" : "changed"
+        entry.changeText
     }
 }

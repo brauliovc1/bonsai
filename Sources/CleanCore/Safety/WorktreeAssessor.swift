@@ -68,7 +68,8 @@ public struct WorktreeAssessor: Sendable {
             idle: idle,
             safety: safety,
             estimatedBytes: estimatedBytes,
-            removeAnyway: RemoveAnyway.verdict(for: worktree, state: state, safety: safety)
+            removeAnyway: RemoveAnyway.verdict(for: worktree, state: state, safety: safety),
+            changedPaths: state.changedPaths
         )
     }
 }
