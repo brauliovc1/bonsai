@@ -23,14 +23,4 @@ extension Badge {
     init(kind: WorktreeKind) {
         self.init(text: kind.rawValue, color: kind == .claude ? .orange : .secondary)
     }
-
-    init(tone: WorktreeRow.Tone, text: String) {
-        let color: Color = switch tone {
-        case .autoReady: .green
-        case .safe: .blue
-        case .inUse: .purple
-        case .blocked: .red
-        }
-        self.init(text: text, color: color)
-    }
 }

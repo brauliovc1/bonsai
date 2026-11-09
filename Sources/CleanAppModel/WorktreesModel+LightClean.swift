@@ -2,12 +2,12 @@ import CleanCore
 import Foundation
 
 extension WorktreesModel {
-    /// The sheet for the shown rows in `ids` (main checkouts too), from a fresh look at each one
+    /// The sheet for the shown worktrees and repo folders in `ids`, from a fresh look at each one
     /// (`LightCleanFlow.look`: git's current record, the repo's own folder, a process index taken now,
     /// `LightCleanFinder` run again). Listed folders are the ones `confirmLightClean` deletes; the rest is
     /// shown with its reasons and left alone.
     public func prepareLightClean(_ ids: Set<WorktreeRow.ID>) async -> LightCleanConfirmation {
-        let chosen = rows.filter { ids.contains($0.id) }
+        let chosen = (groups.compactMap(\.main) + rows).filter { ids.contains($0.id) }
         return LightCleanConfirmation(items: await LightCleanFlow(app: app).look(at: chosen.map(\.worktree)))
     }
 
@@ -40,8 +40,9 @@ extension WorktreesModel {
     /// Deletes the listed folders, one worktree at a time, through `LightCleaner`, which checks each folder
     /// again right before it deletes it, and refuses a worktree that is no longer this repo's or whose branch
     /// or HEAD is not what the sheet showed. A folder that changed since the sheet listed it is refused with
-    /// its reason, and nothing the sheet didn't list is touched. Then the rows' Deps are measured again and the
-    /// worktrees are rescanned.
+    /// its reason, and nothing the sheet didn't list is touched. Then the cleaned checkouts' sizes and
+    /// dependency folders are measured again, just those (no full rescan: the verdicts don't depend on these
+    /// folders), and their rows show "Measuring…" until then.
     @discardableResult
     public func confirmLightClean(_ confirmation: LightCleanConfirmation) async -> LightCleanReport {
         let items = confirmation.cleanable
@@ -57,8 +58,7 @@ extension WorktreesModel {
         lightCleanReport = report
         isLightCleaning = false
         if finished != nil {
-            await app.cleanupFinished()
-            await measureDependencies(of: Set(items.map(\.id)))
+            await app.cleanupFinished(rescanWorktrees: false, touched: items.map(\.worktree))
         }
         return report
     }

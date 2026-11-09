@@ -7,45 +7,52 @@ import Testing
 @Suite("Worktrees grouped by repo")
 @MainActor
 struct WorktreeGroupsTests {
-    @Test func groupHeadersShowFolderRemoteCountAndSize() async throws {
+    @Test func groupHeadersAreTheRepoFolders() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }
+        model.filter = .all
         #expect(model.groups.map(\.name) == ["atlas", "beacon", "cobalt"])
-        #expect(model.groups.map(\.rows.count) == [5, 5, 4])
-        #expect(model.rows.count == model.allRows.count, "rows are the groups' rows, in group order")
+        #expect(model.groups.map(\.rows.count) == [4, 4, 3])
+        #expect(model.rows.count == model.linkedRows.count, "rows are the groups' rows, in group order")
 
         let atlas = try #require(model.groups.first)
         let repo = world.repos[0]
         #expect(atlas.repoPath == Worktree.standardize(repo.path))
+        #expect(atlas.main?.worktree.isMain == true)
+        #expect(atlas.main?.worktree.repoPath == atlas.repoPath)
+        #expect(!atlas.rows.contains { $0.worktree.isMain })
         #expect(atlas.folderText == atlas.repoPath, "outside the home folder: the path as it is")
-        #expect(atlas.countText == "5 worktrees")
+        #expect(atlas.countText == "4 worktrees")
         #expect(atlas.remotes.map(\.name) == ["origin"])
-        #expect(atlas.remotes.first?.url.hasSuffix("/remotes/atlas.git") == true)
         #expect(atlas.remoteText?.hasSuffix("/remotes/atlas.git") == true)
-        #expect(atlas.totalBytes == atlas.rows.compactMap(\.sizeBytes).reduce(0, +))
-        #expect((atlas.totalBytes ?? 0) > 0)
-        #expect(atlas.rows.first?.worktree.isMain == true)
+        let linkedBytes = atlas.rows.compactMap(\.sizeBytes).reduce(0, +)
+        #expect(atlas.worktreeBytes == linkedBytes && linkedBytes > 0)
+        #expect(atlas.headerDetail == "repo folder \(DisplayText.bytes(atlas.main?.sizeBytes)) · 4 worktrees, "
+            + "\(DisplayText.bytes(linkedBytes)) · last commit 8 weeks ago")
+        #expect(atlas.removableRows.map(\.url.lastPathComponent).sorted() == ["atlas-archive", "atlas-review", "tidy-otter"])
+        #expect(atlas.dependencyBytes == nil, "not measured yet")
 
         let beacon = try #require(model.groups.first { $0.name == "beacon" })
         let gone = try #require(beacon.rows.first { $0.isMissingFolder })
         #expect(gone.sizeBytes == nil)
-        #expect(beacon.totalBytes == beacon.rows.compactMap(\.sizeBytes).reduce(0, +), "unknown sizes are left out")
+        #expect(beacon.worktreeBytes == beacon.rows.compactMap(\.sizeBytes).reduce(0, +), "unknown sizes are left out")
     }
 
     @Test func filtersAndSearchWorkInsideGroups() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }
 
-        model.statusFilter = .autoReady
-        #expect(model.groups.map(\.name) == ["atlas"], "a repo with no shown row has no group")
+        model.searchText = "archive"
+        #expect(model.groups.map(\.name) == ["atlas"], "a repo with no shown worktree has no group")
         #expect(model.groups.first?.rows.map(\.url.lastPathComponent) == ["atlas-archive"])
-        #expect(model.groups.first?.countText == "1 of 5 worktrees")
-        #expect(model.groups.first?.totalBytes == model.groups.first?.rows.first?.sizeBytes)
-        model.clearFilters()
+        #expect(model.groups.first?.countText == "4 worktrees", "the header counts the repo's worktrees")
+        model.filter = .needsAttention
+        #expect(model.groups.isEmpty)
 
+        model.filter = .all
         model.searchText = "remotes/beacon"
         #expect(model.groups.map(\.name) == ["beacon"], "the remote")
-        #expect(model.rows.count == 5)
+        #expect(model.rows.count == 4)
         model.searchText = "notes/review.md"
         #expect(model.rows.map(\.url.lastPathComponent) == ["atlas-review"], "the last commit's message")
         model.searchText = "add NOTES/otter"
@@ -79,6 +86,10 @@ struct WorktreeGroupsTests {
         #expect(row.folderText == "~/Documents/GitHub/Nexus-a13")
         #expect(row.repoFolderText == "~/Documents/GitHub/Nexus")
         #expect(row.lastCommitText == "–" && row.lastCommitAgoText.isEmpty)
+        #expect(row.locationText == "~/Documents/GitHub/Nexus-a13", "beside the repo: with ~")
+        #expect(row.activityText == "3 days ago")
+        let otter = try #require(model.row(try world.url("tidy-otter")))
+        #expect(otter.locationText == ".claude/worktrees/tidy-otter", "inside the repo: relative to it")
 
         let now = Date(timeIntervalSince1970: 1_000_000_000)
         #expect(DisplayText.ago(now.addingTimeInterval(-30), now: now) == "just now")
@@ -118,36 +129,13 @@ struct WorktreeGroupsTests {
         model.setExpanded(false, repo: beacon)
         #expect(!model.isExpanded(beacon))
         #expect(model.selection == model.ids([archive, web]), "collapsing deselects the hidden rows")
-        #expect(model.rows.count == model.allRows.count, "collapsed rows still count as shown")
-        #expect(model.tableItems.count == 3 + 5 + 4, "three headers, atlas's and cobalt's rows, none of beacon's")
-        #expect(model.tableItems.contains(.group(try #require(model.groups.first { $0.repoPath == beacon }))))
-        #expect(!model.tableItems.contains { $0.row?.worktree.repoPath == beacon })
+        #expect(model.groups.contains { $0.repoPath == beacon }, "a collapsed group keeps its header")
+        #expect(model.rows.count == model.count(model.filter), "collapsed rows still count as shown")
         let confirmation = await model.prepareRemoval(model.selection)
         #expect(Set(confirmation.allowed.map(\.worktree.url.lastPathComponent)) == ["atlas-archive", "cobalt-web"])
         #expect(confirmation.blocked.isEmpty)
         model.toggleExpanded(beacon)
         #expect(model.isExpanded(beacon))
-        #expect(model.tableItems.count == 3 + model.allRows.count)
-        #expect(model.tableItems.first == .group(try #require(model.groups.first)), "a header comes first")
-    }
-
-    @Test func theTableSortOrderMapsToTheModels() {
-        let size = KeyPathComparator(\WorktreeRow.sizeSortKey, order: .reverse)
-        let table = WorktreeTableItem.tableSortOrder([size])
-        #expect(table == [KeyPathComparator(\WorktreeTableItem.sizeSortKey, order: .reverse)])
-        #expect(WorktreeTableItem.rowSortOrder(table) == [size])
-        #expect(WorktreeTableItem.tableSortOrder([KeyPathComparator(\WorktreeRow.repoName)])
-            == [KeyPathComparator(\WorktreeTableItem.nameSortKey)], "the default sort shows on the first column")
-        #expect(WorktreeTableItem.rowSortOrder([KeyPathComparator(\WorktreeTableItem.nameSortKey, order: .reverse)])
-            == [KeyPathComparator(\WorktreeRow.branchText, order: .reverse)])
-        for (item, row) in [
-            (KeyPathComparator(\WorktreeTableItem.lastCommitSortKey), KeyPathComparator(\WorktreeRow.lastCommitSortKey)),
-        ] {
-            #expect(WorktreeTableItem.rowSortOrder([item]) == [row])
-        }
-        #expect(WorktreeTableItem.rowSortOrder([KeyPathComparator(\WorktreeTableItem.folderText)])
-            == [KeyPathComparator(\WorktreeRow.folderText)])
-        #expect(WorktreeTableItem.tableSortOrder([KeyPathComparator(\WorktreeRow.scanOrder)]).isEmpty)
     }
 
     @Test func theTestModeBannerShowsOnlyWithTheVariable() throws {

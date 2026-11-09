@@ -2,40 +2,24 @@ import CleanCore
 import Foundation
 import Observation
 
-/// The Worktrees screen: rows from the shared scan grouped by repo (`WorktreesModel+Groups`), sorting,
-/// filters, selection, the details panel (`details`), the Deps column (`WorktreesModel+Dependencies`), and
-/// the remove, prune and light-clean flows (`WorktreesModel+Remove`, `+Prune`, `+LightClean`). Removal goes
-/// only through `Remover` (manual mode), prune only through `Pruner`, light clean only through `LightCleaner`.
+/// The Worktrees screen (PLAN §8.4): the linked worktrees of the shared scan, grouped by repo under a header
+/// that is the repo's main checkout (`WorktreesModel+Groups`), the "Can remove / Needs attention / All" filter
+/// and search (`+Filter`), selection and what Remove… may do with it (`+Actions`), the details panel
+/// (`details`), the dependency sizes (`+Dependencies`), and the remove, prune and clean-dependencies flows
+/// (`+Remove`, `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune only through
+/// `Pruner`, cleaning dependencies only through `LightCleaner`. A main checkout is never offered for removal.
 @MainActor
 @Observable
 public final class WorktreesModel {
-    /// The `--status` groups of `clean-claude scan` (IN USE counts as blocked).
-    public enum StatusFilter: String, CaseIterable, Sendable, Identifiable {
-        case autoReady = "auto-ready"
-        case safe
-        case blocked
-
-        public var id: String { rawValue }
-        public var title: String {
-            switch self {
-            case .autoReady: "Auto-ready"
-            case .safe: "Safe"
-            case .blocked: "Blocked or in use"
-            }
-        }
-    }
-
-    public static let idleChoices = [7, 30, 90]
-
     public let app: AppModel
 
-    public var sortOrder = [KeyPathComparator(\WorktreeRow.repoName)]
-    public var kindFilter: WorktreeKind?
-    public var statusFilter: StatusFilter?
-    /// Only rows idle at least this many days (idle unknown is left out).
-    public var minimumIdleDays: Int?
+    /// The order inside each group (groups stay in repo name order): biggest first.
+    public var sortOrder = [KeyPathComparator(\WorktreeRow.sizeSortKey, order: .reverse)]
+    /// The segmented filter; "Can remove" when the screen opens.
+    public var filter: Filter = .canRemove
     public var searchText = ""
-    /// Selecting exactly one row opens the details panel.
+    /// Selected rows and repo headers (a header selects its main checkout's row, for the details panel; it is
+    /// never part of a removal). Selecting exactly one opens the details panel.
     public var selection: Set<WorktreeRow.ID> = [] {
         didSet {
             if selection.count == 1, selection != oldValue { isShowingDetails = true }
@@ -62,7 +46,7 @@ public final class WorktreesModel {
     @ObservationIgnored var volumeOf: (URL) -> URL? = WorktreesModel.volume(of:)
     @ObservationIgnored var freeBytes: (URL) -> Int64? = { FreeSpaceProbe.volume(containing: $0).availableBytes() }
 
-    // Deps column (WorktreesModel+Dependencies).
+    // Dependency sizes (WorktreesModel+Dependencies).
     public internal(set) var dependencySizes: [WorktreeRow.ID: DependencySize] = [:]
     /// Sizes are being measured (one run at a time).
     public internal(set) var isMeasuringDependencies = false
@@ -92,16 +76,19 @@ public final class WorktreesModel {
     public init(app: AppModel) {
         self.app = app
         self.details = WorktreeDetailsModel(git: app.git)
+        // Cleanups elsewhere (Project folders) change these checkouts' dependency folders too.
+        app.whenCheckoutsChange { [weak self] paths in await self?.checkoutsChanged(paths) }
     }
 
     // MARK: - Rows
 
-    /// Every worktree of the last scan, in scan order.
+    /// Every worktree of the last scan, main checkouts included, in scan order.
     public var allRows: [WorktreeRow] {
         let scan = app.scan
         let home = app.environment.homeDirectory
-        // The scan's time, not the clock's: rows stay equal between scans, so the table doesn't redraw every
-        // row each time it asks for them ("3d ago" is as of the last scan, which runs at least every few minutes).
+        let measuring = app.measuringSizes
+        // The scan's time, not the clock's: rows stay equal between scans, so the list doesn't redraw every
+        // row each time it asks for them ("45 days ago" is as of the last scan).
         let now = app.lastScanAt ?? app.environment.now()
         return app.assessments.enumerated().map { order, assessment in
             let worktree = assessment.worktree
@@ -112,46 +99,40 @@ public final class WorktreesModel {
                 lastCommit: scan?.lastCommit(of: worktree),
                 remotes: scan?.remotes(of: worktree) ?? [],
                 home: home,
-                now: now
+                now: now,
+                isMeasuringSize: measuring.contains(worktree.path)
             )
         }
     }
 
-    /// The rows shown (filtered and searched), in the order the table shows them: group by group, each
-    /// group sorted with the main checkout first. Rows of collapsed groups are included.
+    /// Every linked worktree of the last scan (the rows the filter chooses from).
+    public var linkedRows: [WorktreeRow] { allRows.filter { !$0.worktree.isMain } }
+
+    /// The linked worktrees shown (filtered and searched), in list order: group by group. Rows of collapsed
+    /// groups are included. Never a main checkout.
     public var rows: [WorktreeRow] {
         groups.flatMap(\.rows)
     }
 
-    /// The shown rows that are selected.
+    /// The shown worktrees that are selected (repo headers are not among them).
     public var selectedRows: [WorktreeRow] {
         rows.filter { selection.contains($0.id) }
     }
 
-    /// Shown rows whose folder is gone ("Clean up missing folders" covers their repos).
+    /// The repo headers that are selected, as their main checkouts' rows.
+    public var selectedRepos: [WorktreeRow] {
+        groups.compactMap(\.main).filter { selection.contains($0.id) }
+    }
+
+    /// Every worktree whose folder is gone, shown or not ("Prune missing folders…" covers their repos).
     public var missingFolderRows: [WorktreeRow] {
-        rows.filter(\.isMissingFolder)
+        linkedRows.filter(\.isMissingFolder)
     }
 
-    public var hasActiveFilters: Bool {
-        kindFilter != nil || statusFilter != nil || minimumIdleDays != nil
-    }
-
-    public func clearFilters() {
-        kindFilter = nil
-        statusFilter = nil
-        minimumIdleDays = nil
-    }
-
-    func matches(_ row: WorktreeRow) -> Bool {
-        if let kindFilter, row.kind != kindFilter { return false }
-        if let statusFilter, row.status.group != statusFilter.rawValue { return false }
-        if let minimumIdleDays {
-            guard let days = row.idleDays, days >= minimumIdleDays else { return false }
-        }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return true }
-        return row.searchableTexts.contains { $0.localizedCaseInsensitiveContains(query) }
+    /// The More menu's tooltip for Prune when there is nothing to prune; nil when there is.
+    public var pruneDisabledReason: String? {
+        if !missingFolderRows.isEmpty { return app.isCleaningUp ? app.busySentence : nil }
+        return "No worktree's folder is missing, so there is nothing to prune."
     }
 
     /// The root of the volume holding `url` (or its nearest existing parent).

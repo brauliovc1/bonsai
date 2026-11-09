@@ -72,8 +72,9 @@ extension ProjectsModel {
     /// (`LightCleanFlow.clean`: `LightCleaner` with a `LightCleanExpectation` of the record the sheet showed,
     /// every folder checked again right before its delete, one log entry per folder), holding the app's cleanup
     /// guard and `cleanup.lock`; refused as a whole while another cleanup holds either. A project that is
-    /// refused doesn't stop the next. Then the log, free space and worktrees are read again and the cleaned
-    /// projects are looked at again.
+    /// refused doesn't stop the next. Then the log and free space are read again, the cleaned checkouts' sizes
+    /// are measured again (their Worktrees rows show "Measuring…" meanwhile), and the cleaned projects are
+    /// looked at again.
     @discardableResult
     public func cleanSelected(_ confirmation: ProjectsConfirmation) async -> LightCleanReport {
         let items = confirmation.cleanable.map(\.lightClean)
@@ -93,7 +94,7 @@ extension ProjectsModel {
         if finished != nil {
             // The log entries this clean wrote name these projects; they are looked at once, here.
             isFinishingClean = true
-            await app.cleanupFinished()
+            await app.cleanupFinished(rescanWorktrees: false, touched: items.map(\.worktree))
             isFinishingClean = false
             let paths = Set(items.map(\.worktree.path)).union(namedByLog)
             namedByLog = []

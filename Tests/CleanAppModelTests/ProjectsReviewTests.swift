@@ -179,7 +179,7 @@ struct ProjectsReviewTests {
 
         #expect(await eventually { world.row("delta") == nil }, "delta has nothing left to clean")
         #expect(world.projects.idleTotal.count == before.count - 1)
-        #expect(world.models.overview.row(.projectFolders).bytes == world.projects.idleTotal.bytes)
+        #expect(world.models.overview.summary.bytes(.projectFolders) == world.projects.idleTotal.bytes)
 
         // The CLI cleans foxtrot (in this fixture); the app sees it on its next scan.
         let environment = world.environment

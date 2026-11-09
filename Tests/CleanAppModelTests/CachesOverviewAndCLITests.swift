@@ -7,23 +7,26 @@ import Testing
 @Suite("Tool caches: Overview row and CLI")
 @MainActor
 struct CachesOverviewAndCLITests {
-    /// "Tool caches: N ready to clean" with what the ready entries hold, and it jumps to the screen.
-    @Test func theOverviewRowSumsTheReadyEntries() async throws {
+    /// The Tool caches part of the total is what the ready entries hold; its card opens the screen with them
+    /// selected.
+    @Test func theOverviewCountsTheReadyEntries() async throws {
         let world = try ToolCacheWorld()
         defer { world.remove() }
         let models = ScreenModels(app: AppModel(environment: world.environment), runner: FakeToolchain().runner,
                                   processes: world.processes.source)
-        #expect(models.overview.row(.toolCaches).detail == "Not scanned yet.")
+        #expect(models.overview.summary.state(.toolCaches) == .notMeasured)
         world.processes.run("npm install")
         await models.caches.refresh()
 
-        let row = models.overview.row(.toolCaches)
-        #expect(row.title == "Tool caches")
-        #expect(row.detail == "14 ready to clean; 1 wait for their tool to quit")
-        #expect(row.bytes == models.caches.readyBytes)
-        #expect((row.bytes ?? 0) > 0)
-        models.overview.jump(to: .toolCaches)
+        let card = try #require(models.overview.card(.toolCaches))
+        #expect(card.title == "Tool caches")
+        #expect(card.detail == "14 caches the tools download again when needed")
+        #expect(card.bytes == models.caches.readyBytes && card.bytes > 0)
+        #expect(models.overview.summary.count(.toolCaches) == 14, "npm waits for its tool to quit: not counted")
+        models.overview.open(.toolCaches)
         #expect(models.navigation.section == .caches)
+        #expect(models.caches.selection == Set(models.caches.readyRows.map(\.id)))
+        #expect(models.caches.selectedBytes == card.bytes)
         #expect(SidebarSection.caches.title == "Tool caches")
     }
 

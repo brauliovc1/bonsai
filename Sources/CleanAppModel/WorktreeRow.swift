@@ -24,6 +24,8 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public let repoFolderText: String
     /// When the row was made, for "3d ago".
     public let now: Date
+    /// Its folder is being measured again after a cleanup touched it: the size shows "Measuring…".
+    public let isMeasuringSize: Bool
 
     public init(
         assessment: WorktreeAssessment,
@@ -32,7 +34,8 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
         lastCommit: CommitSummary? = nil,
         remotes: [GitRemote] = [],
         home: URL? = nil,
-        now: Date = Date()
+        now: Date = Date(),
+        isMeasuringSize: Bool = false
     ) {
         self.assessment = assessment
         self.scanOrder = scanOrder
@@ -43,6 +46,7 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
         self.folderText = home.map { TildePath.abbreviate(worktree.path, home: $0) } ?? worktree.path
         self.repoFolderText = home.map { TildePath.abbreviate(worktree.repoPath, home: $0) } ?? worktree.repoPath
         self.now = now
+        self.isMeasuringSize = isMeasuringSize
     }
 
     /// Repo and path together: two repos can list the same folder (one repo's stale record and another
@@ -54,6 +58,11 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
         public init(_ worktree: Worktree) {
             repoPath = worktree.repoPath
             path = worktree.path
+        }
+
+        public init(repoPath: String, path: String) {
+            self.repoPath = repoPath
+            self.path = path
         }
     }
 
@@ -73,6 +82,17 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     public var dependencyText: String { DisplayText.bytes(dependencyBytes) }
     public var idleDays: Int? { assessment.idle.idleDays }
     public var idleText: String { DisplayText.idle(assessment) }
+    /// The last-activity column: "45 days ago".
+    public var activityText: String { DisplayText.activity(assessment) }
+
+    /// The second line of a row: the folder inside the repo (".claude/worktrees/tidy-otter"), else with "~".
+    public var locationText: String {
+        // git and the folder walk can name the same folder through /private/var and /var.
+        func plain(_ path: String) -> String { path.hasPrefix("/private/") ? String(path.dropFirst(8)) : path }
+        let path = plain(worktree.path)
+        let repo = plain(worktree.repoPath).hasSuffix("/") ? plain(worktree.repoPath) : plain(worktree.repoPath) + "/"
+        return path.hasPrefix(repo) ? String(path.dropFirst(repo.count)) : folderText
+    }
 
     public var status: WorktreeStatus { assessment.status }
     /// Exactly what `clean-claude scan` prints in its STATUS column.
@@ -87,22 +107,18 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
         }
     }
 
-    /// The badge word: AUTO-READY, SAFE, BLOCKED or IN USE.
-    public var badgeText: String {
-        switch status {
-        case .autoReady, .safe, .inUse: status.label
-        case .blocked: "BLOCKED"
-        }
+    /// The status chip, in the app's words (PLAN §8.4).
+    public var chip: StatusWords { WorktreeStatusText.chip(for: assessment) }
+    /// Under "Needs attention": the orange chips.
+    public var needsAttention: Bool { WorktreeStatusText.needsAttention(assessment) }
+    /// The quiet notes next to the chip ("1 commit not pushed · Claude session"); nil without any.
+    public var notesText: String? {
+        let notes = WorktreeStatusText.notes(for: assessment)
+        return notes.isEmpty ? nil : notes.joined(separator: " · ")
     }
-
-    /// Next to the badge: the blocking reason's label, or the processes (name and pid) for IN USE.
-    public var statusDetail: String? {
-        switch status {
-        case .autoReady, .safe: nil
-        case .blocked(let reason): reason.label
-        case .inUse: processes.map(\.description).joined(separator: ", ")
-        }
-    }
+    /// The status in one plain sentence, and the one action that does the job or fixes what stops it.
+    public var explanation: String { WorktreeStatusText.explanation(for: assessment) }
+    public var fix: WorktreeFix { WorktreeStatusText.fix(for: assessment) }
 
     /// The processes that have their working folder inside.
     public var processes: [ProcessCwdIndex.Entry] {
@@ -115,10 +131,11 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     /// Every reason, as P2 words them: blockers first, then notes.
     public var reasons: [SafetyReason] { assessment.safety.blockers + assessment.safety.notes }
 
-    /// For the status cell's tooltip: one "label: sentence" line per reason.
+    /// For the chip's tooltip: one line per reason, in the app's words.
     public var reasonsHelp: String {
-        guard !reasons.isEmpty else { return "Nothing keeps auto mode away from it." }
-        return reasons.map { "\($0.label): \($0.sentence)" }.joined(separator: "\n")
+        guard !reasons.isEmpty else { return explanation }
+        return reasons.map { "\(WorktreeStatusText.words(for: $0).text): \(WorktreeStatusText.sentence(for: $0))" }
+            .joined(separator: "\n")
     }
 
     public var canRemove: Bool { assessment.safety.manualAllowed }

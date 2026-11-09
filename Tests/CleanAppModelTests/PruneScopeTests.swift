@@ -4,12 +4,12 @@ import CleanTestSupport
 import Foundation
 import Testing
 
-/// Review items 3 and 6: prune clears only the records the person was shown.
+/// Review items 3 and 6: prune clears only the records the sheet showed. P12 review item 7: the sheet covers every
+/// missing-folder record, whatever the filter shows (missing folders are grey, never on the default filters).
 @Suite("Prune only what was shown")
 @MainActor
 struct PruneScopeTests {
-    /// 3, review experiment E2: only repos with a missing folder among the shown rows are pruned.
-    @Test func onlyShownReposArePruned() async throws {
+    @Test func everyMissingFolderIsInThePlanWhateverTheFilterShows() async throws {
         let world = try await DemoWorld.build()
         defer { world.remove() }
         let web = try world.url("cobalt-web")
@@ -17,27 +17,27 @@ struct PruneScopeTests {
         let app = makeApp(world.fixture)
         await app.refresh()
         let model = WorktreesModel(app: app)
+        #expect(model.filter == .canRemove)
+        #expect(!model.rows.contains { $0.isMissingFolder }, "the default filter shows none of them")
         #expect(model.missingFolderRows.count == 2)
-
+        #expect(model.pruneDisabledReason == nil, "Prune missing folders… is enabled on Can remove")
+        model.filter = .needsAttention
         model.searchText = "atlas"
-        #expect(model.missingFolderRows.isEmpty)
-        #expect(await model.preparePrune().repos.isEmpty)
+        #expect(model.missingFolderRows.count == 2 && model.pruneDisabledReason == nil, "and with any filter or search")
 
-        model.searchText = "beacon"
         let plan = await model.preparePrune()
-        #expect(plan.repos.map(\.repoName) == ["beacon"])
-        let entry = try #require(plan.repos.first?.entries.first)
-        #expect(plan.entryCount == 1)
+        #expect(plan.repos.map(\.repoName).sorted() == ["beacon", "cobalt"])
+        #expect(plan.entryCount == 2, "the sheet lists every one before anything is pruned")
+        let entry = try #require(plan.repos.first { $0.repoName == "beacon" }?.entries.first)
         #expect(entry.branch == "gone")
         #expect(PrunePlan.describe(entry).contains("beacon-gone"))
 
         let outcomes = await model.prune(plan)
-        #expect(outcomes.map(\.repoName) == ["beacon"])
-        #expect(outcomes.first?.pruned.count == 1)
-        model.searchText = ""
-        #expect(model.row(try world.url("beacon-gone")) == nil)
-        #expect(model.row(web)?.isMissingFolder == true, "cobalt's missing folder wasn't shown, so it stays")
-        #expect(app.logEntries.count == 1)
+        #expect(outcomes.map(\.repoName).sorted() == ["beacon", "cobalt"])
+        #expect(outcomes.allSatisfy { $0.pruned.count == 1 })
+        #expect(model.missingFolderRows.isEmpty)
+        #expect(app.logEntries.count == 2)
+        #expect(model.pruneDisabledReason == "No worktree's folder is missing, so there is nothing to prune.")
     }
 
     /// 3: a folder that went missing after the plan was shown stops that repo's prune.

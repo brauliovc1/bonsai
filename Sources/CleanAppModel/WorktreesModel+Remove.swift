@@ -2,9 +2,10 @@ import CleanCore
 import Foundation
 
 extension WorktreesModel {
-    /// The sheet for the shown rows in `ids`, from a fresh look at each one, because the last scan can be
-    /// old: git's current record of it (another worktree may live at the path now) and a fresh assessment.
-    /// Allowed items carry what they were confirmed with; blocked items are listed, never removed.
+    /// The sheet for the shown worktrees in `ids` (never a repo folder: those aren't rows), from a fresh look at
+    /// each one, because the last scan can be old: git's current record of it (another worktree may live at the
+    /// path now) and a fresh assessment. Allowed items carry what they were confirmed with; blocked items are
+    /// listed, never removed.
     public func prepareRemoval(_ ids: Set<WorktreeRow.ID>) async -> RemovalConfirmation {
         let chosen = rows.filter { ids.contains($0.id) }
         guard !chosen.isEmpty else { return RemovalConfirmation(items: []) }
@@ -29,9 +30,11 @@ extension WorktreesModel {
         return RemovalConfirmation(items: items)
     }
 
-    /// Opens the sheet for `ids` (default: the selection) and fills it once the fresh look is done.
+    /// Opens the sheet for `ids` (default: the selection) and fills it once the fresh look is done. Nothing
+    /// opens when none of them is a shown worktree a removal by hand accepts.
     public func beginRemoval(_ ids: Set<WorktreeRow.ID>? = nil) async {
         let ids = ids ?? selection
+        guard rows.contains(where: { ids.contains($0.id) && $0.canRemove }) else { return }
         removalSheetToken += 1
         let token = removalSheetToken
         report = nil
@@ -70,9 +73,13 @@ extension WorktreesModel {
             measuredFreedBytes: nil
         )
         self.report = report
-        selection.subtract(report.outcomes.filter(\.removed).map(\.id))
+        let removed = report.outcomes.filter(\.removed)
+        selection.subtract(removed.map(\.id))
         isRemoving = false
-        if finished != nil { await app.cleanupFinished() }
+        if finished != nil {
+            // The removed rows go at once (and their group's size with them); the rescan follows.
+            await app.cleanupFinished(removed: items.filter { item in removed.contains { $0.id == item.id } }.map(\.worktree))
+        }
         return report.outcomes
     }
 

@@ -129,13 +129,16 @@ struct LightCleanModelTests {
         #expect(!FileManager.default.fileExists(atPath: web.appending(path: "node_modules").path))
         #expect(FileManager.default.fileExists(atPath: web.appending(path: "notes/web.md").path), "tracked files stay")
 
-        // The log entry came from CleanCore, the worktrees were scanned again, the row's Deps are fresh.
+        // The log entry came from CleanCore; the cleaned worktree alone was measured again (no full rescan), so
+        // its size and dependency folders are fresh.
         let entry = try #require(app.logEntries.first)
         #expect(app.logEntries.count == 1)
         #expect(entry.action == .lightClean)
         #expect(entry.mode == .manual)
         #expect(entry.path.hasSuffix("cobalt-web/node_modules"))
-        #expect(app.scanCount == scans + 1)
+        #expect(app.scanCount == scans, "no full rescan after a light clean")
+        #expect((model.row(web)?.sizeBytes ?? .max) < 1024 * 1024, "the 20 MB of node_modules are gone from its size")
+        #expect(model.row(web)?.isMeasuringSize == false)
         #expect(model.row(web)?.dependencies == .measured(nil))
         #expect(model.row(web)?.dependencyText == "–")
         #expect(model.lightCleanReport?.deletedCount == 1)
@@ -236,7 +239,7 @@ struct LightCleanModelTests {
         try fixture.write("x\n", to: "node_modules/pkg/index.js", in: shared)
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         let stale = try #require(model.allRows.first { $0.repoName == "alpha" && $0.url.lastPathComponent == "shared" })
         let real = try #require(model.allRows.first { $0.repoName == "bravo" && $0.url.lastPathComponent == "shared" })
         #expect(stale.isStaleRecord)

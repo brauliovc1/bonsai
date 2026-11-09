@@ -2,14 +2,13 @@ import CleanCore
 import Foundation
 import Observation
 
-/// The Overview: free space, what could be reclaimed in each category (summed from the other screens'
-/// models, never measured again here) with a button that jumps to the screen that does it, and Refresh.
+/// The Overview (PLAN §8.3): free space and what Bonsai can free (the one total, `ReclaimSummary`), the bar, a card
+/// for each category with something to free (largest first) whose button opens its screen already filtered to
+/// what the card counted, one line for the empty ones, and the auto clean row. Every number comes from the other
+/// screens' models; nothing is measured again here.
 @MainActor
 @Observable
 public final class OverviewModel {
-    /// Light clean counts worktrees idle at least this many days.
-    public static let lightCleanIdleDays = 7
-
     public let app: AppModel
     public let worktrees: WorktreesModel
     public let projects: ProjectsModel
@@ -18,6 +17,8 @@ public final class OverviewModel {
     public let caches: CachesModel
     public let autoMode: AutoModeModel
     public let navigation: NavigationModel
+    /// Render seam: a summary to show instead of the models' (the off-screen renders use it for a full disk).
+    var summaryOverride: ReclaimSummary?
 
     public init(
         app: AppModel,
@@ -39,15 +40,13 @@ public final class OverviewModel {
         self.navigation = navigation
     }
 
-    /// The auto mode row: off / report-only until <date> / on.
-    public var autoModeText: String { autoMode.statusText }
-
-    /// The auto mode row's second line: the last run and the next.
-    public var autoModeDetail: String {
-        autoMode.isRunning ? "Running now…" : autoMode.lastRunText + " " + autoMode.nextRunText
-    }
-
     public var disk: DiskSpaceModel { app.disk }
+
+    /// The one total, as the screens' models have it now.
+    public var summary: ReclaimSummary {
+        summaryOverride
+            ?? ReclaimSummary(app: app, projects: projects, caches: caches, derivedData: derivedData, dockerSimulators: dockerSimulators)
+    }
 
     /// True while anything the Overview sums is being scanned.
     public var isRefreshing: Bool {
@@ -55,158 +54,150 @@ public final class OverviewModel {
             || caches.isScanning
     }
 
-    // MARK: - Rows
+    // MARK: - Headline and bar
 
-    public var rows: [OverviewRow] {
-        OverviewRow.Kind.allCases.map(row)
+    /// "21.9 GB free of 460 GB".
+    public var headline: String {
+        guard let free = disk.freeBytes else { return "Free space unknown" }
+        guard let total = disk.totalBytes else { return "\(DisplayText.bytes(free)) free" }
+        return "\(DisplayText.bytes(free)) free of \(FreeSpaceText.label(total))"
     }
 
-    public func row(_ kind: OverviewRow.Kind) -> OverviewRow {
-        switch kind {
-        case .autoReadyWorktrees: worktreeRow(kind, title: "Worktrees ready for auto mode", status: .autoReady)
-        case .safeWorktrees: worktreeRow(kind, title: "Other safe worktrees", status: .safe)
-        case .lightClean: lightCleanRow()
-        case .projectFolders: projectFoldersRow()
-        case .orphanedDerivedData: derivedDataRow()
-        case .docker: dockerRow()
-        case .simulators: simulatorsRow()
-        case .toolCaches: toolCachesRow()
+    /// "Bonsai can free about 140.2 GB"; "Nothing to clean right now" when every part is known and empty.
+    public var canFreeText: String {
+        let summary = summary
+        if summary.totalBytes > 0 { return "Bonsai can free about \(DisplayText.bytes(summary.totalBytes))" }
+        return summary.pendingParts.isEmpty ? "Nothing to clean right now" : "Looking for space to free…"
+    }
+
+    /// The headline's right side is green only when there is something to free.
+    public var canFreeSomething: Bool { summary.totalBytes > 0 }
+
+    /// How the bar and the headline are colored: the menu bar's rule.
+    public var level: MenuBarModel.Level {
+        MenuBarModel.level(of: disk, warningGB: app.settings.lowSpaceWarningGB)
+    }
+
+    public var space: SpaceBreakdown? {
+        SpaceBreakdown(free: disk.freeBytes, total: disk.totalBytes, canFree: summary.totalBytes)
+    }
+
+    // MARK: - Cards
+
+    /// The categories with something to free, largest first.
+    public var cards: [OverviewCard] {
+        let summary = summary
+        return OverviewCategory.allCases
+            .compactMap { card($0, in: summary) }
+            .sorted { $0.bytes > $1.bytes }
+    }
+
+    /// The card for one category; nil when it has nothing to free.
+    public func card(_ category: OverviewCategory) -> OverviewCard? {
+        card(category, in: summary)
+    }
+
+    private func card(_ category: OverviewCategory, in summary: ReclaimSummary) -> OverviewCard? {
+        let bytes = summary.bytes(category.parts)
+        guard bytes > 0 else { return nil }
+        return OverviewCard(category: category, bytes: bytes, detail: detail(category, summary))
+    }
+
+    private func detail(_ category: OverviewCategory, _ summary: ReclaimSummary) -> String {
+        switch category {
+        case .worktrees:
+            let count = summary.count(.worktrees)
+            return "\(DisplayText.worktrees(count)) you can remove; \(count == 1 ? "its branch is" : "branches are") kept"
+        case .projectFolders:
+            let count = summary.count(.projectFolders)
+            return "Dependency and build folders of \(DisplayText.projects(count)) idle \(projects.threshold)+ days"
+        case .toolCaches:
+            let count = summary.count(.toolCaches)
+            return "\(count) \(count == 1 ? "cache" : "caches") the tools download again when needed"
+        case .dockerSimulators:
+            var parts: [String] = []
+            let devices = summary.count(.simulators)
+            if summary.bytes(.docker) > 0 { parts.append("Docker's stopped containers, unused images and build cache") }
+            if summary.bytes(.simulators) > 0 { parts.append("\(devices) unavailable \(devices == 1 ? "simulator" : "simulators")") }
+            return parts.joined(separator: " and ")
+        case .derivedData:
+            return "\(DisplayText.folders(summary.count(.derivedData))) of deleted projects' DerivedData"
         }
     }
 
-    /// Opens the screen behind a row.
-    public func jump(to kind: OverviewRow.Kind) {
-        navigation.show(row(kind).destination)
+    // MARK: - Lines under the cards
+
+    /// "Nothing to clean in Tool caches or Xcode DerivedData.": the screens whose parts are all measured and empty;
+    /// nil when there is none (a part not measured, or not counted, is not "nothing").
+    public var nothingText: String? {
+        let summary = summary
+        let empty = OverviewCategory.allCases.filter { category in category.parts.allSatisfy(summary.emptyParts.contains) }
+        guard !empty.isEmpty else { return nil }
+        return "Nothing to clean in \(OverviewCategory.names(empty))."
     }
 
-    private enum WorktreeGroup { case autoReady, safe }
-
-    private func worktreeRow(_ kind: OverviewRow.Kind, title: String, status group: WorktreeGroup) -> OverviewRow {
-        guard app.scan != nil else {
-            return OverviewRow(kind: kind, title: title, detail: app.problem ?? "Not scanned yet.", bytes: nil, destination: .worktrees)
-        }
-        let matching = app.assessments.filter { assessment in
-            switch (assessment.status, group) {
-            case (.autoReady, .autoReady), (.safe, .safe): true
-            default: false
-            }
-        }
-        let bytes = matching.compactMap(\.estimatedBytes).reduce(0, +)
-        return OverviewRow(kind: kind, title: title, detail: DisplayText.worktrees(matching.count), bytes: bytes, destination: .worktrees)
+    /// Why some parts aren't counted ("Docker isn't running, so its space isn't counted."); nil when all are.
+    public var notCountedText: String? {
+        let reasons = summary.unavailable.map(\.reason)
+        return reasons.isEmpty ? nil : reasons.joined(separator: " ")
     }
 
-    private func lightCleanRow() -> OverviewRow {
-        let title = "Light clean: dependencies of worktrees idle \(Self.lightCleanIdleDays)+ days"
-        let idle = worktrees.allRows.filter { ($0.idleDays ?? -1) >= Self.lightCleanIdleDays }
-        let measured = idle.filter { $0.dependencyBytes != nil }
-        if worktrees.isMeasuringDependencies {
-            return OverviewRow(kind: .lightClean, title: title, detail: "Measuring…", bytes: nil, destination: .worktrees)
-        }
-        if !worktrees.hasRequestedDependencies {
-            return OverviewRow(kind: .lightClean, title: title, detail: "Measured when you open Worktrees.", bytes: nil, destination: .worktrees)
-        }
-        let bytes = measured.compactMap(\.dependencyBytes).reduce(0, +)
-        let detail = "\(DisplayText.worktrees(measured.count)) with folders to delete. Overlaps the rows above: "
-            + "removing a whole worktree removes its dependencies too."
-        return OverviewRow(kind: .lightClean, title: title, detail: detail, bytes: bytes, destination: .worktrees)
+    /// "Measuring Project folders…" while a screen's parts aren't known yet; nil once they all are.
+    public var measuringText: String? {
+        let pending = summary.pendingParts
+        let screens = OverviewCategory.allCases.filter { $0.parts.contains(where: pending.contains) }
+        guard !screens.isEmpty else { return nil }
+        return "Measuring \(screens.map(\.title).joined(separator: ", "))…"
     }
 
-    private func projectFoldersRow() -> OverviewRow {
-        let title = "Project build folders"
-        guard projects.report != nil else {
-            let detail = projects.isScanning ? "Measuring…" : "Measured when you open Project folders."
-            return OverviewRow(kind: .projectFolders, title: title, detail: detail, bytes: nil, destination: .projects)
-        }
-        let idle = projects.idleTotal
-        let detail = "In \(idle.count) idle \(idle.count == 1 ? "project" : "projects") (\(projects.threshold)+ days, nothing running inside)."
-        return OverviewRow(kind: .projectFolders, title: title, detail: detail, bytes: idle.bytes, destination: .projects)
-    }
+    /// The auto clean row.
+    public var autoClean: AutoCleanLine { AutoCleanLine(autoMode: autoMode) }
 
-    private func derivedDataRow() -> OverviewRow {
-        let title = "Orphaned DerivedData"
-        guard derivedData.report != nil else {
-            return OverviewRow(kind: .orphanedDerivedData, title: title, detail: "Not scanned yet.", bytes: nil, destination: .derivedData)
-        }
-        if let refusal = derivedData.refusal {
-            return OverviewRow(kind: .orphanedDerivedData, title: title, detail: refusal, bytes: nil, destination: .derivedData)
-        }
-        let count = derivedData.orphanRows.count
-        return OverviewRow(
-            kind: .orphanedDerivedData, title: title, detail: DisplayText.folders(count),
-            bytes: derivedData.orphanBytes, destination: .derivedData
-        )
-    }
+    // MARK: - Opening a screen
 
-    private func dockerRow() -> OverviewRow {
-        let title = "Docker reclaimable"
-        let detail: String
-        switch dockerSimulators.dockerStatus {
-        case .unknown: detail = "Not scanned yet."
-        case .notInstalled: detail = "Docker isn't installed."
-        case .notRunning: detail = "Docker isn't running."
-        case .running:
-            detail = dockerSimulators.dockerReadFailure.map { "Couldn't read: \($0)." } ?? "At most: volumes and tagged images stay."
+    /// Opens the card's screen showing what the card counted: Worktrees on "Can remove", Project folders on
+    /// "Ready to clean", Tool caches with the ready ones selected, Xcode DerivedData with the orphans selected,
+    /// Docker & Simulators as it is (one prune and one delete, each for everything it counts).
+    public func open(_ category: OverviewCategory) {
+        switch category {
+        case .worktrees:
+            worktrees.showRemovable()
+            navigation.show(.worktrees)
+        case .projectFolders:
+            projects.showReclaimable()
+            navigation.show(.projects)
+        case .toolCaches:
+            caches.selectAllReady()
+            navigation.show(.caches)
+        case .dockerSimulators:
+            navigation.show(.dockerSimulators)
+        case .derivedData:
+            derivedData.selection = derivedData.selectableIDs
+            navigation.show(.derivedData)
         }
-        return OverviewRow(
-            kind: .docker, title: title, detail: detail,
-            bytes: dockerSimulators.dockerReclaimableBytes, destination: .dockerSimulators
-        )
-    }
-
-    private func simulatorsRow() -> OverviewRow {
-        let title = "Unavailable simulators"
-        guard dockerSimulators.simulators != nil else {
-            return OverviewRow(kind: .simulators, title: title, detail: "Not scanned yet.", bytes: nil, destination: .dockerSimulators)
-        }
-        if dockerSimulators.noXcode {
-            return OverviewRow(kind: .simulators, title: title, detail: "Xcode isn't installed.", bytes: nil, destination: .dockerSimulators)
-        }
-        if let failure = dockerSimulators.deviceListFailure {
-            return OverviewRow(
-                kind: .simulators, title: title, detail: "Couldn't read: \(failure).", bytes: nil, destination: .dockerSimulators
-            )
-        }
-        let count = dockerSimulators.unavailableDevices.count
-        let detail = count == 1 ? "1 device" : "\(count) devices"
-        return OverviewRow(
-            kind: .simulators, title: title, detail: detail,
-            bytes: dockerSimulators.unavailableBytes, destination: .dockerSimulators
-        )
-    }
-
-    /// "Tool caches": what the ready entries hold (an owner running or a refusal leaves an entry out).
-    private func toolCachesRow() -> OverviewRow {
-        let title = "Tool caches"
-        guard caches.report != nil else {
-            return OverviewRow(kind: .toolCaches, title: title, detail: "Not scanned yet.", bytes: nil, destination: .caches)
-        }
-        let ready = caches.readyRows.count
-        let waiting = caches.allRows.filter { $0.tone == .waiting }.count
-        var detail = "\(ready) ready to clean"
-        if waiting > 0 { detail += "; \(waiting) wait for their tool to quit" }
-        return OverviewRow(kind: .toolCaches, title: title, detail: detail, bytes: caches.readyBytes, destination: .caches)
     }
 
     // MARK: - Scanning
 
-    /// Scans everything the Overview sums again: worktrees, DerivedData, Docker and Simulators, tool caches, and
-    /// project folders when their screen has measured them once.
+    /// Scans everything the total sums again: worktrees, DerivedData, Docker and Simulators and the tool caches,
+    /// then the project folders (they read the worktree scan).
     public func refresh() async {
         async let worktreeScan: Void = app.refresh()
         async let derivedDataScan: Void = derivedData.refresh()
         async let dockerScan: Void = dockerSimulators.refresh()
         async let cachesScan: Void = caches.refresh()
         _ = await (worktreeScan, derivedDataScan, dockerScan, cachesScan)
-        // Project folders are heavy to measure: again only once their screen has measured them.
-        if projects.report != nil { await projects.refresh() }
+        await projects.refresh()
     }
 
-    /// The first look, when the window opens: DerivedData, Docker and Simulators and the tool caches are scanned
-    /// once (the worktree scan starts with the app).
+    /// The first look, when the main window or the menu window opens: everything the total sums that hasn't been
+    /// measured yet (the worktree scan starts with the app). Project folders are the slow part; they show
+    /// "Measuring…" until done.
     public func loadIfNeeded() async {
         async let derivedDataScan: Void = derivedData.loadIfNeeded()
         async let dockerScan: Void = dockerSimulators.loadIfNeeded()
         async let cachesScan: Void = caches.loadIfNeeded()
-        _ = await (derivedDataScan, dockerScan, cachesScan)
+        async let projectsScan: Void = projects.loadIfNeeded()
+        _ = await (derivedDataScan, dockerScan, cachesScan, projectsScan)
     }
 }

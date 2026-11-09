@@ -82,7 +82,13 @@ struct AutoModeScheduleTests {
         let center = NotificationCenter()
         let wake = Notification.Name("test.didWake")
         let scheduler = AutoModeScheduler(model: world.autoMode)
-        scheduler.wakeDelay = .milliseconds(600)
+        // The wake check's wait is held until the test lets it go, so nothing depends on how fast this runs.
+        let delays = Box<[Duration]>([])
+        let wait = Box(Gate())
+        scheduler.sleep = { delay in
+            await MainActor.run { delays.value.append(delay) }
+            await wait.value.wait()
+        }
         scheduler.start(wakeCenter: center, wakeName: wake, hourly: false)
         defer { scheduler.stop() }
 
@@ -91,15 +97,22 @@ struct AutoModeScheduleTests {
         let first = try #require(try world.saved().lastAutoRun?.date)
 
         center.post(name: wake, object: nil)
-        try await Task.sleep(for: .milliseconds(900))
+        #expect(await eventually { scheduler.wakeChecksBegun == 1 })
+        await wait.value.open()
+        await scheduler.wakeCheck?.value
         #expect(try world.saved().lastAutoRun?.date == first, "woke within a day: no run")
 
         world.clock.advance(by: 86_400)
         let scans = world.app.scanCount
+        wait.value = Gate()
         center.post(name: wake, object: nil)
-        try await Task.sleep(for: .milliseconds(200))
+        #expect(await eventually { scheduler.wakeChecksBegun == 2 })
+        #expect(await eventually { delays.value.count == 2 }, "the check is waiting")
         #expect(!world.autoMode.isRunning && world.app.scanCount == scans, "not right at the wake: it waits a while first")
-        #expect(await eventually { (try? world.saved().lastAutoRun?.date) == world.clock.now }, "woke a day later: runs")
+        #expect(delays.value == [AutoSchedule.wakeDelay, AutoSchedule.wakeDelay], "and waits the app's delay")
+        await wait.value.open()
+        await scheduler.wakeCheck?.value
+        #expect(try world.saved().lastAutoRun?.date == world.clock.now, "woke a day later: runs")
         #expect(AutoModeScheduler.identifier == "io.github.brauliovc1.bonsai.auto")
         #expect(AutoSchedule.wakeDelay == .seconds(300))
     }
@@ -108,21 +121,38 @@ struct AutoModeScheduleTests {
         let world = try await AutoWorld.make(enabledDaysAgo: nil)
         defer { world.remove() }
         let overview = world.models.overview
-        #expect(overview.autoModeText == "Auto mode: off")
-        #expect(overview.autoModeDetail == "Last run: never. Next run: none while auto mode is off.")
+        #expect(overview.autoClean.title == "Auto clean is off")
+        #expect(overview.autoClean.detail == "Removes finished worktrees once a day.")
+        #expect(overview.autoClean.buttonTitle == "Turn on…")
 
         await world.autoMode.enable()
-        let end = world.clock.now.addingTimeInterval(7 * 86_400).formatted(date: .abbreviated, time: .shortened)
-        #expect(overview.autoModeText == "Auto mode: report-only until \(end)")
-        #expect(overview.autoModeDetail.hasSuffix("Next run: at the next check (daily, at launch and when the Mac wakes)."))
+        let end = world.clock.now.addingTimeInterval(7 * 86_400).formatted(.dateTime.day().month(.abbreviated))
+        #expect(overview.autoClean.title == "Auto clean is report-only until \(end)")
+        #expect(overview.autoClean.detail == "It lists what it would remove and deletes nothing yet. Last run: never.")
+        #expect(overview.autoClean.buttonTitle == "Settings…")
 
         await world.autoMode.runNow()
         let ran = world.clock.now.formatted(date: .abbreviated, time: .shortened)
-        #expect(overview.autoModeDetail.hasPrefix("Last run: \(ran), report only: would remove 1 worktree"))
+        #expect(overview.autoClean.detail.contains("Last run: \(ran), report only: would remove 1 worktree"),
+                "\(overview.autoClean.detail)")
 
         world.clock.advance(by: 8 * 86_400)
-        #expect(overview.autoModeText == "Auto mode: on")
+        #expect(overview.autoClean.title.hasPrefix("Auto clean is on, next run "), "\(overview.autoClean.title)")
+        #expect(overview.autoClean.detail.hasPrefix("Last run: \(ran)"))
         #expect(world.autoMode.reportOnlyText == nil)
+    }
+
+    @Test func theNextRunIsSaidInPlainWords() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 10))!
+        func at(_ day: Int, _ hour: Int) -> Date { calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))! }
+        #expect(AutoCleanLine.nextRun(at(9, 21), now: now, calendar: calendar) == "tonight")
+        #expect(AutoCleanLine.nextRun(at(9, 14), now: now, calendar: calendar).hasPrefix("today at "))
+        #expect(AutoCleanLine.nextRun(at(10, 9), now: now, calendar: calendar) == "tomorrow")
+        #expect(AutoCleanLine.nextRun(at(15, 9), now: now, calendar: calendar).hasPrefix("on "))
+        #expect(AutoCleanLine.nextRun(at(9, 9), now: now, calendar: calendar) == "at the next check")
+        #expect(AutoCleanLine.nextRun(nil, now: now, calendar: calendar) == "at the next check")
     }
 }
 

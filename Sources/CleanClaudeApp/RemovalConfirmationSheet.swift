@@ -26,7 +26,9 @@ struct RemovalConfirmationSheet: View {
 
     private func confirmPage(_ confirmation: RemovalConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(confirmation.allowed.isEmpty ? "Nothing can be removed" : "\(confirmation.removeButtonTitle)?")
+            // Remove… is offered only for worktrees that can go, so "nothing" here means they changed since the
+            // last scan; each one below says why.
+            Text(confirmation.allowed.isEmpty ? "These can't be removed now" : "\(confirmation.removeButtonTitle)?")
                 .font(.title2.weight(.semibold))
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -97,7 +99,7 @@ private struct AllowedItemView: View {
                     .foregroundStyle(.orange)
             }
             ForEach(item.notes, id: \.self) { note in
-                Label(note.sentence, systemImage: "info.circle")
+                Label(WorktreeStatusText.sentence(for: note), systemImage: "info.circle")
                     .foregroundStyle(.secondary)
             }
             if !item.ignoredUserFiles.isEmpty {
@@ -122,7 +124,7 @@ private struct BlockedItemView: View {
         VStack(alignment: .leading, spacing: 5) {
             ItemHeader(item: item)
             ForEach(item.blockers, id: \.self) { reason in
-                Label(reason.sentence, systemImage: "nosign")
+                Label(WorktreeStatusText.sentence(for: reason), systemImage: "nosign")
             }
         }
         .foregroundStyle(.secondary)

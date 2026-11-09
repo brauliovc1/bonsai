@@ -2,8 +2,9 @@ import CleanCore
 import Foundation
 
 extension WorktreesModel {
-    /// What "Clean up missing folders" would clear: `Pruner.preview` of every repo with a missing folder
-    /// among the shown rows (filters and search apply), read now.
+    /// What "Prune missing folders…" would clear: `Pruner.preview` of every repo that has a missing-folder record,
+    /// whatever the filter and search show (missing folders are grey, so the default filters never show them), read
+    /// now. The sheet lists every entry before anything is pruned.
     public func preparePrune() async -> PrunePlan {
         var repos: [String] = []
         for row in missingFolderRows where !repos.contains(row.worktree.repoPath) {

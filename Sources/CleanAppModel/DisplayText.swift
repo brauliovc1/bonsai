@@ -21,6 +21,36 @@ public enum DisplayText {
         return assessment.idle.idleDays.map { "\($0)d" } ?? "unknown"
     }
 
+    /// The last-activity column: "Today", "Yesterday", "45 days ago"; "Unknown" when the idle clock couldn't
+    /// tell; "–" for a main checkout or a missing folder.
+    public static func activity(_ assessment: WorktreeAssessment) -> String {
+        if assessment.worktree.isMain || assessment.safety.blockers.contains(.missingFolder) { return "–" }
+        return assessment.idle.idleDays.map(daysAgo) ?? "Unknown"
+    }
+
+    /// "Today", "Yesterday", "45 days ago".
+    public static func daysAgo(_ days: Int) -> String {
+        switch days {
+        case ..<1: "Today"
+        case 1: "Yesterday"
+        default: "\(days) days ago"
+        }
+    }
+
+    /// "today", "yesterday", "5 days ago", "10 weeks ago", "5 months ago", "2 years ago": for dates further back,
+    /// where days stop meaning much (the last commit of a repo).
+    public static func timeAgo(_ date: Date, now: Date) -> String {
+        let days = Int(now.timeIntervalSince(date) / 86_400)
+        switch days {
+        case ..<1: return "today"
+        case 1: return "yesterday"
+        case ..<14: return "\(days) days ago"
+        case ..<84: return "\(days / 7) weeks ago"
+        case ..<365: return "\(max(3, days / 30)) months ago"
+        default: return days < 730 ? "1 year ago" : "\(days / 365) years ago"
+        }
+    }
+
     /// "1 worktree", "3 worktrees".
     public static func worktrees(_ count: Int) -> String {
         count == 1 ? "1 worktree" : "\(count) worktrees"

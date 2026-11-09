@@ -1,132 +1,135 @@
 import CleanAppModel
 import SwiftUI
 
-/// The Overview: free space, what can be reclaimed in each category with a button to the screen that does
-/// it, auto mode with its last and next run, and the last scan with Refresh.
+/// The Overview (PLAN §8.3): free space and what Bonsai can free, the bar, a card per category with something
+/// to free (largest first) whose button opens its screen filtered to what it counted, one line for the empty
+/// categories, and the auto clean row.
 struct OverviewView: View {
     let model: OverviewModel
+    let settings: SettingsModel
 
     var body: some View {
         VStack(spacing: 0) {
             TestModeBanner(app: model.app)
-            content
+            ScrollView {
+                content
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 24)
+                    .frame(maxWidth: 940, alignment: .leading)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .navigationTitle("Overview")
-        .task { await model.loadIfNeeded() }
+        .toolbar {
+            ToolbarItem {
+                Button { Task { await model.refresh() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .labelStyle(.titleAndIcon)
+                .help("Measure everything again (⌘R)")
+                .keyboardShortcut("r")
+                .disabled(model.isRefreshing)
+            }
+        }
     }
 
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if let problem = model.app.problem {
-                    ProblemBanner(text: problem)
-                }
-                FreeSpaceCard(disk: model.disk)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Reclaimable").font(.headline)
-                    VStack(spacing: 0) {
-                        ForEach(model.rows) { row in
-                            OverviewRowView(row: row) { model.jump(to: row.kind) }
-                            Divider()
+        VStack(alignment: .leading, spacing: 22) {
+            if let problem = model.app.problem {
+                ProblemBanner(text: problem)
+            }
+            PageHeader(title: model.headline, subtitle: subtitle) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(model.canFreeText)
+                        .font(.title3.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(model.canFreeSomething ? Palette.green : .secondary)
+                    if let measuring = model.measuringText {
+                        HStack(spacing: 5) {
+                            ProgressView().controlSize(.mini)
+                            Text(measuring).lineLimit(1)
                         }
-                    }
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-                    Text("Sizes are estimates. What a cleanup really frees is measured from the disk afterwards.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-                AutoModeRow(model: model)
-                HStack(spacing: 10) {
-                    if model.isRefreshing {
-                        ProgressView().controlSize(.small)
                     }
-                    ScanTimeText(app: model.app)
+                }
+            }
+            .foregroundStyle(headlineColor)
+            if let space = model.space {
+                SpaceBar(space: space, level: model.level)
+            }
+            cards
+            lines
+            AutoCleanRow(line: model.autoClean, settings: settings)
+            Text(SizeText.estimateHelp)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var cards: some View {
+        let cards = model.cards
+        if cards.isEmpty, model.measuringText == nil {
+            EmptyState(
+                systemImage: "checkmark.circle",
+                headline: "Nothing to clean",
+                line: "Bonsai found nothing it can free right now. It looks again after every scan."
+            )
+            .frame(maxWidth: .infinity)
+        } else {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 420), spacing: 14)], alignment: .leading, spacing: 14) {
+                ForEach(cards) { card in
+                    CategoryCard(
+                        systemImage: card.category.systemImage,
+                        title: card.title,
+                        sizeText: card.sizeText,
+                        detail: card.detail,
+                        buttonTitle: card.buttonTitle
+                    ) {
+                        model.open(card.category)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var lines: some View {
+        // With no card at all the empty state says it; the line would only list every category.
+        let nothing = model.cards.isEmpty ? nil : model.nothingText
+        if nothing != nil || model.notCountedText != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                if let nothing {
+                    NothingLine(text: nothing)
+                }
+                if let notCounted = model.notCountedText {
+                    Label(notCounted, systemImage: "info.circle")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Refresh") { Task { await model.refresh() } }
-                        .disabled(model.isRefreshing)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(20)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-}
 
-/// "123.4 GB free" large, the used-space bar with its percentage, and which disk it is.
-private struct FreeSpaceCard: View {
-    let disk: DiskSpaceModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(DisplayText.bytes(disk.freeBytes)) free")
-                .font(.system(size: 38, weight: .semibold))
-                .monospacedDigit()
-            ProgressView(value: disk.usedFraction ?? 0)
-                .tint((disk.usedFraction ?? 0) > 0.9 ? .red : .accentColor)
-            HStack {
-                if let used = disk.usedFraction {
-                    Text("\(used, format: .percent.precision(.fractionLength(0))) used")
-                        .monospacedDigit()
-                }
-                Spacer()
-                Text("of \(DisplayText.bytes(disk.totalBytes))" + (disk.volumeName.map { " on \($0)" } ?? ""))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .font(.callout)
-            .foregroundStyle(.secondary)
+    /// "Macintosh HD · Scanned 3 minutes ago".
+    private var subtitle: String {
+        var parts: [String] = []
+        if let volume = model.disk.volumeName { parts.append(volume) }
+        if model.app.isScanning {
+            parts.append(DisplayText.progress(model.app.progress))
+        } else if let scanned = model.app.lastScanAt {
+            parts.append("Scanned \(scanned.formatted(.relative(presentation: .named)))")
         }
+        return parts.joined(separator: " · ")
     }
-}
 
-/// One category: what it is, how many, how big, and a button to its screen.
-private struct OverviewRowView: View {
-    let row: OverviewRow
-    let jump: () -> Void
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.title)
-                Text(row.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text(row.sizeText)
-                .monospacedDigit()
-                .fontWeight(.semibold)
-            Button(row.buttonTitle, action: jump)
+    private var headlineColor: Color {
+        switch model.level {
+        case .low: Palette.orange
+        case .veryLow: Palette.red
+        case .normal, .unknown: .primary
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-    }
-}
-
-/// Auto mode: off / report-only until <date> / on, with the last and next run, and a way to Settings.
-private struct AutoModeRow: View {
-    let model: OverviewModel
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: "clock.badge.checkmark").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.autoModeText)
-                Text(model.autoModeDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if model.autoMode.isRunning {
-                ProgressView().controlSize(.small)
-            }
-            SettingsLink { Text("Settings…") }
-        }
-        .padding(12)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
     }
 }

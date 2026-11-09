@@ -37,7 +37,8 @@ struct ProjectsFooter: View {
             Spacer()
             Text("Ready to clean: \(DisplayText.bytes(model.idleTotal.bytes)) in \(DisplayText.projects(model.idleTotal.count))")
                 .monospacedDigit()
-                .help("The projects Select all idle picks: idle \(model.threshold) days or more, nothing running in them")
+                .help("Idle \(model.threshold) days or more with nothing running inside, the same as the Overview's card. "
+                    + "Worktrees that can be removed whole are left out: Worktrees counts them, folders and all.")
             Text("All: \(DisplayText.bytes(model.allTotal.bytes)) in \(DisplayText.projects(model.allTotal.count))")
                 .monospacedDigit()
         }

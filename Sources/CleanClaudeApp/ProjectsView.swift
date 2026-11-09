@@ -155,7 +155,8 @@ struct ProjectsView: View {
             Button { model.selectAllIdle() } label: {
                 Label("Select all idle", systemImage: "checklist")
             }
-            .help("Select every project idle \(model.threshold)+ days with nothing running inside")
+            .help("Select every project ready to clean: idle \(model.threshold)+ days, nothing running inside, not a "
+                + "worktree that can be removed whole")
             .disabled(model.idleTotal.count == 0)
             Button { Task { await model.beginClean() } } label: {
                 Label("Clean selected…", systemImage: "paintbrush")
