@@ -25,6 +25,18 @@ struct CursorRulesTests {
         #expect(notes.first == "removed versions " + ToolCacheWorld.oldVersions.joined(separator: ", "))
     }
 
+    /// A newer version installed between the scan and the clean makes the old newest removable by the fresh keep
+    /// set, but the person never saw it in the confirmation: it stays.
+    @Test func onlyVersionsTheConfirmationListedGo() async throws {
+        let world = try ToolCacheWorld()
+        defer { world.remove() }
+        let finding = try await world.scanner().scan().require("cursor-agent-versions")
+        try world.home.addFile(ToolCacheWorld.versions + "/2026.10.25-1a2b3c4/cursor-agent", kibibytes: 4)
+        let result = await world.cleaner().clean([finding])
+        #expect(result.cleaned.first?.removedCount == 2)
+        #expect(world.contents(ToolCacheWorld.versions) == [ToolCacheWorld.inUseVersion, ToolCacheWorld.newestVersion, "2026.10.25-1a2b3c4"])
+    }
+
     /// "By name" compares numbers as numbers, and one version that is both in use and newest is kept once.
     @Test func newestIsByNumberAndCanBeTheOneInUse() throws {
         let world = try ToolCacheWorld()
