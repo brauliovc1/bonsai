@@ -20,6 +20,8 @@ struct EnvironmentNameTests {
         #expect(variable.value(in: [:]) == nil, "neither")
         #expect(variable.value(in: [variable.name: "", variable.oldName: "/old"]) == "/old", "empty counts as unset")
         #expect(variable.value(in: [variable.name: "", variable.oldName: ""]) == nil)
+        #expect(variable.isPresent(in: [variable.name: ""]) && variable.isPresent(in: [variable.oldName: ""]))
+        #expect(!variable.isPresent(in: [:]) && !variable.isPresent(in: ["CLAUDE_CONFIG_DIR": "/x"]))
     }
 
     /// The environment reads both variables through it.

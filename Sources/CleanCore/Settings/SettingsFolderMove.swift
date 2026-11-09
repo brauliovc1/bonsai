@@ -10,23 +10,27 @@ import Foundation
 /// path missing (it would make a new, empty folder there), and through the link it opens the same lock files.
 /// Nothing is copied: the log, the settings and the locks keep their inodes.
 ///
-/// `clean-claude` a folder and something at `Bonsai` too: `Bonsai` is used, neither is touched, and the notice
-/// says so. `clean-claude` missing, a link already or not a folder: nothing to do.
+/// What is at each path decides the rest (`decide`, in SettingsFolderMove+Decision): two real folders = both are
+/// kept and `Bonsai` is used; anything else at `Bonsai` (a link, a file, another app's `bonsai` folder) = no move,
+/// `clean-claude` is used; `clean-claude` a link to a folder elsewhere = no move, the link is used. A notice says
+/// where each folder is and which one is used, never to delete anything.
 public enum SettingsFolderMove {
     public static let oldName = "clean-claude"
     public static let newName = "Bonsai"
-    /// How long the move waits for each lock (a cleanup running in another process) before it leaves the move
-    /// to the next launch.
+    /// How long the CLI waits, for both locks together, for a cleanup running in another process before it leaves
+    /// the move to the next launch.
     public static let lockTimeout: Duration = .seconds(10)
+    /// The app's wait for both locks together: it runs at launch on the main thread, before anything shows.
+    public static let appLockTimeout: Duration = .milliseconds(1500)
 
     public enum Outcome: Equatable, Sendable {
-        /// No `clean-claude` folder: missing, a link already, or not a folder.
+        /// No `clean-claude` folder to move: missing, not a folder, or a link to `Bonsai` already.
         case nothingToMove
         case moved
-        /// `clean-claude` is a folder and something is at `Bonsai` too: `Bonsai` is used, neither is touched.
+        /// `clean-claude` and `Bonsai` are two real folders: `Bonsai` is used, neither is touched.
         case bothExist
-        /// Not moved this time (a lock wasn't free in time, or the file system said no): `clean-claude` is used
-        /// for this run and the next launch tries again.
+        /// Not moved: a lock wasn't free in time, the file system said no, something else is at `Bonsai`, or
+        /// `clean-claude` is a link to a folder elsewhere. `clean-claude` is used for this run.
         case notMoved(String)
     }
 
@@ -38,88 +42,67 @@ public enum SettingsFolderMove {
         public var notice: String?
     }
 
-    /// Moves `<library>/clean-claude` to `<library>/Bonsai` when it should (see above).
+    /// Moves `<library>/clean-claude` to `<library>/Bonsai` when it should (see above). `lockTimeout` is the
+    /// wait for both locks together.
     public static func run(in library: URL, lockTimeout: Duration = lockTimeout) -> Result {
-        let old = library.appending(path: oldName, directoryHint: .isDirectory)
-        let new = library.appending(path: newName, directoryHint: .isDirectory)
-        guard case .folder = Entry(old) else { return Result(outcome: .nothingToMove, folder: new) }
-        guard Entry(new).isFreeForTheMove else { return bothExist(old: old, new: new) }
+        let paths = Paths(library: library)
+        let first = decide(paths)
+        guard case .move = first else { return result(of: first, paths) }
 
-        let locks: [FileLock]
+        let clock = SuspendingClock()
+        let deadline = clock.now.advanced(by: lockTimeout)
+        var locks: [FileLock] = []
+        defer { locks.reversed().forEach { $0.release() } }
         do {
             // Never creates the folder: if it went away meanwhile, the lock fails and nothing is moved.
-            locks = try [CleanupLock.fileName, SettingsStore.lockFileName].map { name in
-                try FileLock.lock(old.appending(path: name), timeout: lockTimeout, createsFolder: false)
+            for name in [CleanupLock.fileName, SettingsStore.lockFileName] {
+                let left = max(.zero, clock.now.duration(to: deadline))
+                locks.append(try FileLock.lock(paths.old.appending(path: name), timeout: left, createsFolder: false))
             }
         } catch {
-            return notMoved("\(error)", old: old, new: new)
+            return notMoved("\(error)", paths, retries: true)
         }
-        defer { locks.reversed().forEach { $0.release() } }
 
         // Again under the locks: another launch may have moved it while this one waited.
-        guard case .folder = Entry(old) else { return Result(outcome: .nothingToMove, folder: new) }
-        let atNew = Entry(new)
-        guard atNew.isFreeForTheMove else { return bothExist(old: old, new: new) }
-        if atNew.isLeftoverLink, unlink(new.path) != 0 {
-            return notMoved("can't remove the link an earlier move left at \(new.path): \(errorText())", old: old, new: new)
+        let decision = decide(paths)
+        guard case .move = decision else { return result(of: decision, paths) }
+        let new = paths.new
+        if Entry(new).isLeftoverLink, unlink(new.path) != 0 {
+            return notMoved("can't remove the link an earlier move left at \(new.path): \(errorText())", paths, retries: true)
         }
         guard symlink(newName, new.path) == 0 else {
-            return notMoved("can't make a link at \(new.path): \(errorText())", old: old, new: new)
+            return notMoved("can't make a link at \(new.path): \(errorText())", paths, retries: true)
         }
-        guard renamex_np(new.path, old.path, UInt32(RENAME_SWAP)) == 0 else {
+        guard renamex_np(new.path, paths.old.path, UInt32(RENAME_SWAP)) == 0 else {
             let why = errorText()
             if Entry(new).isLeftoverLink { unlink(new.path) }
-            return notMoved("the file system didn't swap the folder and the link: \(why)", old: old, new: new)
+            return notMoved("the file system didn't swap the folder and the link: \(why)", paths, retries: true)
         }
         return Result(outcome: .moved, folder: new)
     }
 
-    private static func bothExist(old: URL, new: URL) -> Result {
-        let notice = "There are two settings folders, \(new.path) and \(old.path). Bonsai uses \(newName) and "
-            + "leaves \(oldName) as it is; delete \(oldName) when you no longer need it."
-        return Result(outcome: .bothExist, folder: new, notice: notice)
-    }
-
-    private static func notMoved(_ why: String, old: URL, new: URL) -> Result {
-        let notice = "Bonsai couldn't move its settings folder to \(new.path) yet (\(why)). It uses \(old.path) "
-            + "this time and tries again next launch."
-        return Result(outcome: .notMoved(why), folder: old, notice: notice)
-    }
-
-    private static func errorText() -> String {
-        String(cString: strerror(errno))
-    }
-
-    /// What `lstat` finds at a path (links are not followed).
-    enum Entry: Equatable {
-        case missing
-        case folder
-        /// A symbolic link and its text.
-        case link(String)
-        /// A file, or something `lstat` couldn't read.
-        case other
-
-        init(_ url: URL) {
-            var info = stat()
-            guard lstat(url.path, &info) == 0 else {
-                self = errno == ENOENT ? .missing : .other
-                return
-            }
-            switch info.st_mode & S_IFMT {
-            case S_IFDIR:
-                self = .folder
-            case S_IFLNK:
-                let text = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)
-                self = text.map(Entry.link) ?? .other
-            default:
-                self = .other
-            }
+    private static func result(of decision: Decision, _ paths: Paths) -> Result {
+        switch decision {
+        case .move, .useNew:
+            return Result(outcome: .nothingToMove, folder: paths.new)
+        case .bothExist:
+            let notice = "There are two settings folders: \(paths.new.path) and \(paths.old.path). Bonsai uses "
+                + "\(paths.new.path); \(paths.old.path) is left as it is."
+            return Result(outcome: .bothExist, folder: paths.new, notice: notice)
+        case .keepOld(let why):
+            return notMoved(why, paths, retries: false)
         }
+    }
 
-        /// The link `Bonsai -> Bonsai` a move makes right before its swap: nothing else makes a link that
-        /// points at itself, so one still there was left by a move that stopped in between.
-        var isLeftoverLink: Bool { self == .link(SettingsFolderMove.newName) }
+    private static func notMoved(_ why: String, _ paths: Paths, retries: Bool) -> Result {
+        let notice = retries
+            ? "Bonsai couldn't move its settings folder to \(paths.new.path) yet (\(why)). It uses \(paths.old.path) "
+                + "this time and tries again next launch."
+            : "Bonsai keeps its settings in \(paths.old.path) and doesn't move them to \(paths.new.path): \(why)."
+        return Result(outcome: .notMoved(why), folder: paths.old, notice: notice)
+    }
 
-        var isFreeForTheMove: Bool { self == .missing || isLeftoverLink }
+    static func errorText() -> String {
+        String(cString: strerror(errno))
     }
 }

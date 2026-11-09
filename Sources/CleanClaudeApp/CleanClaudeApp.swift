@@ -15,8 +15,9 @@ struct CleanClaudeApp: App {
     @State private var models: ScreenModels
 
     init() {
-        // Moves the settings folder from clean-claude to Bonsai first, when it should (PLAN §10.2).
-        let launch = CleanEnvironment.launch()
+        // Moves the settings folder from clean-claude to Bonsai first, when it should (PLAN §10.2), waiting at most
+        // a moment for another process's lock: this runs before anything shows, and the next launch tries again.
+        let launch = CleanEnvironment.launch(lockTimeout: SettingsFolderMove.appLockTimeout)
         let app = AppModel(environment: launch.environment)
         app.launchNotice = launch.notice
         AppDelegate.app = app

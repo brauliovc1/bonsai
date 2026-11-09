@@ -83,14 +83,18 @@ public struct CleanEnvironment: Sendable {
         )
     }
 
-    /// The live environment at launch (the app and the CLI, once per process). When no settings folder is named
-    /// in the environment, the old `clean-claude` folder is first moved to `Bonsai` (PLAN §10.2), and the folder
-    /// the move says is used. `notice` is what to tell the person, once.
-    public static func launch() -> (environment: CleanEnvironment, notice: String?) {
+    /// The live environment at launch (the app and the CLI, once per process). When no settings folder variable
+    /// is in the environment (new or old name, even empty), the old `clean-claude` folder is first moved to
+    /// `Bonsai` (PLAN §10.2), and the folder the move says is used. `notice` is what to tell the person, once.
+    /// `lockTimeout`: the wait for both of the old folder's locks together (the app passes a short one).
+    public static func launch(
+        lockTimeout: Duration = SettingsFolderMove.lockTimeout
+    ) -> (environment: CleanEnvironment, notice: String?) {
         launch(
             homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
             variables: ProcessInfo.processInfo.environment,
-            tools: .resolve()
+            tools: .resolve(),
+            lockTimeout: lockTimeout
         )
     }
 
@@ -102,7 +106,8 @@ public struct CleanEnvironment: Sendable {
         lockTimeout: Duration = SettingsFolderMove.lockTimeout
     ) -> (environment: CleanEnvironment, notice: String?) {
         var environment = make(homeDirectory: homeDirectory, variables: variables, tools: tools)
-        guard EnvironmentName.settingsDirectory.value(in: variables) == nil else { return (environment, nil) }
+        // Present at all, even empty, means a folder was chosen by hand: nothing is moved.
+        guard !EnvironmentName.settingsDirectory.isPresent(in: variables) else { return (environment, nil) }
         let library = environment.settingsDirectory.deletingLastPathComponent()
         let move = SettingsFolderMove.run(in: library, lockTimeout: lockTimeout)
         environment.settingsDirectory = move.folder

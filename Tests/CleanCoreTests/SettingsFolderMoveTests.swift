@@ -57,13 +57,14 @@ struct SettingsFolderMoveTests {
         #expect(result.folder == world.new)
         let notice = try #require(result.notice)
         #expect(notice.contains(world.old.path) && notice.contains(world.new.path), "\(notice)")
-        #expect(notice.contains("Bonsai uses Bonsai and leaves clean-claude as it is"), "\(notice)")
+        #expect(notice.contains("Bonsai uses \(world.new.path)"), "says which one is used: \(notice)")
+        #expect(!notice.lowercased().contains("delete"), "never tells the person to delete anything: \(notice)")
         #expect(try world.snapshot(world.old) == old)
         #expect(try world.snapshot(world.new) == new)
         #expect(world.entry(world.old) == .folder && world.entry(world.new) == .folder)
     }
 
-    /// The old one is a link already (after a move, or made by hand): no change.
+    /// The old one is a link to Bonsai already (after a move): no change. (A link elsewhere: SettingsFolderMoveEdgeTests.)
     @Test func theOldOneIsALinkAlready() throws {
         let world = try SettingsFolderWorld()
         defer { world.remove() }
@@ -76,14 +77,6 @@ struct SettingsFolderMoveTests {
         #expect(result.outcome == .nothingToMove && result.folder == world.new && result.notice == nil)
         #expect(world.entry(world.old) == .link("Bonsai"))
         #expect(try world.snapshot(world.new) == before)
-
-        // A link somewhere else stays as it is too.
-        let elsewhere = world.home.url.appending(path: "elsewhere", directoryHint: .isDirectory)
-        try world.makeFolder(elsewhere, tag: "elsewhere")
-        try FileManager.default.removeItem(at: world.old)
-        try FileManager.default.createSymbolicLink(atPath: world.old.path, withDestinationPath: elsewhere.path)
-        #expect(world.move().outcome == .nothingToMove)
-        #expect(world.entry(world.old) == .link(elsewhere.path))
     }
 
     /// A move stopped between making its link and the swap leaves `Bonsai -> Bonsai`: the next one goes on.

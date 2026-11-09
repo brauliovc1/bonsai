@@ -12,6 +12,11 @@ public enum EnvironmentName: String, CaseIterable, Sendable {
     /// The name before the rename: `CLEAN_CLAUDE_SETTINGS_DIR`, `CLEAN_CLAUDE_SCAN_ROOTS`.
     public var oldName: String { "CLEAN_CLAUDE_" + rawValue.dropFirst("BONSAI_".count) }
 
+    /// True when either name is in the environment, even empty.
+    public func isPresent(in variables: [String: String]) -> Bool {
+        variables[name] != nil || variables[oldName] != nil
+    }
+
     /// The value under the new name, else under the old one; nil when neither is set to something.
     public func value(in variables: [String: String]) -> String? {
         for key in [name, oldName] {
