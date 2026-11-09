@@ -36,6 +36,12 @@ extension ProcessList {
         return processes.map(Facts.init).filter { $0.process.pid != ownPID && !$0.names.contains("clean-claude") }
     }
 
+    /// An executable inside a `Cursor.app` bundle, or one named `Cursor` (or `Cursor Helper …`) in any app's
+    /// `Contents/MacOS` (a renamed copy). The system's `CursorUIViewService` is not Cursor.
+    static func isCursor(_ line: String) -> Bool {
+        line.contains("/cursor.app/contents/") || line.contains("/contents/macos/cursor ") || line.hasSuffix("/contents/macos/cursor")
+    }
+
     /// What the rules look at in one process, worked out once per check.
     struct Facts {
         let process: Process
@@ -66,9 +72,7 @@ extension ProcessList {
             let needle = text.lowercased()
             return facts.contains { $0.line.contains(needle) }
         case .cursorApp:
-            return cursorAppRunning || facts.contains { fact in
-                fact.line.contains("/cursor.app/contents/") || fact.process.command.lowercased().contains("/cursor.app/contents/")
-            }
+            return cursorAppRunning || facts.contains { Self.isCursor($0.line) || Self.isCursor($0.process.command.lowercased()) }
         }
     }
 }

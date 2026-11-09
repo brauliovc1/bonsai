@@ -83,6 +83,7 @@ struct CursorRulesTests {
         ("/Applications/Cursor.app/Contents/MacOS/Cursor", "Cursor"),
         ("/Applications/Cursor.app/Contents/Frameworks/Cursor Helper (Renderer).app/Contents/MacOS/Cursor Helper (Renderer) --type=renderer", "Cursor"),
         ("/Users/me/.local/bin/cursor-agent --print", "cursor-agent"),
+        ("/Users/me/Applications/Cursor 2.app/Contents/MacOS/Cursor", "Cursor"),
     ])
     func cursorRunningRefusesItsEntries(line: String, owner: String) async throws {
         let world = try ToolCacheWorld()

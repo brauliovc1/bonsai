@@ -60,7 +60,7 @@ public enum ToolCacheCatalog {
                 ToolOwner("dart", [.command(["dart", "dartaotruntime"])]),
                 ToolOwner("Flutter", [.command(["flutter"]), .argumentContains("flutter_tools")]),
             ],
-            note: "Packages download again; Flutter projects need `flutter pub get`. Globally activated tools stay."
+            note: "Packages download again; Flutter projects need `flutter pub get`."
         ),
         ToolCacheEntry(
             id: "cocoapods", name: "CocoaPods", section: .packages,
