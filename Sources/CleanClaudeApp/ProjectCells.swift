@@ -94,7 +94,7 @@ struct ProjectStatusCell: View {
         case .ready: .green
         case .recent: .blue
         case .idleUnknown: .secondary
-        case .blocked: .purple
+        case .blocked, .usedElsewhere: .purple
         }
     }
 }

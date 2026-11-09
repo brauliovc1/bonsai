@@ -42,6 +42,8 @@ public final class AppModel {
     public private(set) var isQuitting = false
     /// Why the last cleanup that didn't start was refused, when it wasn't this app's own cleanup.
     private var lastRefusal: String?
+    /// Run each time the log has been read again (after every scan and cleanup; see `whenLogReloads`).
+    @ObservationIgnored private var logObservers: [@MainActor () -> Void] = []
 
     private var scanTask: Task<Void, Never>?
     private var rescanRequested = false
@@ -161,7 +163,15 @@ public final class AppModel {
             logError = nil
         } catch {
             logError = "cannot read \(log.fileURL.path): \(error)"
+            return
         }
+        for observer in logObservers { observer() }
+    }
+
+    /// Runs `action` each time the log has been read again: after every cleanup of this app and every scan
+    /// (which is when cleanups by the CLI or another Bonsai show up), so a screen can catch up with them.
+    public func whenLogReloads(_ action: @escaping @MainActor () -> Void) {
+        logObservers.append(action)
     }
 
     /// Why a cleanup can't start now, for refusals: "Auto mode is running" while an auto-mode run holds the

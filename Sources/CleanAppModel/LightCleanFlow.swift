@@ -4,6 +4,10 @@ import Foundation
 /// The light-clean steps the Worktrees and Project folders screens share (P6's sheet pattern): a fresh look at
 /// the chosen checkouts when the sheet opens, and the deletes of exactly the folders that look listed, one
 /// checkout at a time through `LightCleaner` with a `LightCleanExpectation`. The caller holds the cleanup guard.
+///
+/// A main checkout is also left alone while a process works in one of its `LinkedWorktrees` (a sibling or a
+/// Cursor worktree whose `node_modules` is a symlink into it): `LightCleaner` only looks inside the checkout, so
+/// this is checked in the look and again right before the checkout's turn.
 @MainActor
 struct LightCleanFlow {
     /// How many checkouts the sheet looks at together.
@@ -31,8 +35,8 @@ struct LightCleanFlow {
     }
 
     /// One sheet item per worktree, in order, from a fresh look: git's current record of it, whether the folder
-    /// is still that repo's worktree (a stale record lists nothing), a process index taken now, and
-    /// `LightCleanFinder` run again. Listed folders are the ones `clean` deletes; the rest is shown with its
+    /// is still that repo's worktree (a stale record lists nothing), a process index taken now (inside the
+    /// checkout, or for a main checkout in any of its linked worktrees), and `LightCleanFinder` run again. Listed folders are the ones `clean` deletes; the rest is shown with its
     /// reasons and left alone.
     func look(at chosen: [Worktree]) async -> [LightCleanConfirmation.Item] {
         guard !chosen.isEmpty else { return [] }
@@ -53,7 +57,8 @@ struct LightCleanFlow {
                     ?? "git no longer lists it as a worktree of \(DisplayText.repoName(chosen.repoPath)); refresh the list"
                 return (chosen, nil, why)
             }
-            return (chosen, record, LightCleaner.inUseReason(index, worktree: record.url)?.sentence)
+            let inside = LightCleaner.inUseReason(index, worktree: record.url)?.sentence
+            return (chosen, record, inside ?? Self.linkedUse(of: record, known: known, index: index))
         }
         return await BoundedConcurrency.map(jobs, limit: Self.lookConcurrency) { job in
             guard let record = job.record else {
@@ -85,6 +90,11 @@ struct LightCleanFlow {
                 onEach()
                 continue
             }
+            if let why = await linkedUseNow(of: item.worktree, git: git) {
+                outcomes.append(LightCleanOutcome(item: item, error: "\(why) Nothing was deleted."))
+                onEach()
+                continue
+            }
             do {
                 let result = try await cleaner.clean(
                     item.worktree,
@@ -99,5 +109,21 @@ struct LightCleanFlow {
             onEach()
         }
         return outcomes
+    }
+
+    /// Why a main checkout is left alone because a process works in one of its linked worktrees; nil otherwise
+    /// (and for any other checkout, or without a process listing: `LightCleaner` refuses that itself).
+    nonisolated static func linkedUse(of record: Worktree, known: [Worktree], index: ProcessCwdIndex) -> String? {
+        let processes = LinkedWorktrees.processes(of: record, in: known, index: index)
+        return processes.isEmpty ? nil : LinkedWorktrees.sentence(processes)
+    }
+
+    /// `linkedUse` right before a main checkout's turn: its repo listed again and a process index taken now.
+    private func linkedUseNow(of worktree: Worktree, git: Git) async -> String? {
+        guard worktree.isMain else { return nil }
+        let scanner = WorktreeScanner(git: git, cursorWorktreesDirectory: app.environment.cursorWorktreesDirectory)
+        let listing = (try? await scanner.worktrees(in: worktree.repoURL)) ?? []
+        let index = await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof)
+        return Self.linkedUse(of: worktree, known: listing + (app.scan?.worktrees ?? []), index: index)
     }
 }

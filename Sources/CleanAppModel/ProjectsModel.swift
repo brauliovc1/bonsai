@@ -25,12 +25,22 @@ public final class ProjectsModel {
     public private(set) var lastScanAt: Date?
     public var filter: Filter = .idle
     public var sortOrder = [KeyPathComparator(\ProjectTableItem.sizeSortKey, order: .reverse)]
-    public var selection: Set<ProjectRow.ID> = []
+    public var selection: Set<ProjectRow.ID> = [] {
+        didSet { autoPicked.formIntersection(selection) }
+    }
+    /// The selected rows "Select all idle" picked (the rest were picked by hand). The sheet doesn't delete one of
+    /// these whose idle days, read again, are below the threshold or unknown unless the user ticks it there.
+    public internal(set) var autoPicked: Set<ProjectRow.ID> = []
     /// Repos whose group is collapsed (by repo path).
     public internal(set) var collapsedRepos: Set<String> = []
     /// Projects cleaned while a full scan ran: that scan may have looked before the clean, so they are looked
     /// at again when it ends.
     @ObservationIgnored private var cleanedDuringScan: Set<String> = []
+    /// Log entries already accounted for (`ProjectsModel+Log`).
+    @ObservationIgnored var logSeen = 0
+    /// This screen's own clean is finishing: projects the log names are kept for its own rescan.
+    @ObservationIgnored var isFinishingClean = false
+    @ObservationIgnored var namedByLog: Set<String> = []
 
     // Clean sheet (ProjectsModel+Clean).
     public var isShowingCleanSheet = false
@@ -43,6 +53,7 @@ public final class ProjectsModel {
 
     public init(app: AppModel) {
         self.app = app
+        app.whenLogReloads { [weak self] in self?.logReloaded() }
     }
 
     /// The settings' idle threshold (default 30).
@@ -118,6 +129,7 @@ public final class ProjectsModel {
         let ready = allRows.filter(\.isReady)
         for row in ready { collapsedRepos.remove(row.worktree.repoPath) }
         selection = Set(ready.map(\.id))
+        autoPicked = selection
     }
 
     public var canClean: Bool { !selectedRows.isEmpty && !app.isCleaningUp && !isCleaning }
@@ -137,6 +149,9 @@ public final class ProjectsModel {
         return total
     }
 
+    /// Checkouts the last scan couldn't look at, one sentence each (a stale record, a folder git can't read).
+    public var problems: [String] { report?.problems ?? [] }
+
     /// "3 Claude/Cursor worktrees hold 4.2 GB more; see Worktrees".
     public var leftOutText: String? {
         leftOut.map { total in
@@ -147,17 +162,20 @@ public final class ProjectsModel {
 
     // MARK: - Scanning
 
-    /// Looks at every checkout of the last worktree scan (scanning first when there is none yet).
+    /// Looks at every checkout of the last worktree scan (scanning first when there is none yet), with every
+    /// idle clock read now.
     public func refresh() async {
         await loop.run { [self] in
             if app.scan == nil { await app.refresh() }
             guard let scan = app.scan, let git = app.git else { return }
             isScanning = true
+            // Cleanups logged from now on are looked at again (`logReloaded`); earlier ones are on disk already.
+            logSeen = app.logEntries.count
             report = await scanner(git: git).scan(
                 scan.worktrees,
                 knownWorktrees: scan.worktrees,
                 cwdIndex: await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof),
-                knownIdle: knownIdle,
+                log: app.logEntries,
                 progress: { [weak self] step in Task { @MainActor in self?.receive(step) } }
             )
             lastScanAt = app.environment.now()
@@ -201,7 +219,7 @@ public final class ProjectsModel {
             targets,
             knownWorktrees: scan.worktrees,
             cwdIndex: await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof),
-            knownIdle: knownIdle,
+            log: app.logEntries,
             includeLeftOut: false
         )
         // The report as it is now: a full scan may have ended meanwhile.
@@ -210,15 +228,6 @@ public final class ProjectsModel {
 
     func scanner(git: Git) -> ProjectFoldersScanner {
         ProjectFoldersScanner(git: git, environment: app.environment, sizeCache: FolderSizeCache(environment: app.environment))
-    }
-
-    /// The idle reports the worktree scan already worked out (linked worktrees; main checkouts have none).
-    private var knownIdle: [String: IdleReport] {
-        var reports: [String: IdleReport] = [:]
-        for assessment in app.assessments where !assessment.worktree.isMain {
-            reports[assessment.worktree.path] = assessment.idle
-        }
-        return reports
     }
 
     private func receive(_ step: ProjectFoldersScanner.Progress) {

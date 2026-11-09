@@ -28,7 +28,8 @@ struct ProjectsText {
         }
         lines.append("")
         let idle = report.idleTotal(atLeast: threshold)
-        lines.append("Idle \(threshold)+ days, nothing running inside: \(ByteFormatting.string(idle.bytes)) in \(Self.projects(idle.count))")
+        lines.append("Ready to clean (idle \(threshold)+ days, nothing running inside): \(ByteFormatting.string(idle.bytes)) in "
+            + Self.projects(idle.count))
         lines.append("All: \(ByteFormatting.string(report.all.bytes)) in \(Self.projects(report.all.count))")
         if !all, shown.count < report.projects.count {
             lines.append("\(Self.projects(report.projects.count - shown.count)) used more recently or with idle unknown; --all shows them.")

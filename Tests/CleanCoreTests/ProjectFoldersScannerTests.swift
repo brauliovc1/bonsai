@@ -190,9 +190,54 @@ struct ProjectFoldersScannerTests {
         #expect(report.leftOut.count == 0, "the Claude worktree has no folders of its own")
 
         // Unknown inside = unknown.
-        #expect(ProjectFoldersScanner.combined(.idle(days: 60), nested: [.unknown]).idleDays == nil)
-        #expect(ProjectFoldersScanner.combined(.idle(days: 60), nested: [.idle(days: 9), .idle(days: 40)]).idleDays == 9)
-        #expect(ProjectFoldersScanner.combined(.idle(days: 5), nested: []).idleDays == 5)
+        #expect(ProjectFoldersScanner.combined(.idle(days: 60), linked: [.unknown]).idleDays == nil)
+        #expect(ProjectFoldersScanner.combined(.idle(days: 60), linked: [.idle(days: 9), .idle(days: 40)]).idleDays == 9)
+        #expect(ProjectFoldersScanner.combined(.idle(days: 5), linked: []).idleDays == 5)
+    }
+
+    // Review finding 1 (probe A): worktrees of the repo outside the main checkout, using its node_modules
+    // through a symlink.
+    @Test func aMainCheckoutCountsItsWorktreesOutsideItForIdleDaysAndProcesses() async throws {
+        let fixture = try GitFixture()
+        defer { fixture.remove() }
+        let aged = AgedRepos(fixture: fixture)
+        let india = try await aged.repo("india", days: 60, gitignore: Self.gitignore, files: ["package-lock.json": "{}\n"])
+        try aged.blob(in: india, "node_modules/react/blob.bin", kibibytes: 64)
+        let cursor = fixture.environment().cursorWorktreesDirectory.appending(path: "india/abc1", directoryHint: .isDirectory)
+        let sibling = fixture.scanRoot.appending(path: "india-feature", directoryHint: .isDirectory)
+        try await aged.git(["worktree", "add", "--quiet", "--detach", cursor.path], in: india, days: 60)
+        try await aged.git(["worktree", "add", "--quiet", "-b", "feature", sibling.path], in: india, days: 60)
+        for worktree in [cursor, sibling] {
+            try FileManager.default.createSymbolicLink(at: worktree.appending(path: "node_modules"), withDestinationURL: india.appending(path: "node_modules"))
+            try await aged.age(worktree, days: 60)
+        }
+        try await aged.age(india, days: 60)
+
+        let quiet = await report(fixture)
+        let main = try #require(quiet.projects.first)
+        #expect(quiet.projects.count == 1, "the linked worktrees' symlinks are no candidates")
+        #expect(main.worktree.isMain && main.idleDays == 60)
+        #expect(main.status(threshold: 30) == .ready)
+
+        // A process works in the Cursor worktree: the main checkout is in use.
+        let node = ProcessCwdIndex.Entry(pid: 4243, command: "node", cwd: CanonicalPath.resolve(cursor))
+        let used = await report(fixture, cwdIndex: ProcessCwdIndex(entries: [node]))
+        let usedMain = try #require(used.projects.first)
+        #expect(usedMain.blocker == nil, "nothing runs inside the main checkout itself")
+        #expect(usedMain.linkedInUse == [node])
+        #expect(usedMain.status(threshold: 30) == .usedElsewhere([node]))
+        #expect(usedMain.status(threshold: 30).label == "In use (node)")
+        #expect(usedMain.status(threshold: 30).sentence.contains(node.cwd))
+        #expect(used.ready(idleAtLeast: 30).isEmpty)
+
+        // Work in the sibling today: the main checkout reads today too.
+        try fixture.write("today\n", to: "src/today.txt", in: sibling)
+        let worked = await report(fixture)
+        #expect(worked.projects.first?.idleDays == 0)
+        #expect(worked.projects.first?.status(threshold: 30) == .recent(days: 0))
+        let listing = try await WorktreeScanner(git: fixture.git, cursorWorktreesDirectory: fixture.environment().cursorWorktreesDirectory)
+            .worktrees(in: india)
+        #expect(Set(LinkedWorktrees.of(main.worktree, in: listing).map(\.url.lastPathComponent)) == ["abc1", "india-feature"])
     }
 
     @Test func aStaleRecordIsNotAProject() async throws {

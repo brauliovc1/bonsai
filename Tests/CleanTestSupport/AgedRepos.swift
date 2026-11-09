@@ -48,12 +48,25 @@ public struct AgedRepos: Sendable {
         try Data(repeating: 0x2A, count: megabytes * 1024 * 1024 + kibibytes * 1024).write(to: file)
     }
 
-    /// Every file's mtime, and `index` and `HEAD` in the checkout's git dir.
+    /// Every file's mtime (a symlink's own too), and `index` and `HEAD` in the checkout's git dir.
     public func age(_ checkout: URL, days: Int) async throws {
         let gitDir = URL(fileURLWithPath: try await fixture.run(["rev-parse", "--absolute-git-dir"], in: checkout))
         try fixture.setModificationDate(date(daysAgo: days), of: checkout, recursively: true)
+        ageSymlinks(in: checkout, to: date(daysAgo: days))
         for name in ["index", "HEAD"] {
             try fixture.setModificationDate(date(daysAgo: days), of: gitDir.appending(path: name))
+        }
+    }
+
+    /// `setModificationDate` follows a symlink to its target; the idle clock reads the link's own mtime.
+    private func ageSymlinks(in folder: URL, to date: Date) {
+        guard let enumerator = FileManager.default.enumerator(atPath: folder.path) else { return }
+        while let relative = enumerator.nextObject() as? String {
+            let path = folder.appending(path: relative).path
+            guard (try? FileManager.default.destinationOfSymbolicLink(atPath: path)) != nil else { continue }
+            let stamp = timeval(tv_sec: Int(date.timeIntervalSince1970), tv_usec: 0)
+            var times = [stamp, stamp]
+            lutimes(path, &times)
         }
     }
 

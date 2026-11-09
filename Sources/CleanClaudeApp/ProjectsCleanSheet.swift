@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Confirms cleaning the selected projects. It first looks at them afresh, then lists the projects, how many
 /// folders and how much, each project's folders with sizes, the reinstall note for a recent one, and how to
-/// get the folders back. After it runs, the light-clean report shows what happened to each folder.
+/// get the folders back. Projects "Select all idle" picked that were worked on since are listed apart, unticked.
+/// After it runs, the light-clean report shows what happened to each folder.
 struct ProjectsCleanSheet: View {
     let model: ProjectsModel
 
@@ -34,8 +35,28 @@ struct ProjectsCleanSheet: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(confirmation.cleanable) { item in
+                    ForEach(confirmation.ready) { item in
                         ProjectCleanItemView(item: item)
+                    }
+                    if !confirmation.changed.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Changed since you selected it").font(.headline)
+                            Text("Select all idle picked these, but they are no longer idle \(model.threshold) days. "
+                                + "Nothing is deleted here unless you tick it.")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 4)
+                        ForEach(confirmation.changed) { item in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Toggle("Delete these folders too", isOn: Binding(
+                                    get: { confirmation.included.contains(item.id) },
+                                    set: { model.setIncluded(item.id, $0) }
+                                ))
+                                .disabled(model.isCleaning)
+                                ProjectCleanItemView(item: item)
+                            }
+                            .opacity(confirmation.included.contains(item.id) ? 1 : 0.7)
+                        }
                     }
                     if !confirmation.others.isEmpty {
                         Text("Nothing is deleted here").font(.headline).padding(.top, 4)

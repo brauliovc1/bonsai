@@ -76,7 +76,7 @@ public struct ProjectRow: Identifiable, Hashable, Sendable {
         case .ready: 0
         case .recent: 1
         case .idleUnknown: 2
-        case .blocked: 3
+        case .blocked, .usedElsewhere: 3
         }
     }
 }

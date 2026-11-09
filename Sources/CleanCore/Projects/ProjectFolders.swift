@@ -18,7 +18,7 @@ public struct ProjectFolders: Sendable, Hashable, Identifiable {
 
     /// git's record of the checkout as the scan listed it.
     public var worktree: Worktree
-    /// For a main checkout, the most recent of its own and those of the linked worktrees inside it.
+    /// For a main checkout, the most recent of its own and those of its `LinkedWorktrees`.
     public var idle: IdleReport
     /// Sorted by relative path.
     public var folders: [Folder]
@@ -28,6 +28,8 @@ public struct ProjectFolders: Sendable, Hashable, Identifiable {
     public var unreadable: [String]
     /// A process inside, or processes that couldn't be checked, when the scan looked.
     public var blocker: LightCleanSkipReason?
+    /// For a main checkout, processes working in its other worktrees (`LinkedWorktrees`) when the scan looked.
+    public var linkedInUse: [ProcessCwdIndex.Entry]
     /// "How to get them back" (`RebuildHint`).
     public var rebuildLines: [String]
 
@@ -38,6 +40,7 @@ public struct ProjectFolders: Sendable, Hashable, Identifiable {
         skipped: [LightCleanSkip] = [],
         unreadable: [String] = [],
         blocker: LightCleanSkipReason? = nil,
+        linkedInUse: [ProcessCwdIndex.Entry] = [],
         rebuildLines: [String] = []
     ) {
         self.worktree = worktree
@@ -46,6 +49,7 @@ public struct ProjectFolders: Sendable, Hashable, Identifiable {
         self.skipped = skipped
         self.unreadable = unreadable
         self.blocker = blocker
+        self.linkedInUse = linkedInUse
         self.rebuildLines = rebuildLines
     }
 
@@ -57,7 +61,7 @@ public struct ProjectFolders: Sendable, Hashable, Identifiable {
     public var hasUnknownSizes: Bool { folders.contains { $0.bytes == nil } }
 
     public func status(threshold: Int) -> ProjectStatus {
-        ProjectStatus(idleDays: idleDays, blocker: blocker, threshold: threshold)
+        ProjectStatus(idleDays: idleDays, blocker: blocker, linkedProcesses: linkedInUse, threshold: threshold)
     }
 
     /// Idle at least `days` (idle known), whatever else holds.

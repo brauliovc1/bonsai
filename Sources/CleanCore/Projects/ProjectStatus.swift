@@ -8,10 +8,14 @@ public enum ProjectStatus: Sendable, Hashable {
     case idleUnknown
     /// A process has its working folder inside, or processes couldn't be checked: nothing is cleaned now.
     case blocked(LightCleanSkipReason)
+    /// A main checkout whose other worktrees (`LinkedWorktrees`) have a process working in them.
+    case usedElsewhere([ProcessCwdIndex.Entry])
 
-    public init(idleDays: Int?, blocker: LightCleanSkipReason?, threshold: Int) {
+    public init(idleDays: Int?, blocker: LightCleanSkipReason?, linkedProcesses: [ProcessCwdIndex.Entry] = [], threshold: Int) {
         if let blocker {
             self = .blocked(blocker)
+        } else if !linkedProcesses.isEmpty {
+            self = .usedElsewhere(linkedProcesses)
         } else if let idleDays {
             self = idleDays >= threshold ? .ready : .recent(days: idleDays)
         } else {
@@ -26,6 +30,7 @@ public enum ProjectStatus: Sendable, Hashable {
         case .recent: "Recent"
         case .idleUnknown: "Idle unknown"
         case .blocked(let reason): reason.label.prefix(1).uppercased() + reason.label.dropFirst()
+        case .usedElsewhere(let processes): "In use (\(processes.map(\.command).uniqued().joined(separator: ", ")))"
         }
     }
 
@@ -36,14 +41,17 @@ public enum ProjectStatus: Sendable, Hashable {
         case .recent(let days): Self.recentNote(days: days)
         case .idleUnknown: "Bonsai couldn't tell when you last worked here, so Select all idle leaves it out."
         case .blocked(let reason): reason.sentence
+        case .usedElsewhere(let processes): LinkedWorktrees.sentence(processes)
         }
     }
 
     public var isReady: Bool { self == .ready }
 
     public var isBlocked: Bool {
-        if case .blocked = self { return true }
-        return false
+        switch self {
+        case .blocked, .usedElsewhere: true
+        case .ready, .recent, .idleUnknown: false
+        }
     }
 
     /// "You worked here 3 days ago; it will need a reinstall."

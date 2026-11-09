@@ -2,8 +2,8 @@ import Foundation
 
 /// The read-only side of the Project folders screen and `clean-claude projects` (PLAN §4.5): for every main
 /// checkout and sibling or other worktree of a scan, `LightCleanFinder`'s candidates with their sizes, the §4.3
-/// idle report and whether a process is inside. Claude and Cursor worktrees are not listed; their light-clean
-/// folders are only added up for the footer. Deleting is not done here: it goes through `LightCleaner`.
+/// idle report read now and whether a process works there. Claude and Cursor worktrees are not listed; their
+/// light-clean folders are only added up for the footer. Deleting is not done here: it goes through `LightCleaner`.
 public struct ProjectFoldersScanner: Sendable {
     /// The kinds listed as projects.
     public static let projectKinds: Set<WorktreeKind> = [.main, .sibling, .other]
@@ -33,24 +33,23 @@ public struct ProjectFoldersScanner: Sendable {
         self.maxConcurrent = maxConcurrent
     }
 
-    /// One checkout as looked at, before sizes.
+    /// One checkout as looked at, before idle days and sizes.
     private struct Look: Sendable {
         var worktree: Worktree
         var findings: LightCleanFindings?
-        var idle: IdleReport = .unknown
         var rebuildLines: [String] = []
         var problem: String?
     }
 
     /// Looks at the project checkouts among `worktrees` (and, with `includeLeftOut`, adds up the Claude and
-    /// Cursor ones). `knownWorktrees`: every worktree of the scan, for the nested-checkout rule and for the
-    /// linked worktrees inside a main checkout. `cwdIndex`: one process listing for the whole scan.
-    /// `knownIdle`: idle reports already worked out, by path (the app passes its assessments').
+    /// Cursor ones). `knownWorktrees`: every worktree of the scan, for the nested-checkout rule and a main
+    /// checkout's `LinkedWorktrees`. `cwdIndex`: one process listing for the whole scan. `log`: the removal log,
+    /// so `sizes.json` entries of checkouts cleaned since they were measured are measured again.
     public func scan(
         _ worktrees: [Worktree],
         knownWorktrees: [Worktree],
         cwdIndex: ProcessCwdIndex,
-        knownIdle: [String: IdleReport] = [:],
+        log: [RemovalLogEntry] = [],
         includeLeftOut: Bool = true,
         progress: @escaping @Sendable (Progress) -> Void = { _ in }
     ) async -> ProjectFoldersReport {
@@ -62,36 +61,48 @@ public struct ProjectFoldersScanner: Sendable {
         let looks = await BoundedConcurrency.map(targets, limit: maxConcurrent, onCompletion: {
             progress(.looking(completed: $0, total: total))
         }) { worktree, isProject in
-            await look(at: worktree, isProject: isProject, known: knownWorktrees, knownIdle: knownIdle)
+            await look(at: worktree, isProject: isProject, known: knownWorktrees)
         }
 
-        let folders = looks.flatMap { $0.findings?.candidates ?? [] }.map(\.url)
-        let sizes = await measure(folders) { progress(.measuring(completed: $0, total: $1)) }
+        // Idle days, read now, once per worktree: each listed project's own and its linked worktrees'.
+        let listed = looks.filter { Self.projectKinds.contains($0.worktree.kind) && !($0.findings?.candidates.isEmpty ?? true) }
+        var linked: [String: [Worktree]] = [:]
+        for look in listed { linked[Self.key(look.worktree)] = LinkedWorktrees.of(look.worktree, in: knownWorktrees) }
+        let clocked = Self.unique(listed.map(\.worktree) + linked.values.flatMap { $0 })
+        let reports = await BoundedConcurrency.map(clocked, limit: maxConcurrent) { await idleClock.report(for: $0) }
+        let idle = Dictionary(zip(clocked.map(Self.key), reports)) { first, _ in first }
+
+        let folders = looks.flatMap { look in
+            (look.findings?.candidates ?? []).map { FolderSizeCache.Folder(url: $0.url, checkout: look.worktree.path) }
+        }
+        let sizes = await measure(folders, log: log) { progress(.measuring(completed: $0, total: $1)) }
 
         var rows: [ProjectFolders] = []
         var leftOutTotal = ProjectFoldersReport.Total(count: 0, bytes: 0)
         for look in looks {
             guard let findings = look.findings, !findings.candidates.isEmpty else { continue }
             let entries = findings.candidates.map { ProjectFolders.Folder(candidate: $0, bytes: sizes[$0.url.path]) }
-            if Self.projectKinds.contains(look.worktree.kind) {
-                rows.append(ProjectFolders(
-                    worktree: look.worktree,
-                    idle: look.idle,
-                    folders: entries,
-                    skipped: findings.skipped,
-                    unreadable: findings.unreadable,
-                    blocker: LightCleaner.inUseReason(cwdIndex, worktree: look.worktree.url),
-                    rebuildLines: look.rebuildLines
-                ))
-            } else {
+            guard Self.projectKinds.contains(look.worktree.kind) else {
                 leftOutTotal.count += 1
                 leftOutTotal.bytes += entries.compactMap(\.bytes).reduce(0, +)
+                continue
             }
+            let others = (linked[Self.key(look.worktree)] ?? []).map { idle[Self.key($0)] ?? .unknown }
+            rows.append(ProjectFolders(
+                worktree: look.worktree,
+                idle: Self.combined(idle[Self.key(look.worktree)] ?? .unknown, linked: others),
+                folders: entries,
+                skipped: findings.skipped,
+                unreadable: findings.unreadable,
+                blocker: LightCleaner.inUseReason(cwdIndex, worktree: look.worktree.url),
+                linkedInUse: LinkedWorktrees.processes(of: look.worktree, in: knownWorktrees, index: cwdIndex),
+                rebuildLines: look.rebuildLines
+            ))
         }
         return ProjectFoldersReport(projects: rows, leftOut: leftOutTotal, problems: looks.compactMap(\.problem))
     }
 
-    private func look(at worktree: Worktree, isProject: Bool, known: [Worktree], knownIdle: [String: IdleReport]) async -> Look {
+    private func look(at worktree: Worktree, isProject: Bool, known: [Worktree]) async -> Look {
         var look = Look(worktree: worktree)
         // A stale record: the folder is another repo's, so nothing read there is about this record.
         if let blocker = await SafetyCheck(git: git).identityBlocker(of: worktree) {
@@ -105,37 +116,31 @@ public struct ProjectFoldersScanner: Sendable {
         }
         look.findings = findings
         guard isProject, !findings.candidates.isEmpty else { return look }
-        look.idle = await idleReport(for: worktree, known: known, knownIdle: knownIdle)
         look.rebuildLines = Self.rebuildLines(in: worktree.url, candidates: findings.candidates.map(\.relativePath))
         return look
     }
 
-    /// The checkout's idle report; for a main checkout, combined with the linked worktrees inside it (a Claude
-    /// session working in `<repo>/.claude/worktrees/x` uses the repo's `node_modules` when it has none).
-    public func idleReport(for worktree: Worktree, known: [Worktree], knownIdle: [String: IdleReport] = [:]) async -> IdleReport {
-        let own = if let report = knownIdle[worktree.path], !worktree.isMain { report } else { await idleClock.report(for: worktree) }
-        guard worktree.isMain else { return own }
-        let inside = known.filter {
-            !$0.isMain && !$0.isBare && !$0.isPrunable && CanonicalPath.isInside($0.url, directory: worktree.url)
+    /// The checkout's idle report read now; for a main checkout, combined with its `LinkedWorktrees`'.
+    public func idleReport(for worktree: Worktree, known: [Worktree]) async -> IdleReport {
+        let own = await idleClock.report(for: worktree)
+        var linked: [IdleReport] = []
+        for other in LinkedWorktrees.of(worktree, in: known) {
+            linked.append(await idleClock.report(for: other))
         }
-        var nested: [IdleReport] = []
-        for linked in inside {
-            if let report = knownIdle[linked.path] { nested.append(report) } else { nested.append(await idleClock.report(for: linked)) }
-        }
-        return Self.combined(own, nested: nested)
+        return Self.combined(own, linked: linked)
     }
 
     /// The most recent of the reports; unknown when any of them is.
-    static func combined(_ own: IdleReport, nested: [IdleReport]) -> IdleReport {
-        guard !nested.isEmpty else { return own }
+    static func combined(_ own: IdleReport, linked: [IdleReport]) -> IdleReport {
+        guard !linked.isEmpty else { return own }
         if own.idleDays == nil { return own }
-        if nested.contains(where: { $0.idleDays == nil }) {
+        if linked.contains(where: { $0.idleDays == nil }) {
             var unknown = own
             unknown.idleDays = nil
-            unknown.errors.append("a linked worktree inside: idle unknown")
+            unknown.errors.append("a linked worktree: idle unknown")
             return unknown
         }
-        return ([own] + nested).min { ($0.idleDays ?? 0) < ($1.idleDays ?? 0) } ?? own
+        return ([own] + linked).min { ($0.idleDays ?? 0) < ($1.idleDays ?? 0) } ?? own
     }
 
     /// `RebuildHint`'s lines from the names in the checkout root and in each candidate's parent folder.
@@ -148,14 +153,22 @@ public struct ProjectFoldersScanner: Sendable {
         return RebuildHint.lines(candidates: candidates, entries: entries)
     }
 
-    private func measure(_ folders: [URL], onFinished: @escaping @Sendable (Int, Int) -> Void) async -> [String: Int64] {
+    private func measure(
+        _ folders: [FolderSizeCache.Folder],
+        log: [RemovalLogEntry],
+        onFinished: @escaping @Sendable (Int, Int) -> Void
+    ) async -> [String: Int64] {
         guard let du, !folders.isEmpty else { return [:] }
-        if let sizeCache { return await sizeCache.sizes(of: folders, du: du, onFinished: onFinished) }
-        return await DirectorySizer(du: du).sizes(of: folders, onFinished: onFinished).sizes
+        if let sizeCache { return await sizeCache.sizes(of: folders, du: du, log: log, onFinished: onFinished) }
+        return await DirectorySizer(du: du).sizes(of: folders.map(\.url), onFinished: onFinished).sizes
+    }
+
+    private static func key(_ worktree: Worktree) -> String {
+        worktree.repoPath + "\u{0}" + worktree.path
     }
 
     private static func unique(_ worktrees: [Worktree]) -> [Worktree] {
         var seen: Set<String> = []
-        return worktrees.filter { seen.insert($0.repoPath + "\u{0}" + $0.path).inserted }
+        return worktrees.filter { seen.insert(key($0)).inserted }
     }
 }

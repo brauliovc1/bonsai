@@ -11,7 +11,12 @@ struct FolderSizeCacheTests {
         try Data(count: kibibytes * 1024).write(to: url)
     }
 
-    @Test func anUnchangedFolderIsNotMeasuredAgainAndAChangedOneIs() async throws {
+    private func sizes(_ cache: FolderSizeCache, _ folder: URL, du: URL, log: [RemovalLogEntry] = []) async -> Int64? {
+        let checkout = folder.deletingLastPathComponent().path
+        return await cache.sizes(of: [FolderSizeCache.Folder(url: folder, checkout: checkout)], du: du, log: log)[folder.path]
+    }
+
+    @Test func aFolderIsMeasuredAgainWhenItOrAFirstLevelEntryChanges() async throws {
         let temp = try TemporaryDirectory(prefix: "clean-claude-sizes")
         defer { temp.remove() }
         let fixture = try GitFixture()
@@ -19,24 +24,28 @@ struct FolderSizeCacheTests {
         let du = try #require(fixture.environment().tools.du)
         let cache = FolderSizeCache(environment: fixture.environment())
         let folder = temp.url.appending(path: "node_modules", directoryHint: .isDirectory)
-        try file("pkg/a.bin", in: folder, kibibytes: 64)
+        try file("pkg/deep/a.bin", in: folder, kibibytes: 64)
 
-        let first = await cache.sizes(of: [folder], du: du)
-        let measured = try #require(first[folder.path])
+        let measured = try #require(await sizes(cache, folder, du: du))
         #expect(measured >= 64 * 1024)
         #expect(FileManager.default.fileExists(atPath: cache.fileURL.path), "sizes.json in the settings folder")
 
-        // Deep inside: the folder's own mtime doesn't move, so the cached size is used.
-        try file("pkg/b.bin", in: folder, kibibytes: 512)
-        #expect(await cache.sizes(of: [folder], du: du)[folder.path] == measured)
+        // Two levels down: neither the folder's nor its first-level entries' mtimes move, so the cache is used.
+        try file("pkg/deep/b.bin", in: folder, kibibytes: 512)
+        #expect(await sizes(cache, folder, du: du) == measured)
 
-        // A new entry at the top changes the folder's mtime: measured again.
-        try file("c.bin", in: folder, kibibytes: 4)
-        let again = try #require(await cache.sizes(of: [folder], du: du)[folder.path])
-        #expect(again >= measured + 512 * 1024)
+        // A new file in a first-level folder (pkg) moves pkg's mtime: measured again.
+        try file("pkg/c.bin", in: folder, kibibytes: 256)
+        let again = try #require(await sizes(cache, folder, du: du))
+        #expect(again >= measured + 768 * 1024)
+
+        // A new entry at the top changes the folder's own mtime: measured again.
+        try file("d.bin", in: folder, kibibytes: 128)
+        #expect(try #require(await sizes(cache, folder, du: du)) >= again + 128 * 1024)
     }
 
-    @Test func oldEntriesAreMeasuredAgainAndABrokenFileIsAnEmptyCache() async throws {
+    @Test func entriesLastAnHourAndABrokenFileIsAnEmptyCache() async throws {
+        #expect(FolderSizeCache.maxAge == 3_600)
         let temp = try TemporaryDirectory(prefix: "clean-claude-sizes")
         defer { temp.remove() }
         let fixture = try GitFixture()
@@ -44,41 +53,53 @@ struct FolderSizeCacheTests {
         let du = try #require(fixture.environment().tools.du)
         var cache = FolderSizeCache(environment: fixture.environment())
         let folder = temp.url.appending(path: ".next", directoryHint: .isDirectory)
-        try file("cache/a.bin", in: folder, kibibytes: 16)
-        let measured = try #require(await cache.sizes(of: [folder], du: du)[folder.path])
-        try file("cache/b.bin", in: folder, kibibytes: 256)
+        try file("cache/deep/a.bin", in: folder, kibibytes: 16)
+        let measured = try #require(await sizes(cache, folder, du: du))
+        try file("cache/deep/b.bin", in: folder, kibibytes: 256)
+        #expect(await sizes(cache, folder, du: du) == measured)
 
         cache.now = { Date().addingTimeInterval(FolderSizeCache.maxAge + 60) }
-        let later = try #require(await cache.sizes(of: [folder], du: du)[folder.path])
-        #expect(later >= measured + 256 * 1024, "a day later it is measured again")
+        let later = try #require(await sizes(cache, folder, du: du))
+        #expect(later >= measured + 256 * 1024, "an hour later it is measured again")
 
         try Data("not json".utf8).write(to: cache.fileURL)
         cache.now = { Date() }
-        #expect(await cache.sizes(of: [folder], du: du)[folder.path] == later)
+        #expect(await sizes(cache, folder, du: du) == later)
         #expect(cache.load()[folder.path]?.bytes == later, "the broken file was replaced")
 
         // A folder that is gone is left out.
-        let gone = temp.url.appending(path: "gone", directoryHint: .isDirectory)
-        #expect(await cache.sizes(of: [gone], du: du).isEmpty)
+        #expect(await sizes(cache, temp.url.appending(path: "gone", directoryHint: .isDirectory), du: du) == nil)
     }
 
-    @Test func aFolderReplacedAtTheSamePathIsMeasuredAgain() async throws {
+    @Test func aCleanupLoggedForTheCheckoutAfterTheMeasurementMakesItStale() async throws {
         let temp = try TemporaryDirectory(prefix: "clean-claude-sizes")
         defer { temp.remove() }
         let fixture = try GitFixture()
         defer { fixture.remove() }
         let du = try #require(fixture.environment().tools.du)
         let cache = FolderSizeCache(environment: fixture.environment())
-        let folder = temp.url.appending(path: "build", directoryHint: .isDirectory)
-        try file("a.bin", in: folder, kibibytes: 8)
-        let measured = try #require(await cache.sizes(of: [folder], du: du)[folder.path])
-        let entry = try #require(cache.load()[folder.path])
+        let shop = temp.url.appending(path: "shop", directoryHint: .isDirectory)
+        let other = temp.url.appending(path: "other", directoryHint: .isDirectory)
+        let modules = shop.appending(path: "node_modules", directoryHint: .isDirectory)
+        try file("pkg/deep/a.bin", in: modules, kibibytes: 32)
+        let measured = try #require(await sizes(cache, modules, du: du))
+        try file("pkg/deep/b.bin", in: modules, kibibytes: 512)
 
-        // Another folder at the same path with the same mtime: a different inode.
-        try FileManager.default.removeItem(at: folder)
-        try file("big.bin", in: folder, kibibytes: 300)
-        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: entry.modified)], ofItemAtPath: folder.path)
-        let again = try #require(await cache.sizes(of: [folder], du: du)[folder.path])
-        #expect(again > measured)
+        func entry(_ path: URL, _ action: RemovalAction, secondsFromNow: TimeInterval) -> RemovalLogEntry {
+            RemovalLogEntry(
+                date: Date().addingTimeInterval(secondsFromNow), mode: .manual, action: action, repoPath: path.path,
+                path: path.path, branch: nil, headSha: nil, kind: .main, estimatedBytes: nil, freedBytes: nil, notes: []
+            )
+        }
+        // Older than the measurement, or about another checkout: still cached.
+        #expect(await sizes(cache, modules, du: du, log: [entry(shop.appending(path: ".next"), .lightClean, secondsFromNow: -600)]) == measured)
+        #expect(await sizes(cache, modules, du: du, log: [entry(other.appending(path: "dist"), .lightClean, secondsFromNow: 5)]) == measured)
+        // A light clean of another folder of the same checkout (the Worktrees screen or the CLI): measured again.
+        let afterClean = try #require(await sizes(cache, modules, du: du, log: [entry(shop.appending(path: ".next"), .lightClean, secondsFromNow: 5)]))
+        #expect(afterClean >= measured + 512 * 1024)
+        // The checkout removed (and made again): measured again.
+        try file("pkg/deep/c.bin", in: modules, kibibytes: 256)
+        let afterRemove = try #require(await sizes(cache, modules, du: du, log: [entry(shop, .worktreeRemove, secondsFromNow: 5)]))
+        #expect(afterRemove >= afterClean + 256 * 1024)
     }
 }
