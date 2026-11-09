@@ -6,6 +6,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     case worktrees
     case derivedData
     case dockerSimulators
+    case caches
     case claudeUsage
     case recentlyRemoved
 
@@ -17,6 +18,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .worktrees: "Worktrees"
         case .derivedData: "Xcode DerivedData"
         case .dockerSimulators: "Docker & Simulators"
+        case .caches: "Tool caches"
         case .claudeUsage: "Claude usage"
         case .recentlyRemoved: "Recently removed"
         }
@@ -29,6 +31,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .worktrees: "folder.badge.gearshape"
         case .derivedData: "hammer"
         case .dockerSimulators: "shippingbox"
+        case .caches: "archivebox"
         case .claudeUsage: "sparkles"
         case .recentlyRemoved: "clock.arrow.circlepath"
         }

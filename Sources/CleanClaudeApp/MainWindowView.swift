@@ -32,6 +32,7 @@ struct MainWindowView: View {
         case .worktrees: WorktreesView(model: models.worktrees)
         case .derivedData: DerivedDataView(model: models.derivedData)
         case .dockerSimulators: DockerSimulatorsView(model: models.dockerSimulators)
+        case .caches: CachesView(model: models.caches)
         case .claudeUsage: ClaudeUsageView(model: models.claudeUsage)
         case .recentlyRemoved: RecentlyRemovedView(model: models.removals)
         }

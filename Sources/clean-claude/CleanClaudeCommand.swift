@@ -18,6 +18,7 @@ struct CleanClaudeCommand: AsyncParsableCommand {
             ClaudeUsageCommand.self,
             LightCleanCommand.self,
             DerivedDataCommand.self,
+            CachesCommand.self,
         ]
     )
 }

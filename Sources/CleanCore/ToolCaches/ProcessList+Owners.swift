@@ -5,18 +5,19 @@ extension ProcessList {
     /// one of `paths` (a browser Playwright installed, a mongod from the test-binary cache, a cursor-agent
     /// version): a program running from a cache is using it. nil when the list couldn't be read.
     ///
-    /// `du` is never counted for `paths` (it only reads, and the scanner runs it), nor this process itself.
+    /// This process and any clean-claude (also under `sudo` or `env`) never count: their own command line names
+    /// the entries (`caches clean cursor-agent-versions`). Nor does `du` for `paths`: it only reads, and the
+    /// scanner runs it.
     public func runningOwners(_ owners: [ToolOwner], mentioning paths: [String]) -> [String]? {
         guard failure == nil else { return nil }
-        let facts = processes.map(Facts.init)
+        let facts = otherFacts
         var names: [String] = []
         for owner in owners where !names.contains(owner.name) {
             if owner.rules.contains(where: { matches($0, facts) }) { names.append(owner.name) }
         }
         let needles = paths.map { $0.lowercased() }.filter { !$0.isEmpty }
         guard !needles.isEmpty else { return names }
-        let ownPID = getpid()
-        for fact in facts where fact.process.pid != ownPID && !fact.names.contains("du") {
+        for fact in facts where !fact.names.contains("du") {
             guard needles.contains(where: fact.line.contains) else { continue }
             let name = fact.process.displayName
             if !names.contains(name) { names.append(name) }
@@ -26,7 +27,13 @@ extension ProcessList {
 
     /// The Cursor app runs (by ps, or NSWorkspace in the app). Without a process list, only NSWorkspace counts.
     public var isCursorRunning: Bool {
-        failure == nil ? matches(.cursorApp, processes.map(Facts.init)) : cursorAppRunning
+        failure == nil ? matches(.cursorApp, otherFacts) : cursorAppRunning
+    }
+
+    /// Every process but this one and clean-claude's own.
+    private var otherFacts: [Facts] {
+        let ownPID = getpid()
+        return processes.map(Facts.init).filter { $0.process.pid != ownPID && !$0.names.contains("clean-claude") }
     }
 
     /// What the rules look at in one process, worked out once per check.

@@ -127,7 +127,9 @@ public enum ToolCacheCatalog {
             id: "cursor-agent-versions", name: "Cursor: old agent versions", section: .cursor,
             deletion: .cursorAgentVersions,
             paths: [CursorAgentVersions.versionsPath], never: [CursorAgentVersions.linkPath],
-            owners: [.cursor, ToolOwner("cursor-agent", [.command(["cursor-agent"]), .argumentContains("cursor-agent")])],
+            owners: [.cursor, ToolOwner("cursor-agent", [
+                .command(["cursor-agent", "cursor-agent-sea", "cursor-agent-worker-sea"]), .argumentContains("/cursor-agent/versions/"),
+            ])],
             note: "Old copies of Cursor's agent command-line tool; the one in use and the newest stay."
         ),
         ToolCacheEntry(

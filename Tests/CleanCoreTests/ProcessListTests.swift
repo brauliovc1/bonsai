@@ -82,6 +82,21 @@ struct ProcessListTests {
         #expect(ProcessList(processes: [], failure: "ps timed out").runningOwners([], mentioning: [cache]) == nil)
     }
 
+    /// clean-claude's own command line names entries (`caches clean playwright cursor-agent-versions`), also under
+    /// sudo: it never counts as an owner. This process neither.
+    @Test func cleanClaudeItselfIsNeverAnOwner() {
+        let list = ProcessList(processes: [
+            ProcessList.Process(pid: 80, command: "clean-claude", arguments: "/Users/me/.local/bin/clean-claude caches clean playwright cursor-agent-versions --yes"),
+            ProcessList.Process(pid: 81, command: "sudo", arguments: "sudo clean-claude caches clean playwright --yes"),
+            ProcessList.Process(pid: getpid(), command: "node", arguments: "node /x/npm-cli.js playwright"),
+        ])
+        for id in ["playwright", "cursor-agent-versions", "npm"] {
+            #expect(list.runningOwners(ToolCacheCatalog.entry(id: id)!.owners, mentioning: []) == [], "\(id)")
+        }
+        let other = ProcessList(processes: [ProcessList.Process(pid: 82, command: "node", arguments: "node /x/npm-cli.js playwright")])
+        #expect(other.runningOwners(ToolCacheCatalog.entry(id: "playwright")!.owners, mentioning: []) == ["Playwright"])
+    }
+
     /// The real ps is run by absolute path with the fixed arguments; a failure is a failure, not an empty list.
     @Test func captureRunsPsAndReportsFailures() async throws {
         let scripted = ScriptedCommandRunner { _ in ScriptedCommandRunner.result(stdout: Self.output) }

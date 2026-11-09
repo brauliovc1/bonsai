@@ -3,7 +3,7 @@ import Foundation
 /// One "Reclaimable" row of the Overview: what could be freed, and the screen that frees it.
 public struct OverviewRow: Identifiable, Sendable, Hashable {
     public enum Kind: String, Sendable, Hashable, CaseIterable {
-        case autoReadyWorktrees, safeWorktrees, lightClean, orphanedDerivedData, docker, simulators
+        case autoReadyWorktrees, safeWorktrees, lightClean, orphanedDerivedData, docker, simulators, toolCaches
     }
 
     public let kind: Kind
