@@ -58,4 +58,24 @@ struct LightCleanPackageCopyTests {
         #expect(result.refused.map(\.reason) == [.nestedCheckout(["vendor/mylib"])], "\(result)")
         #expect(world.exists("build/vendor/mylib/Draft.swift", in: wt))
     }
+
+    /// P12b review (P0): "Clean dependencies…" keeps a `.build` holding a repo with work inside a package copy.
+    @Test func dotBuildHoldingARepoWithWorkInsideACopyIsKept() async throws {
+        let world = try await LightCleanWorld.make()
+        defer { world.remove() }
+        let wt = try await world.fixture.addSiblingWorktree(to: world.repo, name: "swiftpm")
+        let (checkout, _) = try await world.fixture.xcodePackage("swift-nio", in: wt, base: ".build")
+        let mine = try await PackageCopyInsideTests.repoWithWork(world.fixture, in: checkout, at: "vendor/mine")
+        let worktree = try await world.worktree(wt)
+        let known = try await world.known()
+
+        let found = await world.finder().candidates(in: worktree, knownWorktrees: known)
+        #expect(!found.candidates.contains { $0.relativePath == ".build" }, "\(found)")
+        #expect(found.skipped.first { $0.relativePath == ".build" }?.reason == .nestedCheckout(["checkouts/swift-nio/vendor/mine"]))
+        let stale = LightCleanCandidate(worktreePath: worktree.path, relativePath: ".build", name: ".build",
+                                        estimatedBytes: nil, packageClones: [])
+        let result = try await world.cleaner().clean(worktree, candidates: [stale], knownWorktrees: known)
+        #expect(result.deleted.isEmpty, "\(result)")
+        #expect(FileManager.default.fileExists(atPath: mine.appending(path: "work.txt").path))
+    }
 }

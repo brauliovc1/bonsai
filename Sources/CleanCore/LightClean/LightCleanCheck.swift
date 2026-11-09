@@ -69,22 +69,15 @@ struct LightCleanCheck: Sendable {
     }
 
     /// `.git` files and registered worktrees always keep the folder. A plain clone or bare repo goes with it
-    /// when it is a package copy (`PackageCopyRule`, decided without running git in it) or holds no local work
-    /// (`NestedCloneCheck`); any other keeps it. A search that can't finish keeps it too.
+    /// when it is a package copy (decided without running git in it) or holds no local work; any other keeps it,
+    /// also one inside a copy (`NestedRepoFinder`). A search that can't finish keeps it too.
     private func nestedVerdict(_ folder: URL, relative: String, in worktree: URL, knownWorktrees: [Worktree]) async -> Verdict {
-        let search = nestedSearch.search(folder)
-        let registered = knownWorktrees.compactMap { CanonicalPath.relativePath(of: $0.url, to: folder) }
-        let plain = search.checkouts.filter { !registered.contains($0) && !search.gitFiles.contains($0) }
-        // The rule reads paths from the worktree root: the build folder may be this folder or one above it.
-        let fromRoot = await PackageCopyRule(git: git, worktree: worktree)
-            .copies(among: plain.map { relative + "/" + $0 })
-        let copies = plain.filter { fromRoot.contains(relative + "/" + $0) }
-        let others = plain.filter { !copies.contains($0) }
-        let verdicts = await NestedCloneCheck(git: git).verdicts(others, in: folder)
-        let clean = others.filter { verdicts[$0] == .clean }
-        let blocking = (registered + search.gitFiles + others.filter { verdicts[$0] != .clean }).uniqued().sorted()
+        let found = await NestedRepoFinder(git: git, search: nestedSearch)
+            .find(in: folder, worktree: worktree, prefix: relative, knownWorktrees: knownWorktrees)
+        let blocking = (found.worktrees + found.others.filter { $0.verdict != .clean }.map(\.path)).uniqued().sorted()
         if !blocking.isEmpty { return Verdict(reason: .nestedCheckout(blocking)) }
-        if let why = search.incomplete { return Verdict(reason: .nestedSearchIncomplete(why)) }
-        return Verdict(reason: nil, packageClones: (copies + clean).sorted())
+        if let why = found.incomplete { return Verdict(reason: .nestedSearchIncomplete(why)) }
+        let clean = found.others.map(\.path)
+        return Verdict(reason: nil, packageClones: (found.copies + clean).sorted())
     }
 }

@@ -3,33 +3,27 @@ import Foundation
 /// The nested-checkout row of PLAN §4.1 (package copies included) and the exact facts the Remove anyway list
 /// (§4.8) needs: the submodule paths, and a stamp of each path the worktree itself would lose.
 extension WorktreeInspector {
-    /// Sorts every checkout below `folder` into what blocks, what is a note, and what git couldn't read:
+    /// Sorts every checkout below `folder` (`NestedRepoFinder`, inside package copies too) into what blocks, what is
+    /// a note, and what git couldn't read:
     /// - registered worktrees (of any scanned repo) and `.git` files: `nestedWorktrees`, always blocking;
     /// - package copies (`PackageCopyRule`, decided without running git in them): build output, a note;
     /// - every other clone or bare repo by what `NestedCloneCheck` finds in it: no local work (a note), local
     ///   work (blocking, with what was found), or unreadable (blocking, with git's first error line).
     func findNested(in folder: URL, knownWorktrees: [Worktree], into state: inout WorktreeState) async {
-        let search = nestedSearch.search(folder)
-        let registered = knownWorktrees
-            .filter { CanonicalPath.isInside($0.url, directory: folder) }
-            .compactMap { CanonicalPath.relativePath(of: $0.url, to: folder) }
-        let candidates = search.checkouts.filter { !registered.contains($0) && !search.gitFiles.contains($0) }
-        let copies = await PackageCopyRule(git: git, worktree: folder).copies(among: candidates)
-        let others = candidates.filter { !copies.contains($0) }
-        let verdicts = await NestedCloneCheck(git: git).verdicts(others, in: folder)
-
-        state.nestedWorktrees = (registered + search.gitFiles).uniqued().sorted()
-        state.packageCopies = candidates.filter(copies.contains).sorted()
-        state.nestedClones = others.filter { verdicts[$0] == .clean }.sorted()
-        state.nestedLocalWork = others.sorted().compactMap { path in
-            guard case .localWork(let found) = verdicts[path] else { return nil }
-            return NestedRepo(path: path, findings: found)
+        let found = await NestedRepoFinder(git: git, search: nestedSearch)
+            .find(in: folder, worktree: folder, prefix: "", knownWorktrees: knownWorktrees)
+        state.nestedWorktrees = found.worktrees
+        state.packageCopies = found.copies
+        state.nestedClones = found.others.filter { $0.verdict == .clean }.map(\.path)
+        state.nestedLocalWork = found.others.compactMap { path, verdict in
+            guard case .localWork(let what) = verdict else { return nil }
+            return NestedRepo(path: path, findings: what)
         }
-        state.nestedUnreadable = others.sorted().compactMap { path in
-            guard case .unreadable(let message) = verdicts[path] else { return nil }
+        state.nestedUnreadable = found.others.compactMap { path, verdict in
+            guard case .unreadable(let message) = verdict else { return nil }
             return NestedRepo(path: path, findings: [message])
         }
-        state.nestedSearchIncomplete = search.incomplete
+        state.nestedSearchIncomplete = found.incomplete
     }
 
     /// The `submodule.<name>.path` values of `.gitmodules`, read with `git config --file` (which runs nothing),
