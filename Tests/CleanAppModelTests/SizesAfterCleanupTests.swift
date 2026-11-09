@@ -48,10 +48,15 @@ struct SizesAfterCleanupTests {
         defer { world.remove() }
         let atlas = try #require(model.allRows.first { $0.worktree.isMain && CanonicalPath.same($0.url, world.repos[0]) })
         let scanned = try #require(atlas.sizeBytes)
-        await app.remeasureSizes(of: [atlas.worktree])
+        // tidy-otter lives inside atlas and grows by 3 MiB; measured together, atlas leaves out its new size.
+        let otter = try #require(model.row(try world.url("tidy-otter")))
+        try AgedRepos(fixture: world.fixture).blob(in: otter.url, "build/out.bin", megabytes: 3)
+        await app.remeasureSizes(of: [atlas.worktree, otter.worktree])
         let again = try #require(model.allRows.first { $0.id == atlas.id }?.sizeBytes)
-        // tidy-otter lives inside atlas; both readings leave it out, so they agree (give or take a block).
         #expect(abs(again - scanned) <= 64 * 1024, "\(scanned) then \(again)")
+        #expect((model.row(otter.url)?.sizeBytes ?? 0) >= 3 * 1024 * 1024)
+        await app.remeasureSizes(of: [otter.worktree, atlas.worktree])
+        #expect(abs((model.allRows.first { $0.id == atlas.id }?.sizeBytes ?? 0) - scanned) <= 64 * 1024, "in any order")
     }
 
     @Test func removingAWorktreeUpdatesItsGroupAtOnce() async throws {

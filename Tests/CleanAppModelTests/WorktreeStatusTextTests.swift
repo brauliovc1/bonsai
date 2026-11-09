@@ -139,6 +139,14 @@ struct WorktreeStatusTextTests {
         #expect(ignored.status == .safe)
         #expect(WorktreeStatusText.chip(for: ignored).text == "Has ignored files")
         #expect(WorktreeStatusText.needsAttention(ignored))
+        // Grey and blue are not "Needs attention": only orange is.
+        for reason in Self.samples {
+            let blocked = assessment(blockers: [reason])
+            #expect(WorktreeStatusText.needsAttention(blocked) == (WorktreeStatusText.chip(for: blocked).tone == .orange), "\(reason)")
+        }
+        #expect(!WorktreeStatusText.needsAttention(assessment(blockers: [.missingFolder])))
+        #expect(!WorktreeStatusText.needsAttention(assessment(blockers: [.inUse([Self.process])])))
+        #expect(!WorktreeStatusText.needsAttention(assessment()))
         // Unpushed commits on a branch are a note on a green chip; stashes and Claude sessions too.
         let unpushed = assessment(notes: [.localOnlyCommits(count: 1, onBranch: true), .stash(count: 2), .claudeSession],
                                   autoOnly: [.localOnlyCommits(count: 1, onBranch: true)])

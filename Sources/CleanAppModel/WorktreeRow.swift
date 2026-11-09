@@ -110,7 +110,7 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     /// The status chip, in the app's words (PLAN §8.4).
     public var chip: StatusWords { WorktreeStatusText.chip(for: assessment) }
     /// Under "Needs attention": the orange chips.
-    public var needsAttention: Bool { chip.tone == .orange }
+    public var needsAttention: Bool { WorktreeStatusText.needsAttention(assessment) }
     /// The quiet notes next to the chip ("1 commit not pushed · Claude session"); nil without any.
     public var notesText: String? {
         let notes = WorktreeStatusText.notes(for: assessment)
