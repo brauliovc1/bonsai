@@ -106,7 +106,7 @@ struct ProjectsModelTests {
         #expect(entries.allSatisfy { $0.action == .lightClean && $0.mode == .manual })
         #expect(Set(entries.map { URL(fileURLWithPath: $0.path).lastPathComponent }) == ["node_modules", ".next", ".dart_tool", "build", "Pods"])
         #expect(world.app.logEntries.count == 5, "the app re-read the log")
-        #expect(world.app.scanCount == scans + 1, "the worktrees were scanned again")
+        #expect(world.app.scanCount == scans, "the cleaned checkouts were measured again, not every worktree")
         // The cleaned projects were looked at again: nothing left, so they are gone from the list.
         #expect(world.row("delta") == nil && world.row("echo") == nil)
         #expect(world.row("foxtrot") != nil)
@@ -274,22 +274,23 @@ struct ProjectsModelTests {
         #expect(world.row("echo") != nil)
     }
 
-    @Test func theOverviewRowSumsIdleProjectsAndJumpsToTheScreen() async throws {
+    @Test func theOverviewCardSumsIdleProjectsAndOpensTheScreenOnThem() async throws {
         let world = try await ProjectsWorld.make(scanProjects: false)
         defer { world.remove() }
         let overview = world.models.overview
-        let before = overview.row(.projectFolders)
-        #expect(before.title == "Project build folders")
-        #expect(before.detail == "Measured when you open Project folders.")
-        #expect(before.bytes == nil)
-        #expect(before.destination == .projects)
+        #expect(overview.summary.state(.projectFolders) == .notMeasured)
+        #expect(overview.card(.projectFolders) == nil)
+        #expect(overview.measuringText?.contains("Project folders") == true)
 
         await world.projects.loadIfNeeded()
-        let after = overview.row(.projectFolders)
-        #expect(after.bytes == world.projects.idleTotal.bytes)
-        #expect((after.bytes ?? 0) >= 10 * 1024 * 1024)
-        #expect(after.detail == "In 3 idle projects (30+ days, nothing running inside).")
-        overview.jump(to: .projectFolders)
+        let card = try #require(overview.card(.projectFolders))
+        #expect(card.bytes == world.projects.reclaimableTotal.bytes)
+        #expect(world.projects.reclaimableTotal == world.projects.idleTotal, "no idle project here is a removable worktree")
+        #expect(card.bytes >= 10 * 1024 * 1024)
+        #expect(card.detail == "Dependency and build folders of 3 projects idle 30+ days")
+        overview.open(.projectFolders)
         #expect(world.models.navigation.section == .projects)
+        #expect(world.projects.filter == .canFree)
+        #expect(Set(world.projects.rows.map(\.id)) == Set(world.projects.reclaimableRows.map(\.id)))
     }
 }

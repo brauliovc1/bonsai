@@ -34,7 +34,7 @@ struct LightCleanIdentityModelTests {
         try fixture.write("x\n", to: "node_modules/pkg/index.js", in: shared)
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         let row = try #require(model.allRows.first { $0.repoName == "alpha" && $0.url.lastPathComponent == "shared" })
         return World(fixture: fixture, alpha: alpha, bravo: bravo, shared: shared, app: app, model: model, alphaRow: row)
     }

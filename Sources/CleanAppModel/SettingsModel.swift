@@ -21,6 +21,13 @@ public final class SettingsModel {
     public private(set) var lowSpaceWarningGB = Settings().lowSpaceWarningGB
     /// Why settings couldn't be read or saved; the controls then change nothing.
     public private(set) var error: String?
+    /// The Settings window's tab; the Overview's "Turn on…" opens it on auto mode. Kept in memory only.
+    public var selectedTab: Tab = .general
+
+    public enum Tab: String, Hashable, Sendable {
+        case general
+        case autoMode
+    }
 
     public init(app: AppModel) {
         self.app = app

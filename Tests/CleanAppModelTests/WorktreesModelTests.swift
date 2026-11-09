@@ -7,55 +7,59 @@ import Testing
 @Suite("Worktrees model")
 @MainActor
 struct WorktreesModelTests {
-    @Test func filtersAndSearch() async throws {
+    /// PLAN §8.4: "Can remove" (what a removal by hand accepts), "Needs attention" (the orange chips), "All";
+    /// a repo folder is never a row.
+    @Test func filtersCountsAndSearch() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }
         #expect(model.allRows.count == world.items.count + world.repos.count)
-        #expect(model.rows.count == model.allRows.count)
+        #expect(model.linkedRows.count == world.items.count)
+        #expect(WorktreesModel(app: model.app).filter == .canRemove, "the screen opens on Can remove")
+        model.filter = .canRemove
+        func shown() -> Set<String> { Set(model.rows.map(\.url.lastPathComponent)) }
 
-        model.kindFilter = .claude
-        #expect(model.rows.map(\.url.lastPathComponent) == ["tidy-otter"])
-        model.kindFilter = .main
-        #expect(model.rows.count == 3)
-        model.kindFilter = nil
-
-        model.statusFilter = .autoReady
-        #expect(model.rows.map(\.url.lastPathComponent) == ["atlas-archive"])
-        model.statusFilter = .safe
-        #expect(Set(model.rows.map(\.url.lastPathComponent)) == [
-            "atlas-review", "tidy-otter", "beacon-spike", "beacon-env", "cobalt-web", "cobalt-swift",
+        #expect(shown() == [
+            "atlas-archive", "atlas-review", "tidy-otter", "beacon-spike", "beacon-env", "cobalt-web", "cobalt-swift",
         ])
-        model.statusFilter = .blocked
-        #expect(model.rows.count == 7, "3 main checkouts, wip, bisect, gone, py")
-        #expect(model.hasActiveFilters)
-        model.clearFilters()
-        #expect(!model.hasActiveFilters)
-
-        model.minimumIdleDays = 30
-        #expect(Set(model.rows.map(\.url.lastPathComponent)) == ["atlas-archive", "tidy-otter", "beacon-env"])
-        model.statusFilter = .safe
-        #expect(Set(model.rows.map(\.url.lastPathComponent)) == ["tidy-otter", "beacon-env"], "filters combine")
-        model.clearFilters()
+        #expect(model.rows.allSatisfy { $0.canRemove })
+        model.filter = .needsAttention
+        #expect(shown() == ["atlas-wip", "beacon-bisect", "beacon-env", "cobalt-py"])
+        #expect(model.rows.allSatisfy { $0.chip.tone == .orange })
+        model.filter = .all
+        #expect(model.rows.count == world.items.count)
+        #expect(!model.rows.contains { $0.worktree.isMain }, "a repo folder is its group's header, never a row")
+        #expect(WorktreesModel.Filter.allCases.map { model.count($0) } == [7, 4, 11])
+        #expect(WorktreesModel.Filter.allCases.map { model.title($0) } == ["Can remove · 7", "Needs attention · 4", "All · 11"])
+        // The Overview's Worktrees part counts exactly the "Can remove" rows.
+        #expect(model.app.removableAssessments.count == model.count(.canRemove))
 
         model.searchText = "  BEACON "
-        #expect(model.rows.count == 5, "repo name, case-insensitive, trimmed")
+        #expect(model.rows.count == 4, "repo name, case-insensitive, trimmed")
         #expect(model.rows.allSatisfy { $0.repoName == "beacon" })
+        #expect(WorktreesModel.Filter.allCases.map { model.count($0) } == [2, 2, 4], "counts follow the search")
         model.searchText = "claude/tidy"
         #expect(model.rows.map(\.url.lastPathComponent) == ["tidy-otter"], "branch")
         model.searchText = "detached"
         #expect(model.rows.map(\.url.lastPathComponent) == ["beacon-bisect"], "detached HEAD's branch text")
         model.searchText = "nothing matches this"
-        #expect(model.rows.isEmpty)
+        #expect(model.rows.isEmpty && model.groups.isEmpty)
+
+        model.searchText = "archive"
+        model.filter = .needsAttention
+        model.showRemovable()
+        #expect(model.filter == .canRemove && model.searchText.isEmpty, "the Overview's card opens on what it counted")
     }
 
-    /// Sorting applies inside each repo group; the main checkout stays first, groups stay in repo order.
+    /// Sorting applies inside each repo group (biggest first unless set); groups stay in repo order.
     @Test func sortingInsideGroups() async throws {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }
+        model.filter = .all
         func linked(_ repo: String) -> [WorktreeRow] {
             let group = model.groups.first { $0.name == repo }
-            #expect(group?.rows.first?.worktree.isMain == true, "\(repo): main checkout first")
-            return Array(group?.rows.dropFirst() ?? [])
+            #expect(group?.main?.worktree.isMain == true, "\(repo): the header is the repo folder")
+            #expect(group?.rows.contains { $0.worktree.isMain } == false)
+            return group?.rows ?? []
         }
         #expect(model.groups.map(\.name) == ["atlas", "beacon", "cobalt"])
 
@@ -79,7 +83,6 @@ struct WorktreesModelTests {
         model.sortOrder = [KeyPathComparator(\WorktreeRow.repoName, order: .reverse)]
         #expect(model.groups.map(\.name) == ["cobalt", "beacon", "atlas"])
         #expect(model.rows.first?.repoName == "cobalt")
-        #expect(model.rows.first?.worktree.isMain == true)
         #expect(linked("cobalt").map(\.url.lastPathComponent) == ["cobalt-py", "cobalt-swift", "cobalt-web"],
                 "ties keep scan order")
 
@@ -99,12 +102,13 @@ struct WorktreesModelTests {
         let python = try world.url("cobalt-py")
         let atlas = world.repos[0]
 
+        model.filter = .all
         let confirmation = await model.prepareRemoval(model.ids([archive, otter, env, wip, swift, python, atlas]))
-        #expect(confirmation.items.count == 7)
+        #expect(confirmation.items.count == 6, "the repo folder is never part of a removal, not even as a blocked item")
         #expect(Set(confirmation.allowed.map(\.worktree.url.lastPathComponent)) == [
             "atlas-archive", "tidy-otter", "beacon-env", "cobalt-swift",
         ])
-        #expect(Set(confirmation.blocked.map(\.worktree.url.lastPathComponent)) == ["atlas-wip", "cobalt-py", "atlas"])
+        #expect(Set(confirmation.blocked.map(\.worktree.url.lastPathComponent)) == ["atlas-wip", "cobalt-py"])
         #expect(confirmation.removeButtonTitle == "Remove 4 worktrees")
         #expect(RemovalConfirmation.keptLine == "Branches are kept. You can restore from Recently removed.")
         let estimate = confirmation.allowed.compactMap(\.estimatedBytes).reduce(0, +)
@@ -148,10 +152,11 @@ struct WorktreesModelTests {
         let safety = SafetyReport(blockers: [.inUse([process])], notes: [], autoBlockers: [.inUse([process])])
         let row = WorktreeRow(assessment: WorktreeAssessment(worktree: worktree, idle: .idle(days: 40), safety: safety),
                               scanOrder: 0)
-        #expect(row.statusLabel == "IN USE")
-        #expect(row.badgeText == "IN USE")
-        #expect(row.statusDetail == "zsh (pid 4242)")
+        #expect(row.statusLabel == "IN USE", "the CLI's words are kept")
+        #expect(row.chip == StatusWords("Open in zsh", .blue, symbol: "macwindow"))
+        #expect(row.explanation.contains("zsh (pid 4242)"))
         #expect(row.reasonsHelp.contains("zsh (pid 4242)"))
-        #expect(!row.canRemove)
+        #expect(row.fix == .refresh)
+        #expect(!row.canRemove && !row.needsAttention)
     }
 }

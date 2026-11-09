@@ -21,9 +21,11 @@ public final class AppModel {
     public private(set) var settings = Settings()
     /// The roots of the last scan.
     public private(set) var roots: [URL] = []
-    public private(set) var scan: ScanResult?
+    public internal(set) var scan: ScanResult?
     /// One per worktree of `scan`, in scan order (each repo's main checkout first).
-    public private(set) var assessments: [WorktreeAssessment] = []
+    public internal(set) var assessments: [WorktreeAssessment] = []
+    /// Checkouts whose folders are being measured again after a cleanup touched them (`AppModel+Sizes`).
+    public internal(set) var measuringSizes: Set<String> = []
     /// `removals.jsonl`, in file order.
     public private(set) var logEntries: [RemovalLogEntry] = []
     public private(set) var logError: String?
@@ -44,6 +46,8 @@ public final class AppModel {
     private var lastRefusal: String?
     /// Run each time the log has been read again (after every scan and cleanup; see `whenLogReloads`).
     @ObservationIgnored private var logObservers: [@MainActor () -> Void] = []
+    /// Run after a cleanup changed some checkouts' folders (see `whenCheckoutsChange`).
+    @ObservationIgnored var checkoutObservers: [@MainActor (Set<String>) async -> Void] = []
 
     private var scanTask: Task<Void, Never>?
     private var rescanRequested = false
@@ -57,14 +61,15 @@ public final class AppModel {
     /// Scan issues (missing roots, unreadable folders, du failures).
     public var issues: [ScanIssue] { scan?.issues ?? [] }
 
-    /// Estimated bytes of every SAFE and AUTO-READY worktree.
+    /// The worktrees a removal by hand accepts (never a main checkout): the Worktrees part of what Bonsai can
+    /// free (`ReclaimSummary`).
+    public var removableAssessments: [WorktreeAssessment] {
+        assessments.filter { !$0.worktree.isMain && $0.safety.manualAllowed }
+    }
+
+    /// Estimated bytes of every worktree a removal by hand accepts.
     public var reclaimableBytes: Int64 {
-        assessments.reduce(0) { total, assessment in
-            switch assessment.status {
-            case .autoReady, .safe: total + (assessment.estimatedBytes ?? 0)
-            case .blocked, .inUse: total
-            }
-        }
+        removableAssessments.compactMap(\.estimatedBytes).reduce(0, +)
     }
 
     // MARK: - Scanning
@@ -142,12 +147,29 @@ public final class AppModel {
     // MARK: - After a cleanup
 
     /// Re-reads the log and the free space, then scans again (always a fresh scan, also when one was
-    /// running when the cleanup ended). `rescanWorktrees: false` for a cleanup that doesn't touch
-    /// worktrees (DerivedData, Docker, Simulators): the log and the free space are re-read, nothing is scanned.
-    public func cleanupFinished(rescanWorktrees: Bool = true) async {
+    /// running when the cleanup ended). `rescanWorktrees: false` for a cleanup that doesn't change any
+    /// worktree's record or verdict (DerivedData, Docker, Simulators, caches, a checkout's dependency folders):
+    /// the log and the free space are re-read, nothing is scanned.
+    ///
+    /// `removed`: worktrees a removal took away; they leave the rows at once, before the rescan ends.
+    /// `touched`: checkouts whose folders a cleanup changed; their sizes are measured again right away (just
+    /// those, PLAN §8.5), and the screens that keep their own sizes of them are told.
+    public func cleanupFinished(rescanWorktrees: Bool = true, touched: [Worktree] = [], removed: [Worktree] = []) async {
         reloadLog()
         disk.refresh()
+        forget(removed)
+        if !touched.isEmpty {
+            let paths = Set(touched.map(\.path))
+            for observer in checkoutObservers { await observer(paths) }
+            await remeasureSizes(of: touched)
+        }
         if rescanWorktrees { await refresh() }
+    }
+
+    /// Runs `action` with the paths of the checkouts a cleanup changed (after a clean of their dependency
+    /// folders), so a screen that keeps its own sizes of them measures again.
+    public func whenCheckoutsChange(_ action: @escaping @MainActor (Set<String>) async -> Void) {
+        checkoutObservers.append(action)
     }
 
     /// Re-reads `settings.json` after a settings screen saved it, without scanning. A file that can't be

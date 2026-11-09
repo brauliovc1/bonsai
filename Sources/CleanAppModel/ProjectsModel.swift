@@ -10,6 +10,8 @@ import Observation
 @Observable
 public final class ProjectsModel {
     public enum Filter: String, CaseIterable, Identifiable, Sendable {
+        /// What the Overview's total counts (`reclaimableRows`): ready, and not a worktree removed whole.
+        case canFree
         case idle
         case all
 
@@ -61,6 +63,7 @@ public final class ProjectsModel {
 
     public func filterTitle(_ filter: Filter) -> String {
         switch filter {
+        case .canFree: "Ready to clean"
         case .idle: "Idle \(threshold)+ days"
         case .all: "All"
         }
@@ -81,7 +84,14 @@ public final class ProjectsModel {
     /// The groups the filter shows, sorted; rows inside each group sorted the same way.
     public var groups: [ProjectGroup] {
         let all = allRows
-        let shown = all.filter { filter == .all || ($0.idleDays ?? -1) >= threshold }
+        let reclaimable = filter == .canFree ? Set(reclaimableRows.map(\.id)) : []
+        let shown = all.filter { row in
+            switch filter {
+            case .canFree: reclaimable.contains(row.id)
+            case .idle: (row.idleDays ?? -1) >= threshold
+            case .all: true
+            }
+        }
         let home = app.environment.homeDirectory
         var repos: [String] = []
         var byRepo: [String: [ProjectRow]] = [:]

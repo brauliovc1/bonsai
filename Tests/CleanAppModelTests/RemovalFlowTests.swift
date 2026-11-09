@@ -59,7 +59,7 @@ struct RemovalFlowTests {
         let task = try await fixture.addSiblingWorktree(to: repo, name: "task")
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         let confirmation = await model.prepareRemoval(model.ids([task]))
         #expect(confirmation.allowed.count == 1)
 
@@ -104,7 +104,7 @@ struct RemovalFlowTests {
         let second = try await fixture.addSiblingWorktree(to: repo, name: "second")
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let worktrees = WorktreesModel(app: app)
+        let worktrees = showingAll(WorktreesModel(app: app))
         let removals = RemovalsModel(app: app)
         #expect(removals.rows.isEmpty)
 

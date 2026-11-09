@@ -2,19 +2,73 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// Repo, branch or detached HEAD, upstream with ahead/behind, and the repo's remotes in full.
+/// A titled block of the details panel.
+struct DetailsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            content
+        }
+    }
+}
+
+/// "Label    value", the value any view.
+struct DetailRow<Value: View>: View {
+    let label: String
+    @ViewBuilder let value: Value
+
+    init(_ label: String, @ViewBuilder value: () -> Value) {
+        self.label = label
+        self.value = value()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).foregroundStyle(.secondary).frame(width: 96, alignment: .leading)
+            value.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.callout)
+    }
+}
+
+/// "Label    value", the value selectable text.
+struct DetailLine: View {
+    let label: String
+    let value: String
+
+    init(_ label: String, _ value: String) {
+        self.label = label
+        self.value = value
+    }
+
+    var body: some View {
+        DetailRow(label) {
+            Text(value).textSelection(.enabled).lineLimit(3)
+        }
+    }
+}
+
+/// Repo folder, branch or detached HEAD, upstream with ahead/behind, and the repo's remotes in full.
 struct RepoBranchDetails: View {
     let row: WorktreeRow
     let state: WorktreeDetailsModel.State
 
     var body: some View {
-        DetailLine("Repo", "\(row.repoName) (\(row.repoFolderText))")
-        DetailLine(row.worktree.isDetached ? "HEAD" : "Branch", row.branchText)
+        DetailLine("Repo folder", row.repoFolderText)
+        DetailLine(row.worktree.isDetached ? "Commit" : "Branch", row.branchText)
         if !row.worktree.isDetached, !row.worktree.isBare {
             DetailLine("Upstream", upstreamText)
         }
         if row.remotes.isEmpty {
-            DetailLine("Remote", "none")
+            DetailLine("Remote", "None")
         } else {
             ForEach(row.remotes, id: \.self) { remote in
                 DetailLine(remote.name, remote.url + (remote.pushURL.map { "\npush: \($0)" } ?? ""))
@@ -25,10 +79,10 @@ struct RepoBranchDetails: View {
     private var upstreamText: String {
         switch state {
         case .notLoaded, .loading: return "…"
-        case .failed: return "couldn't be read"
+        case .failed: return "Couldn't be read"
         case .loaded(let history):
-            if let error = history.upstreamError { return "couldn't be read: \(error)" }
-            guard let upstream = history.upstream else { return "none" }
+            if let error = history.upstreamError { return "Couldn't be read: \(error)" }
+            guard let upstream = history.upstream else { return "None" }
             if upstream.isGone { return "\(upstream.name) (gone from the remote)" }
             var parts: [String] = []
             if upstream.ahead > 0 { parts.append("\(upstream.ahead) ahead") }
@@ -49,7 +103,7 @@ struct RecentCommitsDetails: View {
         case .notLoaded, .loading:
             ProgressView().controlSize(.small)
         case .failed(let message):
-            Text("Couldn't read the commits: \(message)").font(.callout).foregroundStyle(.red)
+            Text("Couldn't read the commits: \(message)").font(.callout).foregroundStyle(.secondary)
         case .loaded(let history):
             if history.commits.isEmpty {
                 Text("No commits").font(.callout).foregroundStyle(.secondary)
@@ -68,52 +122,38 @@ struct RecentCommitsDetails: View {
     }
 }
 
-/// Idle days and each signal with its date (PLAN §4.3), or why there is no idle time.
+/// When it was last used and each sign of it with its date (PLAN §4.3), or why that is unknown.
 struct IdleDetails: View {
     let row: WorktreeRow
 
     var body: some View {
-        if row.worktree.isMain {
-            Text("Not tracked for the main checkout (it is never removed).").font(.callout).foregroundStyle(.secondary)
-        } else {
-            DetailLine("Idle", row.idleDays.map { $0 == 1 ? "1 day" : "\($0) days" } ?? "unknown")
-            ForEach(row.idleSignals, id: \.signal) { signal, date in
-                DetailLine(signal.label.prefix(1).uppercased() + signal.label.dropFirst(), DisplayText.date(date))
-            }
-            if row.assessment.idle.capHit {
-                Text("The file walk stopped at its limit, so the idle time is unknown.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            ForEach(row.assessment.idle.errors, id: \.self) { error in
-                Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-            }
+        DetailLine("Last activity", row.activityText)
+        ForEach(row.idleSignals, id: \.signal) { signal, date in
+            DetailLine(signal.label.prefix(1).uppercased() + signal.label.dropFirst(), DisplayText.date(date))
+        }
+        if row.assessment.idle.capHit {
+            Text("The folder has too many files to check them all, so its last activity is unknown.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        ForEach(row.assessment.idle.errors, id: \.self) { error in
+            Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(3)
         }
     }
 }
 
-/// The badge, the Claude warning for a Claude worktree, and every reason as P2 words it.
-struct StatusDetails: View {
+/// Every reason the verdict lists, in the app's words: what it is, then what it means.
+struct ReasonsDetails: View {
     let row: WorktreeRow
 
     var body: some View {
-        StatusCell(row: row)
-        if row.kind == .claude {
-            Label(SafetyReason.claudeSessionWarning, systemImage: "exclamationmark.bubble")
-                .font(.callout)
-                .foregroundStyle(.orange)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-                .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
-        }
-        if row.reasons.isEmpty {
-            Text("Nothing keeps auto mode away from it.").font(.callout).foregroundStyle(.secondary)
-        }
         ForEach(Array(row.reasons.enumerated()), id: \.offset) { _, reason in
             if reason != .claudeSession {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(reason.label).font(.callout.weight(.medium))
-                    Text(reason.sentence)
+                let words = WorktreeStatusText.words(for: reason)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(words.text)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(words.tone == .grey ? Color.primary : Palette.color(words.tone))
+                    Text(WorktreeStatusText.sentence(for: reason))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

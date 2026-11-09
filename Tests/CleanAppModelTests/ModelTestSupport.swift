@@ -11,13 +11,20 @@ func makeApp(_ fixture: GitFixture, root: URL? = nil, isolatedGit: Bool = true) 
     AppModel(environment: fixture.environment(scanRoots: [root ?? fixture.url]), git: isolatedGit ? fixture.git : nil)
 }
 
-/// The demo world, scanned once.
+/// The demo world, scanned once, its Worktrees model showing every worktree ("All").
 @MainActor
 func scannedDemoWorld() async throws -> (DemoWorld, AppModel, WorktreesModel) {
     let world = try await DemoWorld.build()
     let app = makeApp(world.fixture)
     await app.refresh()
-    return (world, app, WorktreesModel(app: app))
+    return (world, app, showingAll(WorktreesModel(app: app)))
+}
+
+/// The model with the "All" filter, so blocked, missing and stale rows are shown too.
+@MainActor
+func showingAll(_ model: WorktreesModel) -> WorktreesModel {
+    model.filter = .all
+    return model
 }
 
 extension WorktreesModel {

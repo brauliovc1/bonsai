@@ -3,12 +3,13 @@ import CleanAppModel
 import SwiftUI
 
 /// The menu-bar window: the app's name (and a "Test mode" tag under CLEAN_CLAUDE_SCAN_ROOTS) with Refresh,
-/// free space, what can be reclaimed now (a row that opens Worktrees), one status line for the last scan and
-/// auto mode, and the app's commands.
+/// free space, what Bonsai can free (the Overview's one total; its tooltip lists the parts and a click opens the
+/// Overview), one status line for the last scan and auto mode, and the app's commands.
 struct MenuContentView: View {
     let app: AppModel
     let autoMode: AutoModeModel
     let menuBar: MenuBarModel
+    let overview: OverviewModel
     let navigation: NavigationModel
     @Environment(\.openWindow) private var openWindow
 
@@ -17,8 +18,8 @@ struct MenuContentView: View {
             MenuHeader(app: app)
                 .padding(.bottom, 12)
             DiskSummaryView(disk: app.disk, level: menuBar.level)
-            ReclaimRow(bytes: app.scan == nil ? nil : app.reclaimableBytes) {
-                navigation.show(.worktrees)
+            ReclaimRow(summary: overview.summary) {
+                navigation.show(.overview)
                 openMainWindow()
             }
             .padding(.top, 14)
@@ -51,6 +52,7 @@ struct MenuContentView: View {
         }
         .padding(12)
         .frame(width: 290)
+        .task { await overview.loadIfNeeded() }
     }
 
     /// "Scanned 51 minutes ago · Auto mode: off", or what the running scan or auto run is doing.
@@ -75,11 +77,15 @@ struct MenuContentView: View {
     }
 }
 
-/// "Ready to clean  20.2 MB  ›": the estimated size of the SAFE and AUTO-READY worktrees. Clicking it opens
-/// the Worktrees screen.
+/// "Ready to clean  140.2 GB  ›": what Bonsai can free, the same total as the Overview's headline (`ReclaimSummary`);
+/// "–" until something has been measured. The tooltip lists the parts; clicking it opens the Overview.
 private struct ReclaimRow: View {
-    let bytes: Int64?
+    let summary: ReclaimSummary
     let action: () -> Void
+
+    private var bytes: Int64? {
+        summary.pendingParts.count == ReclaimSummary.Part.allCases.count ? nil : summary.totalBytes
+    }
     @State private var hovering = false
 
     var body: some View {
@@ -104,6 +110,6 @@ private struct ReclaimRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("Estimated size of the SAFE and AUTO-READY worktrees. Click to open Worktrees.")
+        .help(summary.partsHelp + "\nClick to open the Overview.")
     }
 }

@@ -27,7 +27,7 @@ struct WorktreeDetailsModelTests {
         try await commit(fixture, "Step 6", in: task)
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         let row = try #require(model.row(task))
         #expect(row.lastCommitText == "Step 6", "the scan reads the last commit only")
 
@@ -83,7 +83,7 @@ struct WorktreeDetailsModelTests {
                                "https://x-access-token:\(Self.token)@github.com/brauliovc1/secret.git"], in: repo)
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
 
         let group = try #require(model.groups.first)
         #expect(group.remotes.map(\.name) == ["origin", "upstream"])
@@ -96,7 +96,8 @@ struct WorktreeDetailsModelTests {
         model.searchText = String(Self.token.suffix(12))
         #expect(model.rows.isEmpty, "a token can't be searched for: it isn't kept")
         model.searchText = "github.com/brauliovc1/secret"
-        #expect(model.rows.count == 2)
+        #expect(model.rows.count == 1, "the linked worktree; the repo folder is its group's header")
+        #expect(model.groups.first?.main != nil)
 
         let environment = fixture.environment()
         let result = try await ProcessRunner.run(

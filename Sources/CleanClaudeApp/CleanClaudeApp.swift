@@ -43,7 +43,8 @@ struct CleanClaudeApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuContentView(
-                app: models.app, autoMode: models.autoMode, menuBar: models.menuBar, navigation: models.navigation
+                app: models.app, autoMode: models.autoMode, menuBar: models.menuBar, overview: models.overview,
+                navigation: models.navigation
             )
         } label: {
             MenuBarLabel(model: models.menuBar)

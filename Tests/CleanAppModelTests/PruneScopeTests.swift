@@ -16,7 +16,7 @@ struct PruneScopeTests {
         try world.fixture.deleteFolder(web)
         let app = makeApp(world.fixture)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         #expect(model.missingFolderRows.count == 2)
 
         model.searchText = "atlas"

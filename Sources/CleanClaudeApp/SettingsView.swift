@@ -3,16 +3,18 @@ import SwiftUI
 
 /// The Settings window: General and Auto mode.
 struct SettingsView: View {
-    let model: SettingsModel
+    @Bindable var model: SettingsModel
     let autoMode: AutoModeModel
     let launchAtLogin: LaunchAtLoginModel
 
     var body: some View {
-        TabView {
+        TabView(selection: $model.selectedTab) {
             GeneralSettingsView(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(SettingsModel.Tab.general)
             AutoModeSettingsView(model: autoMode, launchAtLogin: launchAtLogin)
                 .tabItem { Label("Auto mode", systemImage: "clock.badge.checkmark") }
+                .tag(SettingsModel.Tab.autoMode)
         }
         .frame(width: 540)
         .frame(minHeight: 360)

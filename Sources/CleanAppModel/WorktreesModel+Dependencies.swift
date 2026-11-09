@@ -5,7 +5,8 @@ extension WorktreesModel {
     /// Folders measured at the same time.
     static let dependencyConcurrency = 2
 
-    /// The Deps column's first measurement: runs once, the first time the screen has rows to measure.
+    /// The first measurement of every checkout's dependency folders: runs once, the first time the screen has
+    /// rows to measure.
     public func computeDependenciesIfNeeded() async {
         guard !hasRequestedDependencies, !isMeasuringDependencies, !app.assessments.isEmpty else { return }
         await computeDependencies()
@@ -24,6 +25,15 @@ extension WorktreesModel {
     /// Measures again after a light clean touched these rows.
     func measureDependencies(of ids: Set<WorktreeRow.ID>) async {
         await measureDependencies(of: allRows.filter { ids.contains($0.id) })
+    }
+
+    /// A cleanup changed these checkouts' dependency folders (here or on Project folders): the ones measured
+    /// before are measured again, so "Clean dependencies…" and the details panel show what is left.
+    func checkoutsChanged(_ paths: Set<String>) async {
+        let measured = allRows.filter { row in
+            paths.contains(row.path) && (hasRequestedDependencies || dependencySizes[row.id] != nil)
+        }
+        await measureDependencies(of: Set(measured.map(\.id)))
     }
 
     private func measureDependencies(of targets: [WorktreeRow]) async {

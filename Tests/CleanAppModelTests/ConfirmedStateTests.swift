@@ -71,7 +71,7 @@ struct ConfirmedStateTests {
         let task = try await fixture.addSiblingWorktree(to: repo, name: "task")
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         let confirmation = await model.prepareRemoval(model.ids([task]))
         #expect(confirmation.allowed.first?.branchText == "task")
         try await fixture.run(["worktree", "remove", task.path], in: repo)
@@ -98,7 +98,7 @@ struct ConfirmedStateTests {
         try await fixture.addWorktree(to: bravo, at: shared, branch: "b-task")
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
 
         let rows = model.allRows.filter { $0.url.lastPathComponent == "shared" }
         #expect(rows.count == 2)
@@ -111,7 +111,7 @@ struct ConfirmedStateTests {
             return false
         })
         #expect(stale.statusLabel == "BLOCKED: stale record")
-        #expect(stale.statusDetail == "stale record")
+        #expect(stale.chip.text == "Couldn't check")
         #expect(real.canRemove)
 
         let confirmation = await model.prepareRemoval([real.id])
@@ -130,7 +130,7 @@ struct ConfirmedStateTests {
         let two = try await fixture.addSiblingWorktree(to: repo, name: "two")
         let app = makeApp(fixture, root: fixture.scanRoot)
         await app.refresh()
-        let model = WorktreesModel(app: app)
+        let model = showingAll(WorktreesModel(app: app))
         final class Readings {
             var values = ["/volume-a": [Int64(1_000), 1_500], "/volume-b": [Int64(2_000), 2_250]]
         }

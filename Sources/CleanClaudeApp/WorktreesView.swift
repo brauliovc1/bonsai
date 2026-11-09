@@ -2,10 +2,13 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The Worktrees screen: every worktree of the last scan, grouped by repo, with its last commit, folder,
-/// verdict and Deps; a details panel for the selection; remove, prune and light clean from here.
+/// The Worktrees screen (PLAN §8.4): the toolbar's "Can remove · Needs attention · All" filter, search,
+/// Remove… and More; the worktrees grouped under their repo folder; the details panel; the selection bar.
+/// Keyboard: Delete opens the removal confirmation, Space shows or hides the details, ⌘R scans again.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
+    /// False in a narrow window: the activity column goes first.
+    @State private var showsActivity = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,16 +16,22 @@ struct WorktreesView: View {
             if let problem = model.app.problem {
                 ProblemBanner(text: problem)
             }
-            table
+            list
             Divider()
-            ScanStatusBar(app: model.app, shown: model.rows.count, total: model.allRows.count)
+            bottomBar
+        }
+        // Measured outside the list and only when it crosses the line, so the list isn't reloaded from inside
+        // its own layout.
+        .onGeometryChange(for: Bool.self) { $0.size.width >= WorktreeColumns.activityMinimumListWidth } action: {
+            showsActivity = $0
         }
         .navigationTitle("Worktrees")
-        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch, folder, remote or commit")
-        .toolbar { toolbar }
+        .modifier(ToolbarWithoutTitle())
+        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch, folder or commit")
+        .toolbar { WorktreesToolbar(model: model) }
         .inspector(isPresented: $model.isShowingDetails) {
             WorktreeDetailsView(model: model)
-                .inspectorColumnWidth(min: 270, ideal: 310, max: 460)
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 460)
         }
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
@@ -30,170 +39,107 @@ struct WorktreesView: View {
         .sheet(isPresented: $model.isShowingLightCleanSheet, onDismiss: { model.dismissLightClean() }) {
             LightCleanSheet(model: model)
         }
-        .task(id: model.app.scanCount) { await model.computeDependenciesIfNeeded() }
-    }
-
-    private var table: some View {
-        Table(of: WorktreeTableItem.self, selection: tableSelection, sortOrder: tableSortOrder) {
-            TableColumn("Worktree", value: \WorktreeTableItem.nameSortKey) { item in
-                WorktreeNameCell(item: item, isExpanded: isExpanded(item)) { toggle(item) }
-            }
-            .width(min: 96, ideal: 170)
-            TableColumn("Kind", value: \WorktreeTableItem.kindText) { item in
-                if let row = item.row { Badge(kind: row.kind) }
-            }
-            .width(min: 52, ideal: 62)
-            TableColumn("Last commit", value: \WorktreeTableItem.lastCommitSortKey) { LastCommitCell(item: $0) }
-                .width(min: 110, ideal: 240)
-            TableColumn("Folder", value: \WorktreeTableItem.folderText) { FolderCell(item: $0) }
-                .width(min: 80, ideal: 210)
-            TableColumn("Size", value: \WorktreeTableItem.sizeSortKey) { SizeCell(item: $0) }
-                .width(min: 56, ideal: 74)
-            TableColumn("Deps", value: \WorktreeTableItem.dependencySortKey) { item in
-                if let row = item.row { DepsCell(row: row) }
-            }
-            .width(min: 56, ideal: 74)
-            TableColumn("Idle", value: \WorktreeTableItem.idleSortKey) { item in
-                if let row = item.row {
-                    Text(row.idleText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-            .width(min: 40, ideal: 52)
-            TableColumn("Status", value: \WorktreeTableItem.statusSortKey) { item in
-                if let row = item.row { StatusCell(row: row) }
-            }
-            .width(min: 120, ideal: 210)
-        } rows: {
-            // Plain rows, not DisclosureTableRow: its expansion binding makes SwiftUI expand rows from inside
-            // an NSTableView delegate call ("reentrant operation", which AppKit says will become an assert).
-            ForEach(model.tableItems) { item in
-                TableRow(item)
-            }
-        }
         .sheet(isPresented: $model.isShowingPruneSheet, onDismiss: { model.dismissPrune() }) {
             PruneSheet(model: model)
         }
-        .contextMenu(forSelectionType: WorktreeTableItem.ID.self) { ids in
-            contextMenu(for: rowIDs(ids))
+        .task(id: model.app.scanCount) { await model.computeDependenciesIfNeeded() }
+    }
+
+    private var list: some View {
+        List(selection: $model.selection) {
+            ForEach(model.groups) { group in
+                RepoGroupHeader(model: model, group: group)
+                    .tag(group.main?.id ?? WorktreeRow.ID(repoPath: group.repoPath, path: group.repoPath))
+                if model.isExpanded(group.repoPath) {
+                    ForEach(group.rows) { row in
+                        WorktreeListRow(row: row, showsActivity: showsActivity)
+                            .tag(row.id)
+                    }
+                }
+            }
+        }
+        .listStyle(.inset)
+        .onDeleteCommand { Task { await model.removeSelection() } }
+        .onKeyPress(.space) {
+            model.isShowingDetails.toggle()
+            return .handled
+        }
+        .contextMenu(forSelectionType: WorktreeRow.ID.self) { ids in
+            WorktreeContextMenu(model: model, ids: ids)
         } primaryAction: { ids in
-            let rows = rows(rowIDs(ids))
-            if rows.isEmpty {
-                // A double-click on a group header opens or closes it.
-                for case .group(let repoPath) in ids { model.toggleExpanded(repoPath) }
+            // A double-click on a repo header opens or closes it; on worktrees, shows them in Finder.
+            let repos = model.groups.filter { group in group.main.map { ids.contains($0.id) } ?? false }
+            if !repos.isEmpty, ids.count == repos.count {
+                for group in repos { model.toggleExpanded(group.repoPath) }
             } else {
-                FolderActions.reveal(rows.filter(\.isOpenableFolder).map(\.url))
+                FolderActions.reveal(model.rows.filter { ids.contains($0.id) && $0.isOpenableFolder }.map(\.url))
             }
         }
-        .overlay {
-            if model.allRows.isEmpty, !model.app.isScanning {
-                ContentUnavailableView("No worktrees found", systemImage: "folder",
-                                       description: Text(emptyDescription))
-            } else if model.rows.isEmpty, !model.allRows.isEmpty {
-                ContentUnavailableView.search(text: model.searchText)
-            }
-        }
-    }
-
-    /// The table selects rows and group headers; the model keeps only the rows.
-    private var tableSelection: Binding<Set<WorktreeTableItem.ID>> {
-        Binding(
-            get: { Set(model.selection.map { WorktreeTableItem.ID.worktree($0) }) },
-            set: { model.selection = rowIDs($0) }
-        )
-    }
-
-    private var tableSortOrder: Binding<[KeyPathComparator<WorktreeTableItem>]> {
-        Binding(
-            get: { WorktreeTableItem.tableSortOrder(model.sortOrder) },
-            set: { order in
-                let rows = WorktreeTableItem.rowSortOrder(order)
-                if !rows.isEmpty { model.sortOrder = rows }
-            }
-        )
-    }
-
-    private func isExpanded(_ item: WorktreeTableItem) -> Bool {
-        if case .group(let group) = item { return model.isExpanded(group.repoPath) }
-        return true
-    }
-
-    private func toggle(_ item: WorktreeTableItem) {
-        if case .group(let group) = item { model.toggleExpanded(group.repoPath) }
-    }
-
-    private func rowIDs(_ ids: Set<WorktreeTableItem.ID>) -> Set<WorktreeRow.ID> {
-        Set(ids.compactMap { id in
-            if case .worktree(let rowID) = id { return rowID }
-            return nil
-        })
+        .overlay { emptyState }
     }
 
     @ViewBuilder
-    private func contextMenu(for ids: Set<WorktreeRow.ID>) -> some View {
-        let rows = rows(ids)
-        let folders = rows.filter(\.isOpenableFolder).map(\.url)
-        if !rows.isEmpty {
-            Button("Reveal in Finder") { FolderActions.reveal(folders) }
-                .disabled(folders.isEmpty)
-            Button("Open in Terminal") { FolderActions.openInTerminal(folders) }
-                .disabled(folders.isEmpty)
-            Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.path)) }
-            Divider()
-            Button("Light clean…") { Task { await model.beginLightClean(ids) } }
-                .disabled(model.app.isCleaningUp)
-            Button("Remove…") { Task { await model.beginRemoval(ids) } }
-                .disabled(model.app.isCleaningUp)
-        }
-        if rows.contains(where: \.isMissingFolder) {
-            Button("Clean up missing folders…") { Task { await model.beginPrune() } }
-                .disabled(model.app.isCleaningUp)
+    private var bottomBar: some View {
+        if let text = model.selectionText {
+            SelectionBar(text: text) {
+                Button("Remove…") { Task { await model.removeSelection() } }
+                    .disabled(!model.canRemoveSelection)
+                    .help(model.removeDisabledReason ?? "Remove the selected worktrees (you confirm first)")
+            }
+        } else {
+            ScanStatusBar(app: model.app, shown: model.rows.count, total: model.linkedRows.count)
         }
     }
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItemGroup {
-            Button { model.app.requestRefresh() } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+    @ViewBuilder
+    private var emptyState: some View {
+        if model.groups.isEmpty, !model.app.isScanning {
+            if model.linkedRows.isEmpty {
+                EmptyState(systemImage: "arrow.triangle.branch", headline: "No worktrees", line: noWorktreesLine)
+            } else if !model.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                ContentUnavailableView.search(text: model.searchText)
+            } else {
+                filterEmptyState
             }
-            .help("Scan again")
-            .disabled(model.app.isScanning)
-            WorktreesFilterMenu(model: model)
-            if !model.missingFolderRows.isEmpty {
-                Button { Task { await model.beginPrune() } } label: {
-                    Label("Clean up missing folders…", systemImage: "folder.badge.minus")
-                }
-                .help("git worktree prune for the worktrees whose folders are gone")
-                .disabled(model.app.isCleaningUp)
-            }
-            Button { Task { await model.computeDependencies() } } label: {
-                Label("Compute deps sizes", systemImage: "scalemass")
-            }
-            .help("Measure the dependency and build folders light clean could delete in every worktree")
-            .disabled(model.isMeasuringDependencies || model.allRows.isEmpty)
-            Button { Task { await model.beginLightClean() } } label: {
-                Label("Light clean…", systemImage: "paintbrush")
-            }
-            .help("Delete the selected worktrees' node_modules, build output and other regenerable folders (you confirm first)")
-            .disabled(model.selectedRows.isEmpty || model.app.isCleaningUp)
-            Button { Task { await model.beginRemoval() } } label: {
-                Label("Remove…", systemImage: "trash")
-            }
-            .help("Remove the selected worktrees (you confirm first)")
-            .disabled(model.selectedRows.isEmpty || model.app.isCleaningUp)
-            Button { model.isShowingDetails.toggle() } label: {
-                Label("Details", systemImage: "sidebar.trailing")
-            }
-            .help(model.isShowingDetails ? "Hide the details panel" : "Show the details panel")
         }
     }
 
-    private func rows(_ ids: Set<WorktreeRow.ID>) -> [WorktreeRow] {
-        model.rows.filter { ids.contains($0.id) }
+    @ViewBuilder
+    private var filterEmptyState: some View {
+        switch model.filter {
+        case .canRemove:
+            EmptyState(
+                systemImage: "checkmark.circle", headline: "Nothing to remove",
+                line: "Every worktree has work in it or is in use. Needs attention lists the ones with local work.",
+                actionTitle: "Show all"
+            ) { model.filter = .all }
+        case .needsAttention:
+            EmptyState(
+                systemImage: "checkmark.circle", headline: "Nothing needs your attention",
+                line: "No worktree has local work that keeps it.", actionTitle: "Show all"
+            ) { model.filter = .all }
+        case .all:
+            EmptyState(systemImage: "arrow.triangle.branch", headline: "No worktrees", line: noWorktreesLine)
+        }
     }
 
-    private var emptyDescription: String {
+    private var noWorktreesLine: String {
         let roots = model.app.roots.map(\.path).joined(separator: ", ")
-        return roots.isEmpty ? "There are no scan roots." : "No git repos under \(roots)."
+        if model.allRows.isEmpty {
+            return roots.isEmpty ? "There are no folders to scan. Add one in Settings." : "No git repos under \(roots)."
+        }
+        return "These repos have no worktrees besides their repo folders."
+    }
+}
+
+/// Leaves the screen's name out of the toolbar (the sidebar shows it, and the window keeps it for the Window menu)
+/// so the filter, Remove… and More fit without spilling into the overflow menu down to the window's 860 pt.
+private struct ToolbarWithoutTitle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbar(removing: .title)
+        } else {
+            content
+        }
     }
 }

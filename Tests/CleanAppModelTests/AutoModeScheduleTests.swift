@@ -108,21 +108,38 @@ struct AutoModeScheduleTests {
         let world = try await AutoWorld.make(enabledDaysAgo: nil)
         defer { world.remove() }
         let overview = world.models.overview
-        #expect(overview.autoModeText == "Auto mode: off")
-        #expect(overview.autoModeDetail == "Last run: never. Next run: none while auto mode is off.")
+        #expect(overview.autoClean.title == "Auto clean is off")
+        #expect(overview.autoClean.detail == "Removes finished worktrees once a day.")
+        #expect(overview.autoClean.buttonTitle == "Turn on…")
 
         await world.autoMode.enable()
-        let end = world.clock.now.addingTimeInterval(7 * 86_400).formatted(date: .abbreviated, time: .shortened)
-        #expect(overview.autoModeText == "Auto mode: report-only until \(end)")
-        #expect(overview.autoModeDetail.hasSuffix("Next run: at the next check (daily, at launch and when the Mac wakes)."))
+        let end = world.clock.now.addingTimeInterval(7 * 86_400).formatted(.dateTime.day().month(.abbreviated))
+        #expect(overview.autoClean.title == "Auto clean is report-only until \(end)")
+        #expect(overview.autoClean.detail == "It lists what it would remove and deletes nothing yet. Last run: never.")
+        #expect(overview.autoClean.buttonTitle == "Settings…")
 
         await world.autoMode.runNow()
         let ran = world.clock.now.formatted(date: .abbreviated, time: .shortened)
-        #expect(overview.autoModeDetail.hasPrefix("Last run: \(ran), report only: would remove 1 worktree"))
+        #expect(overview.autoClean.detail.contains("Last run: \(ran), report only: would remove 1 worktree"),
+                "\(overview.autoClean.detail)")
 
         world.clock.advance(by: 8 * 86_400)
-        #expect(overview.autoModeText == "Auto mode: on")
+        #expect(overview.autoClean.title.hasPrefix("Auto clean is on, next run "), "\(overview.autoClean.title)")
+        #expect(overview.autoClean.detail.hasPrefix("Last run: \(ran)"))
         #expect(world.autoMode.reportOnlyText == nil)
+    }
+
+    @Test func theNextRunIsSaidInPlainWords() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 10))!
+        func at(_ day: Int, _ hour: Int) -> Date { calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))! }
+        #expect(AutoCleanLine.nextRun(at(9, 21), now: now, calendar: calendar) == "tonight")
+        #expect(AutoCleanLine.nextRun(at(9, 14), now: now, calendar: calendar).hasPrefix("today at "))
+        #expect(AutoCleanLine.nextRun(at(10, 9), now: now, calendar: calendar) == "tomorrow")
+        #expect(AutoCleanLine.nextRun(at(15, 9), now: now, calendar: calendar).hasPrefix("on "))
+        #expect(AutoCleanLine.nextRun(at(9, 9), now: now, calendar: calendar) == "at the next check")
+        #expect(AutoCleanLine.nextRun(nil, now: now, calendar: calendar) == "at the next check")
     }
 }
 

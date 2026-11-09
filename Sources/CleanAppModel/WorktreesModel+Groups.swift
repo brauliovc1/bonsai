@@ -2,28 +2,37 @@ import CleanCore
 import Foundation
 
 extension WorktreesModel {
-    /// The shown rows grouped by repo. Groups are in name order (reversed when the sort's first key is the
-    /// repo or branch name, descending); inside a group the sort applies, ties keep scan order, and the main
-    /// checkout stays first. Header counts and sizes are those of the shown rows.
+    /// The shown worktrees grouped by repo, each under its main checkout. A repo shows when the filter and search
+    /// leave at least one of its linked worktrees. Groups are in name order (reversed when the sort's first key is
+    /// the repo or branch name, descending); inside a group the sort applies and ties keep scan order.
     public var groups: [WorktreeGroup] {
         let all = allRows
-        let totals = Dictionary(grouping: all, by: \.worktree.repoPath).mapValues(\.count)
         let comparators = sortOrder + [KeyPathComparator(\WorktreeRow.scanOrder)]
         var order: [String] = []
+        var mains: [String: WorktreeRow] = [:]
+        var totals: [String: Int] = [:]
+        var sizes: [String: Int64] = [:]
         var byRepo: [String: [WorktreeRow]] = [:]
-        for row in all where matches(row) {
+        for row in all {
             let repo = row.worktree.repoPath
+            if row.worktree.isMain {
+                mains[repo] = row
+                continue
+            }
+            totals[repo, default: 0] += 1
+            if let bytes = row.sizeBytes { sizes[repo, default: 0] += bytes }
+            guard matches(row) else { continue }
             if byRepo[repo] == nil { order.append(repo) }
             byRepo[repo, default: []].append(row)
         }
         let home = app.environment.homeDirectory
         let groups = order.map { repo in
-            let sorted = (byRepo[repo] ?? []).sorted(using: comparators)
-            let rows = sorted.filter(\.worktree.isMain) + sorted.filter { !$0.worktree.isMain }
-            return WorktreeGroup(
+            WorktreeGroup(
                 repoPath: repo,
-                rows: rows,
-                totalCount: totals[repo] ?? rows.count,
+                main: mains[repo],
+                rows: (byRepo[repo] ?? []).sorted(using: comparators),
+                totalCount: totals[repo] ?? 0,
+                worktreeBytes: sizes[repo],
                 remotes: app.scan?.remotes?[repo] ?? [],
                 home: home
             )
@@ -43,13 +52,6 @@ extension WorktreesModel {
         return byName.contains(first.keyPath) ? first.order : .forward
     }
 
-    /// What the table lists, top to bottom: each group's header, then its rows unless it is collapsed.
-    public var tableItems: [WorktreeTableItem] {
-        groups.flatMap { group in
-            [WorktreeTableItem.group(group)] + (isExpanded(group.repoPath) ? group.rows.map(WorktreeTableItem.worktree) : [])
-        }
-    }
-
     public func isExpanded(_ repoPath: String) -> Bool {
         !collapsedRepos.contains(repoPath)
     }
@@ -58,19 +60,22 @@ extension WorktreesModel {
         setExpanded(!isExpanded(repoPath), repo: repoPath)
     }
 
-    /// Collapsing a group also deselects its rows, so nothing hidden is removed or cleaned.
+    /// Collapsing a group also deselects its rows, so nothing hidden is removed or cleaned. The state is kept
+    /// while the app runs (across screens and scans).
     public func setExpanded(_ expanded: Bool, repo repoPath: String) {
         if expanded {
             collapsedRepos.remove(repoPath)
         } else {
             collapsedRepos.insert(repoPath)
-            selection = selection.filter { $0.repoPath != repoPath }
+            // The header stays selectable; its worktrees are hidden.
+            let header = Set(allRows.filter { $0.worktree.isMain && $0.worktree.repoPath == repoPath }.map(\.id))
+            selection = selection.filter { $0.repoPath != repoPath || header.contains($0) }
         }
     }
 
-    /// What the details panel shows: one selected row, several (a summary), or none.
+    /// What the details panel shows: one selected worktree or repo folder, several (a summary), or none.
     public var detailsSelection: DetailsSelection {
-        let selected = selectedRows
+        let selected = selectedRepos + selectedRows
         switch selected.count {
         case 0: return .none
         case 1: return .one(selected[0])

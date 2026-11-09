@@ -44,12 +44,17 @@ public final class MenuBarModel {
 
     /// Low and very low need only the free space; normal needs the disk's size too (to fill the bar).
     public var level: Level {
-        let free = app.disk.freeBytes
+        Self.level(of: app.disk, warningGB: app.settings.lowSpaceWarningGB)
+    }
+
+    /// The menu-bar rule every bar in the app follows (PLAN §8.1): accent normally, orange below the low-space
+    /// warning, red under half of it; never red just for being nearly full.
+    public static func level(of disk: DiskSpaceModel, warningGB: Int) -> Level {
+        let free = disk.freeBytes
         guard free != nil else { return .unknown }
-        let warning = app.settings.lowSpaceWarningGB
-        if FreeSpaceText.isVeryLow(free, warningGB: warning) { return .veryLow }
-        if FreeSpaceText.isLow(free, warningGB: warning) { return .low }
-        return app.disk.usedFraction == nil ? .unknown : .normal
+        if FreeSpaceText.isVeryLow(free, warningGB: warningGB) { return .veryLow }
+        if FreeSpaceText.isLow(free, warningGB: warningGB) { return .low }
+        return disk.usedFraction == nil ? .unknown : .normal
     }
 
     /// "Bonsai: 23 GB free of 460 GB"; read by VoiceOver for the menu-bar item.
