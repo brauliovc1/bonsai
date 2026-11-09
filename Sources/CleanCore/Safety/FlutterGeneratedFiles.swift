@@ -6,8 +6,9 @@ import Foundation
 /// `ios/Flutter/flutter_export_environment.sh`, `{ios,macos}/Flutter/ephemeral/`, `{linux,windows}/flutter/ephemeral/`,
 /// `ios/.symlinks/`, and `GeneratedPluginRegistrant.*` anywhere under the project.
 ///
-/// Never harmless, wherever they are: `google-services.json`, `GoogleService-Info.plist`, `key.properties`,
-/// `*.jks`, `*.keystore`, `.env*` (Flutter doesn't write them; they are the user's).
+/// Never harmless, wherever they are and in any case, as the name or any folder on the way: `google-services.json`,
+/// `GoogleService-Info.plist`, `key.properties`, `*.jks`, `*.keystore`, `.env*` (Flutter doesn't write them; they
+/// are the user's).
 enum FlutterGeneratedFiles {
     static let files: Set<String> = [
         "android/local.properties", "ios/Flutter/Generated.xcconfig", "ios/Flutter/flutter_export_environment.sh",
@@ -18,9 +19,11 @@ enum FlutterGeneratedFiles {
     ]
     static let registrantPrefix = "GeneratedPluginRegistrant."
 
-    /// A name that is the user's even when ignored and inside a generated folder.
+    /// A name that is the user's even when ignored and inside a generated folder, in any case (APFS is
+    /// case-insensitive: `.ENV` is what a tool opening `.env` reads).
     static func isNeverHarmless(_ name: String) -> Bool {
-        ["google-services.json", "GoogleService-Info.plist", "key.properties"].contains(name)
+        let name = name.lowercased()
+        return ["google-services.json", "googleservice-info.plist", "key.properties"].contains(name)
             || name.hasSuffix(".jks") || name.hasSuffix(".keystore") || name.hasPrefix(".env")
     }
 
@@ -29,8 +32,10 @@ enum FlutterGeneratedFiles {
     static func isGenerated(projectRelative path: String) -> Bool {
         let isFolder = path.hasSuffix("/")
         let trimmed = isFolder ? String(path.dropLast()) : path
-        let name = trimmed.split(separator: "/").last.map(String.init) ?? trimmed
-        if isNeverHarmless(name) { return false }
+        let parts = trimmed.split(separator: "/").map(String.init)
+        let name = parts.last ?? trimmed
+        // Every part, not just the last: a `.env/` folder inside `ios/Flutter/ephemeral` is the user's too.
+        if parts.contains(where: isNeverHarmless) { return false }
         if folders.contains(where: { trimmed == $0 || trimmed.hasPrefix($0 + "/") }) { return true }
         if isFolder { return false }
         return files.contains(trimmed) || (name.hasPrefix(registrantPrefix) && name.count > registrantPrefix.count)

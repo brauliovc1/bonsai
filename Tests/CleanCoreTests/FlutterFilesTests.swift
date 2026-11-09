@@ -63,7 +63,8 @@ struct FlutterFilesTests {
         #expect(report.status == .autoReady)
     }
 
-    @Test(arguments: ["android/app/google-services.json", "android/key.properties", ".env", "ios/Flutter/ephemeral/.env"])
+    @Test(arguments: ["android/app/google-services.json", "android/key.properties", ".env", "ios/Flutter/ephemeral/.env",
+                      "ios/Flutter/ephemeral/.ENV"])
     func aUserFileMakesItHaveIgnoredFilesAgain(_ path: String) async throws {
         let world = try await SafetyWorld.make()
         defer { world.remove() }
@@ -111,6 +112,22 @@ struct FlutterFilesTests {
         for path in user {
             #expect(!FlutterGeneratedFiles.isGenerated(projectRelative: path), "\(path)")
         }
+    }
+
+    /// P12b review (P3): the never-harmless names in any case, and as any folder on the way.
+    @Test(arguments: [
+        "ios/Flutter/ephemeral/.ENV", "ios/Flutter/ephemeral/Key.properties", "ios/.symlinks/plugins/release.JKS",
+        "ios/.symlinks/plugins/upload.Keystore", "ios/Flutter/ephemeral/Google-Services.json",
+        "ios/Flutter/ephemeral/googleservice-info.PLIST", "ios/Flutter/ephemeral/.env/production",
+        "ios/.symlinks/key.properties/x",
+    ])
+    func neverHarmlessNamesInAnyCase(_ path: String) throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "flutter-case-\(UUID().uuidString.prefix(8))")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("name: app\n".utf8).write(to: root.appending(path: "pubspec.yaml"))
+        #expect(!FlutterGeneratedFiles.isGenerated(path, in: root), "\(path)")
+        #expect(FlutterGeneratedFiles.isGenerated("ios/Flutter/ephemeral/flutter_lldb_helper.py", in: root))
     }
 
     /// A nested Flutter project (an example app) has its own `pubspec.yaml`.
