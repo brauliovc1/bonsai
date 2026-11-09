@@ -33,7 +33,7 @@ extension ProjectsModel {
             for worktree in listed {
                 let path = worktree.path
                 let named = entry.path == path || entry.path.hasPrefix(path + "/") || path.hasPrefix(entry.path + "/")
-                let mainOfRemoved = entry.action == .worktreeRemove && worktree.isMain && worktree.repoPath == entry.repoPath
+                let mainOfRemoved = entry.action.isWorktreeRemoval && worktree.isMain && worktree.repoPath == entry.repoPath
                 if named || mainOfRemoved { paths.insert(path) }
             }
         }

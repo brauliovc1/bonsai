@@ -54,5 +54,5 @@ public struct RemovalLogEntry: Sendable, Codable, Hashable, Identifiable {
     }
 
     /// A removed worktree that has not been put back yet.
-    public var isRestorable: Bool { action == .worktreeRemove && restoredAt == nil }
+    public var isRestorable: Bool { action.isWorktreeRemoval && restoredAt == nil }
 }

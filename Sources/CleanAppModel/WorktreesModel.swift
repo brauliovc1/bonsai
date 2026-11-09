@@ -6,15 +6,18 @@ import Observation
 /// that is the repo's main checkout (`WorktreesModel+Groups`), the "Can remove / Needs attention / All" filter
 /// and search (`+Filter`), selection and what Remove… may do with it (`+Actions`), the details panel
 /// (`details`), the dependency sizes (`+Dependencies`), and the remove, prune and clean-dependencies flows
-/// (`+Remove`, `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune only through
-/// `Pruner`, cleaning dependencies only through `LightCleaner`. A main checkout is never offered for removal.
+/// (`+Remove`, `+RemoveAnyway`, `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune
+/// only through `Pruner`, cleaning dependencies only through `LightCleaner`. A main checkout is never offered for
+/// removal.
 @MainActor
 @Observable
 public final class WorktreesModel {
     public let app: AppModel
 
-    /// The order inside each group (groups stay in repo name order): biggest first.
-    public var sortOrder = [KeyPathComparator(\WorktreeRow.sizeSortKey, order: .reverse)]
+    /// "Sort by" (`WorktreesModel+Sort`): largest first when the screen first opens; kept while the app runs.
+    public var sortKey: SortKey = .size
+    /// Rows under their repo folder (on), or one flat list across repos (off); kept while the app runs.
+    public var groupsByRepo = true
     /// The segmented filter; "Can remove" when the screen opens.
     public var filter: Filter = .canRemove
     public var searchText = ""
@@ -45,6 +48,18 @@ public final class WorktreesModel {
     /// Test seams: the volume a folder is on, and a volume's free bytes.
     @ObservationIgnored var volumeOf: (URL) -> URL? = WorktreesModel.volume(of:)
     @ObservationIgnored var freeBytes: (URL) -> Int64? = { FreeSpaceProbe.volume(containing: $0).availableBytes() }
+
+    // Remove anyway sheet (WorktreesModel+RemoveAnyway, PLAN §4.8): one worktree at a time.
+    public var isShowingRemoveAnywaySheet = false
+    public internal(set) var isPreparingRemoveAnyway = false
+    public internal(set) var removeAnywayConfirmation: RemoveAnywayConfirmation?
+    /// The fresh look found it can't be removed anyway (or no longer needs to be): why, and what to do.
+    public internal(set) var removeAnywayRefusal: String?
+    /// The sheet's checkbox: "I understand these are deleted for good".
+    public var removeAnywayUnderstood = false
+    public internal(set) var isRemovingAnyway = false
+    public internal(set) var removeAnywayOutcome: RemoveAnywayOutcome?
+    @ObservationIgnored var removeAnywaySheetToken = 0
 
     // Dependency sizes (WorktreesModel+Dependencies).
     public internal(set) var dependencySizes: [WorktreeRow.ID: DependencySize] = [:]
@@ -108,10 +123,10 @@ public final class WorktreesModel {
     /// Every linked worktree of the last scan (the rows the filter chooses from).
     public var linkedRows: [WorktreeRow] { allRows.filter { !$0.worktree.isMain } }
 
-    /// The linked worktrees shown (filtered and searched), in list order: group by group. Rows of collapsed
-    /// groups are included. Never a main checkout.
+    /// The linked worktrees shown (filtered and searched), in list order: group by group (rows of collapsed groups
+    /// included), or the flat list. Never a main checkout.
     public var rows: [WorktreeRow] {
-        groups.flatMap(\.rows)
+        groupsByRepo ? groups.flatMap(\.rows) : flatRows
     }
 
     /// The shown worktrees that are selected (repo headers are not among them).
@@ -119,9 +134,11 @@ public final class WorktreesModel {
         rows.filter { selection.contains($0.id) }
     }
 
-    /// The repo headers that are selected, as their main checkouts' rows.
+    /// The repo headers that are selected, as their main checkouts' rows (none in the flat list, which has no
+    /// headers; a header's selection waits there until grouping is back).
     public var selectedRepos: [WorktreeRow] {
-        groups.compactMap(\.main).filter { selection.contains($0.id) }
+        guard groupsByRepo else { return [] }
+        return groups.compactMap(\.main).filter { selection.contains($0.id) }
     }
 
     /// Every worktree whose folder is gone, shown or not ("Prune missing folders…" covers their repos).

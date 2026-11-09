@@ -11,6 +11,7 @@ struct WorktreeGroupsTests {
         let (world, _, model) = try await scannedDemoWorld()
         defer { world.remove() }
         model.filter = .all
+        model.sortKey = .name  // Size is the default (P12b addition); these checks read the groups in name order.
         #expect(model.groups.map(\.name) == ["atlas", "beacon", "cobalt"])
         #expect(model.groups.map(\.rows.count) == [4, 4, 3])
         #expect(model.rows.count == model.linkedRows.count, "rows are the groups' rows, in group order")

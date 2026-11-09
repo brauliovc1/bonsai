@@ -9,25 +9,30 @@ import Foundation
 struct IgnoredFolderSearch: Sendable {
     var limit: Int
 
-    /// True when `folder` holds a file that is not harmless outside regenerable subfolders, when it can't
-    /// be read, or when the search hits its limit.
-    func holdsUserFiles(_ folder: URL) -> Bool {
-        var pending = [folder]
+    /// True when the folder `entry` (relative to `root`) holds a file that is neither a harmless name (§4.2) nor
+    /// Flutter-generated outside regenerable subfolders, when it can't be read, or when the search hits its limit.
+    func holdsUserFiles(_ entry: String, in root: URL) -> Bool {
+        let start = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
+        var pending = [start]
         var visited = 0
         while let current = pending.popLast() {
+            let folder = root.appending(path: current, directoryHint: .isDirectory)
             guard let children = try? FileManager.default.contentsOfDirectory(
-                at: current,
+                at: folder,
                 includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]
             ) else { return true }
             for child in children {
                 visited += 1
                 if visited > limit { return true }
+                let name = child.lastPathComponent
+                let relative = current + "/" + name
                 let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 if values?.isDirectory == true, values?.isSymbolicLink != true {
-                    if !RegenerableNames.isRegenerableFolder(child.lastPathComponent) { pending.append(child) }
+                    if !RegenerableNames.isRegenerableFolder(name) { pending.append(relative) }
                     continue
                 }
-                if !RegenerableNames.isHarmlessFile(child.lastPathComponent) { return true }
+                if RegenerableNames.isHarmlessFile(name) { continue }
+                if !FlutterGeneratedFiles.isGenerated(relative, in: root) { return true }
             }
         }
         return false

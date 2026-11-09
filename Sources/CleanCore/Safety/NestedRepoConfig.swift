@@ -7,19 +7,31 @@ struct NestedRepoConfig: Sendable {
     /// Keys as git lists them (section and name lowercased, subsection as written), with their values.
     var entries: [(key: String, value: String)]
 
-    /// Reads `config` and, when present, `config.worktree` in `gitDir`. nil when a file can't be read.
+    /// Why a config file couldn't be read: git's first error line.
+    struct Unreadable: Error, Sendable, Hashable {
+        var message: String
+    }
+
+    /// Reads `config` and, when present, `config.worktree` in `gitDir`; fails when a file can't be read.
     /// git runs in `/`, so it doesn't even discover the repo.
-    static func read(gitDir: URL, git: Git) async -> NestedRepoConfig? {
+    static func read(gitDir: URL, git: Git) async -> Result<NestedRepoConfig, Unreadable> {
         var entries: [(key: String, value: String)] = []
         for name in ["config", "config.worktree"] {
             let file = gitDir.appending(path: name)
             if name == "config.worktree", PathPresence.of(file.path) == .missing { continue }
-            guard let result = try? await git.result(["config", "--file", file.path, "--list", "-z"], in: URL(fileURLWithPath: "/")),
-                  result.succeeded
-            else { return nil }
-            entries += parse(result.stdout)
+            let arguments = ["config", "--file", file.path, "--list", "-z"]
+            do {
+                let result = try await git.result(arguments, in: URL(fileURLWithPath: "/"))
+                guard result.succeeded else {
+                    let error = GitError(exitCode: result.exitCode, stderr: result.stderr, arguments: arguments, timedOut: result.timedOut)
+                    return .failure(Unreadable(message: NestedCloneCheck.firstLine(of: error)))
+                }
+                entries += parse(result.stdout)
+            } catch {
+                return .failure(Unreadable(message: "\(error)"))
+            }
         }
-        return NestedRepoConfig(entries: entries)
+        return .success(NestedRepoConfig(entries: entries))
     }
 
     /// `--list -z` output: `key\nvalue\0` per entry (no `\n` when the key has no value).

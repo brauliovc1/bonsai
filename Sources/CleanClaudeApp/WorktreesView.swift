@@ -3,7 +3,8 @@ import CleanCore
 import SwiftUI
 
 /// The Worktrees screen (PLAN §8.4): the toolbar's "Can remove · Needs attention · All" filter, search,
-/// Remove… and More; the worktrees grouped under their repo folder; the details panel; the selection bar.
+/// Remove… and More; "Sort: … · Group by repo" above the list; the worktrees grouped under their repo folder or
+/// in one flat list; the details panel; the selection bar.
 /// Keyboard: Delete opens the removal confirmation, Space shows or hides the details, ⌘R scans again.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
@@ -16,6 +17,8 @@ struct WorktreesView: View {
             if let problem = model.app.problem {
                 ProblemBanner(text: problem)
             }
+            WorktreesSortBar(model: model)
+            Divider()
             list
             Divider()
             bottomBar
@@ -25,8 +28,18 @@ struct WorktreesView: View {
         .onGeometryChange(for: Bool.self) { $0.size.width >= WorktreeColumns.activityMinimumListWidth } action: {
             showsActivity = $0
         }
+        // Every screen keeps the same toolbar structure, title included: removing the title here alone moved the
+        // sidebar when switching to this screen (11-09). At narrow widths the search field collapses and what
+        // doesn't fit goes to the toolbar's overflow menu.
         .navigationTitle("Worktrees")
-        .modifier(ToolbarWithoutTitle())
+        .background {
+            // ⌘R from anywhere on the screen, also when More sits in the overflow menu.
+            Button("Refresh") { model.app.requestRefresh() }
+                .keyboardShortcut("r")
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch, folder or commit")
         .toolbar { WorktreesToolbar(model: model) }
         .inspector(isPresented: $model.isShowingDetails) {
@@ -35,6 +48,9 @@ struct WorktreesView: View {
         }
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
+        }
+        .sheet(isPresented: $model.isShowingRemoveAnywaySheet, onDismiss: { model.dismissRemoveAnyway() }) {
+            RemoveAnywaySheet(model: model)
         }
         .sheet(isPresented: $model.isShowingLightCleanSheet, onDismiss: { model.dismissLightClean() }) {
             LightCleanSheet(model: model)
@@ -47,14 +63,22 @@ struct WorktreesView: View {
 
     private var list: some View {
         List(selection: $model.selection) {
-            ForEach(model.groups) { group in
-                RepoGroupHeader(model: model, group: group)
-                    .tag(group.main?.id ?? WorktreeRow.ID(repoPath: group.repoPath, path: group.repoPath))
-                if model.isExpanded(group.repoPath) {
-                    ForEach(group.rows) { row in
-                        WorktreeListRow(row: row, showsActivity: showsActivity)
-                            .tag(row.id)
+            if model.groupsByRepo {
+                ForEach(model.groups) { group in
+                    RepoGroupHeader(model: model, group: group)
+                        .tag(group.main?.id ?? WorktreeRow.ID(repoPath: group.repoPath, path: group.repoPath))
+                    if model.isExpanded(group.repoPath) {
+                        ForEach(group.rows) { row in
+                            WorktreeListRow(row: row, showsActivity: showsActivity)
+                                .tag(row.id)
+                        }
                     }
+                }
+            } else {
+                // One list across repos, each row with its repo's name.
+                ForEach(model.flatRows) { row in
+                    WorktreeListRow(row: row, showsActivity: showsActivity, showsRepo: true)
+                        .tag(row.id)
                 }
             }
         }
@@ -129,17 +153,5 @@ struct WorktreesView: View {
             return roots.isEmpty ? "There are no folders to scan. Add one in Settings." : "No git repos under \(roots)."
         }
         return "These repos have no worktrees besides their repo folders."
-    }
-}
-
-/// Leaves the screen's name out of the toolbar (the sidebar shows it, and the window keeps it for the Window menu)
-/// so the filter, Remove… and More fit without spilling into the overflow menu down to the window's 860 pt.
-private struct ToolbarWithoutTitle: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content.toolbar(removing: .title)
-        } else {
-            content
-        }
     }
 }

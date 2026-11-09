@@ -61,13 +61,15 @@ public struct WorktreeAssessor: Sendable {
         estimatedBytes: Int64? = nil
     ) async -> WorktreeAssessment {
         let idle = worktree.isMain || worktree.isBare ? IdleReport.unknown : await idleClock.report(for: worktree)
-        let safety = await safetyCheck.check(
-            worktree,
+        let state = await safetyCheck.state(of: worktree, knownWorktrees: knownWorktrees)
+        let safety = SafetyCheck.evaluate(worktree: worktree, state: state, idle: idle, settings: settings, cwdIndex: cwdIndex)
+        return WorktreeAssessment(
+            worktree: worktree,
             idle: idle,
-            settings: settings,
-            cwdIndex: cwdIndex,
-            knownWorktrees: knownWorktrees
+            safety: safety,
+            estimatedBytes: estimatedBytes,
+            removeAnyway: RemoveAnyway.verdict(for: worktree, state: state, safety: safety),
+            changedPaths: state.changedPaths
         )
-        return WorktreeAssessment(worktree: worktree, idle: idle, safety: safety, estimatedBytes: estimatedBytes)
     }
 }

@@ -2,6 +2,9 @@
 public enum RemovalAction: String, Sendable, Codable, Hashable {
     /// `git worktree remove`; can be restored from the kept branch or commit.
     case worktreeRemove
+    /// "Remove anyway" (PLAN §4.8): `git worktree remove --force` by hand, one worktree; the loss list is in
+    /// `notes`. Restored like `worktreeRemove`, without what was lost.
+    case worktreeRemoveAnyway
     /// `git worktree prune` for one repo; the pruned names are in `notes`.
     case worktreePrune
     /// Light clean of one worktree (PLAN §4.2); the deleted and refused folders are in `notes`. Not restorable.
@@ -15,4 +18,9 @@ public enum RemovalAction: String, Sendable, Codable, Hashable {
     /// One tool-cache entry cleaned (PLAN §4.6): `repoPath` is the catalog entry id (`npm`), `path` its folder,
     /// what was removed in `notes`. Not restorable.
     case cacheClean
+
+    /// A worktree removal of either kind: restorable from its branch or commit.
+    public var isWorktreeRemoval: Bool {
+        self == .worktreeRemove || self == .worktreeRemoveAnyway
+    }
 }

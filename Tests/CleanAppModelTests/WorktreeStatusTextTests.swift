@@ -14,7 +14,9 @@ struct WorktreeStatusTextTests {
     static let samples: [SafetyReason] = [
         .mainCheckout, .missingFolder, .locked(reason: "on a drive"), .inUse([process]), .inUseUnknown,
         .uncommitted(count: 3), .hiddenLocalEdits(["a.txt"]), .operationInProgress(["rebase-merge"]), .submodules,
-        .nestedCheckouts(["vendor/x"]), .nestedClones([".build/checkouts/kit"]), .nestedSearchIncomplete("cap hit"),
+        .nestedCheckouts(["vendor/x"]), .nestedClones(["vendor/kit"]), .nestedSearchIncomplete("cap hit"),
+        .nestedUnreadable([NestedRepo(path: "vendor/sdk", findings: ["fatal: bad tree object HEAD"])]),
+        .packageCopies(["build/ios/SourcePackages/checkouts/sdk", ".build/checkouts/kit"]),
         .localOnlyCommits(count: 2, onBranch: false), .localOnlyCommits(count: 1, onBranch: true),
         .reflogOnlyCommits(count: 1), .stash(count: 2), .ignoredUserFiles([".env"]), .claudeSession,
         .recentlyActive(days: 4), .idleUnknown, .gitError("fatal: bad object"), .staleRecord(leadsTo: "/x/.git"),
@@ -35,6 +37,9 @@ struct WorktreeStatusTextTests {
         case .nestedCheckouts: ("Contains other repos", .orange, false)
         // Decision: clones with no local work are a note in both modes (§4.1), so grey, not orange.
         case .nestedClones: ("Contains other repos", .grey, false)
+        // P12b (§8.4 additions): an unreadable repo needs you; package copies are build output, details only.
+        case .nestedUnreadable: ("Couldn't read 1 repo inside", .orange, false)
+        case .packageCopies: ("Package copies (2)", .grey, false)
         case .nestedSearchIncomplete, .gitError, .staleRecord: ("Couldn't check", .grey, false)
         case .localOnlyCommits(_, let onBranch):
             onBranch ? ("1 commit not pushed", .grey, true) : ("2 commits not pushed", .orange, false)
@@ -62,6 +67,8 @@ struct WorktreeStatusTextTests {
         case .submodules: "submodules"
         case .nestedCheckouts: "nestedCheckouts"
         case .nestedClones: "nestedClones"
+        case .nestedUnreadable: "nestedUnreadable"
+        case .packageCopies: "packageCopies"
         case .nestedSearchIncomplete: "nestedSearchIncomplete"
         case .localOnlyCommits: "localOnlyCommits"
         case .reflogOnlyCommits: "reflogOnlyCommits"
@@ -76,7 +83,7 @@ struct WorktreeStatusTextTests {
     }
 
     @Test func everyReasonHasItsWordsAndColor() {
-        #expect(Set(Self.samples.map(Self.caseName)).count == 21, "every SafetyReason case is sampled")
+        #expect(Set(Self.samples.map(Self.caseName)).count == 23, "every SafetyReason case is sampled")
         for reason in Self.samples {
             let words = WorktreeStatusText.words(for: reason)
             let expected = Self.expected(reason)
@@ -155,9 +162,15 @@ struct WorktreeStatusTextTests {
         #expect(WorktreeStatusText.chip(for: unpushed).tone == .green)
         #expect(WorktreeStatusText.notes(for: unpushed) == ["1 commit not pushed", "2 stashes kept", "Claude session"])
         #expect(WorktreeStatusText.explanation(for: unpushed).contains("the branch is kept"))
-        // Package clones never make an auto-ready worktree orange.
-        let clones = assessment(notes: [.nestedClones([".build/checkouts/kit"])])
+        // Package clones and package copies never make an auto-ready worktree orange, nor show next to the chip.
+        let clones = assessment(notes: [.nestedClones(["vendor/kit"]), .packageCopies([".build/checkouts/kit"])])
         #expect(clones.status == .autoReady && WorktreeStatusText.chip(for: clones).tone == .green)
+        #expect(WorktreeStatusText.notes(for: clones).isEmpty)
+        #expect(!WorktreeStatusText.needsAttention(clones))
+        // A repo git couldn't read needs you.
+        let unreadable = assessment(blockers: [.nestedUnreadable([NestedRepo(path: "vendor/sdk", findings: ["fatal: x"])])])
+        #expect(WorktreeStatusText.needsAttention(unreadable))
+        #expect(WorktreeStatusText.chip(for: unreadable).text == "Couldn't read 1 repo inside")
     }
 
     /// The one action per status: remove what can go, otherwise what fixes it.
@@ -165,6 +178,8 @@ struct WorktreeStatusTextTests {
         let fixes: [(SafetyReason, WorktreeFix)] = [
             (.mainCheckout, .cleanDependencies), (.missingFolder, .prune), (.uncommitted(count: 1), .openInTerminal),
             (.nestedCheckouts(["x"]), .showInFinder), (.gitError("x"), .refresh), (.staleRecord(leadsTo: "/x"), .none),
+            (.nestedUnreadable([NestedRepo(path: "x", findings: ["fatal: x"])]), .showInFinder),
+            (.packageCopies(["x"]), .remove),
             (.locked(reason: ""), .openInTerminal), (.inUse([Self.process]), .refresh),
         ]
         for (reason, fix) in fixes {

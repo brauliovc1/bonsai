@@ -13,8 +13,14 @@ public enum SafetyReason: Sendable, Hashable, Codable {
     case submodules
     /// Other git checkouts inside the folder; `git worktree remove` would delete them too.
     case nestedCheckouts([String])
-    /// Clones with no local work inside (package managers' checkouts): a note in both modes.
+    /// Clones with no local work inside: a note in both modes.
     case nestedClones([String])
+    /// Repos inside that git couldn't read, each with git's first error line (PLAN §4.1, added 11-09): what
+    /// they hold is unknown, so they block both modes.
+    case nestedUnreadable([NestedRepo])
+    /// Package managers' copies inside ignored build folders (PLAN §4.1 "Package copies", 11-09): build
+    /// output, a note in both modes.
+    case packageCopies([String])
     case nestedSearchIncomplete(String)
     case localOnlyCommits(count: Int, onBranch: Bool)
     case reflogOnlyCommits(count: Int)
@@ -47,6 +53,8 @@ public enum SafetyReason: Sendable, Hashable, Codable {
         case .submodules: "submodules"
         case .nestedCheckouts(let paths): "nested checkouts (\(paths.count))"
         case .nestedClones(let paths): "package clones (\(paths.count))"
+        case .nestedUnreadable(let repos): "unreadable nested repos (\(repos.count))"
+        case .packageCopies(let paths): "package copies (\(paths.count))"
         case .nestedSearchIncomplete: "nested search incomplete"
         case .localOnlyCommits(let count, _): "local-only commits (\(count))"
         case .reflogOnlyCommits(let count): "reflog-only commits (\(count))"
@@ -85,6 +93,12 @@ public enum SafetyReason: Sendable, Hashable, Codable {
                 + "in its git dir); finish or abort it first."
         case .nestedClones(let paths):
             return "Clones with no local work (package checkouts that can be fetched again) are inside and go with it: "
+                + Self.list(paths) + "."
+        case .nestedUnreadable(let repos):
+            return "git couldn't read other repos inside it, so what they hold is unknown: "
+                + Self.list(repos.map(\.description)) + "."
+        case .packageCopies(let paths):
+            return "Package copies (Xcode or SwiftPM fetch them again) are inside and go with it: "
                 + Self.list(paths) + "."
         case .nestedSearchIncomplete(let why):
             return "The search for other checkouts inside could not finish (\(why)), so one could be missed."

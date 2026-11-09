@@ -87,8 +87,8 @@ struct DemoWorldBuilder {
         let kit = swift.appending(path: ".build/checkouts/demo-kit", directoryHint: .isDirectory)
         try await nestedClone("demo-kit", at: kit, days: 12, unpushedCommit: false)
         items.append(.init(
-            url: swift, repo: cobalt, purpose: "clean package clone in .build/checkouts, 12 days idle",
-            idleDays: 12, status: "SAFE", notes: ["package clones (1)"]
+            url: swift, repo: cobalt, purpose: "package copy in .build/checkouts, 12 days idle",
+            idleDays: 12, status: "SAFE", notes: ["package copies (1)"]
         ))
         let python = try await pushedSibling(of: cobalt, "py", days: 25)
         let package = python.appending(path: ".venv/src/mypkg", directoryHint: .isDirectory)

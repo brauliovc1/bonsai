@@ -7,8 +7,9 @@ import Foundation
 /// - its own name is in §4.2 (a regenerable folder, or a harmless file name), or
 /// - it is inside a folder named in §4.2 that git tracks nothing in. `.ruff_cache`, `.pytest_cache` and
 ///   `.mypy_cache` write their own `.gitignore` with `*`, so git lists their files one by one; or
+/// - it is a file Flutter generates (§4.2 "Flutter-generated", relative to a folder holding `pubspec.yaml`), or
 /// - it is a collapsed folder (git lists `packages/` when everything in it is ignored) holding nothing but
-///   §4.2 output (`IgnoredFolderSearch`).
+///   §4.2 output and Flutter-generated files (`IgnoredFolderSearch`).
 struct IgnoredFileFilter {
     var git: Git
     var folder: URL
@@ -21,6 +22,7 @@ struct IgnoredFileFilter {
 
         for entry in entries {
             if RegenerableNames.isHarmlessIgnoredPath(entry) { continue }
+            if !entry.hasSuffix("/"), FlutterGeneratedFiles.isGenerated(entry, in: folder) { continue }
             var insideOutput = false
             for ancestor in Self.regenerableAncestors(of: entry) {
                 if tracksNothing[ancestor] == nil {
@@ -32,7 +34,7 @@ struct IgnoredFileFilter {
                 }
             }
             if insideOutput { continue }
-            if entry.hasSuffix("/"), !search.holdsUserFiles(folder.appending(path: entry, directoryHint: .isDirectory)) {
+            if entry.hasSuffix("/"), !search.holdsUserFiles(entry, in: folder) {
                 continue
             }
             userFiles.append(entry)

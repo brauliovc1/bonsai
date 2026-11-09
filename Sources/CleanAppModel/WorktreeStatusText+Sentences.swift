@@ -36,6 +36,13 @@ extension WorktreeStatusText {
         case .nestedClones(let paths):
             return "It holds package clones with no local work, which can be fetched again; they go with it: "
                 + "\(list(paths))."
+        case .nestedUnreadable(let repos):
+            let what = repos.count == 1 ? "a repo inside it, so Bonsai can't tell what it holds"
+                : "\(repos.count) repos inside it, so Bonsai can't tell what they hold"
+            return "git couldn't read \(what): \(list(repos.map(\.description)))."
+        case .packageCopies(let paths):
+            return "Package copies that Xcode or SwiftPM fetch again; they're build output and go with it: "
+                + "\(list(paths))."
         case .nestedSearchIncomplete(let why):
             return "Bonsai couldn't finish looking for other checkouts inside (\(why)), so one could be missed."
         case .localOnlyCommits(let count, let onBranch):
@@ -99,11 +106,11 @@ extension WorktreeStatusText {
         case .locked, .uncommitted, .hiddenLocalEdits, .operationInProgress, .localOnlyCommits, .reflogOnlyCommits,
              .submodules:
             .openInTerminal
-        case .nestedCheckouts: .showInFinder
+        case .nestedCheckouts, .nestedUnreadable: .showInFinder
         case .inUse, .gitError, .nestedSearchIncomplete: .refresh
         case .staleRecord: .none
         // Notes: they never stop a removal by hand.
-        case .inUseUnknown, .nestedClones, .stash, .ignoredUserFiles, .claudeSession, .recentlyActive, .idleUnknown:
+        case .inUseUnknown, .nestedClones, .packageCopies, .stash, .ignoredUserFiles, .claudeSession, .recentlyActive, .idleUnknown:
             .remove
         }
     }

@@ -37,6 +37,7 @@ struct RestoreCommand: AsyncParsableCommand {
                 let plan = try await restorer.plan(entryID: entryID)
                 let arguments = plan.arguments.map(VerdictText.quoted).joined(separator: " ")
                 print("would run: git -C \(VerdictText.quoted(plan.entry.repoPath)) \(arguments)")
+                if plan.entry.action == .worktreeRemoveAnyway { print(Restorer.lostFilesNote) }
                 print(Restorer.dependenciesNote)
                 print("Dry run: nothing was changed. Add --yes to restore.")
             }

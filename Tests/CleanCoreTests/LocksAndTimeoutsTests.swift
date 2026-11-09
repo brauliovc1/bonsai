@@ -82,13 +82,14 @@ struct LocksAndTimeoutsTests {
         defer { world.remove() }
         let path = try await world.sibling("slow")
         let script = world.fixture.url.appending(path: "hanging-git")
-        let text = "#!/bin/sh\ncase \" $* \" in *\" worktree remove \"*) exec /bin/sleep 60 ;; esac\n"
+        let text = "#!/bin/sh\ncase \" $* \" in *\" worktree remove \"*) exec /bin/sleep 120 ;; esac\n"
             + "exec \"\(world.fixture.git.executable.path)\" \"$@\"\n"
         try Data(text.utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         var git = world.fixture.git
         git.executable = script
-        git.timeout = .seconds(5)
+        // Long enough that the re-check's own git calls never hit it on a loaded machine; only the hanging remove does.
+        git.timeout = .seconds(15)
         let environment = world.fixture.environment(clockOffset: 40 * 86_400)
         let worktree = try await world.worktree(path)
 

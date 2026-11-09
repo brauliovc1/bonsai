@@ -72,6 +72,12 @@ public enum WorktreeStatusText {
             // Clones with no local work are a note in both modes (§4.1): grey, so a SwiftPM worktree with its
             // .build/checkouts isn't put under "Needs attention" (or an auto-ready one colored orange).
             StatusWords("Contains other repos", .grey, symbol: "folder")
+        case .nestedUnreadable(let repos):
+            StatusWords("Couldn't read \(repos.count) \(repos.count == 1 ? "repo" : "repos") inside", .orange,
+                        symbol: "exclamationmark.triangle")
+        case .packageCopies(let paths):
+            // Build output (§4.1): shown in the details only, never next to the chip.
+            StatusWords("Package copies (\(paths.count))", .grey, symbol: "shippingbox")
         case .nestedSearchIncomplete, .gitError, .staleRecord:
             StatusWords("Couldn't check", .grey, symbol: "exclamationmark.circle")
         case .localOnlyCommits(let count, let onBranch):
