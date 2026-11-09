@@ -3,8 +3,8 @@
 /// builds a fresh one and compares it with the confirmed one entry by entry, and the log keeps it.
 public struct LossList: Sendable, Hashable {
     public enum Category: String, Sendable, Hashable, CaseIterable {
-        case uncommittedFiles, hiddenEdits, reposWithLocalWork, unreadableRepos, submodules, unpushedCommits,
-             unreachableCommits, ignoredFiles, commitsOnBranch, stashes, claudeSession
+        case uncommittedFiles, hiddenEdits, reposWithLocalWork, unreadableRepos, submodules, submoduleFiles,
+             unpushedCommits, unreachableCommits, ignoredFiles, commitsOnBranch, stashes, claudeSession
 
         /// Deleted with the worktree, for good. The others are listed too: kept (branch commits, stashes), or
         /// the Claude session that can't continue.
@@ -22,6 +22,7 @@ public struct LossList: Sendable, Hashable {
             case .reposWithLocalWork: "Repos inside with local work"
             case .unreadableRepos: "Repos inside git couldn't read"
             case .submodules: "Submodules"
+            case .submoduleFiles: "Files in submodule folders (git doesn't see them)"
             case .unpushedCommits: "Commits on no branch or remote"
             case .unreachableCommits: "Commits only in this worktree's history"
             case .ignoredFiles: "Ignored files that aren't build output"
@@ -39,6 +40,7 @@ public struct LossList: Sendable, Hashable {
             case .reposWithLocalWork: ("repo with local work", "repos with local work")
             case .unreadableRepos: ("repo git couldn't read", "repos git couldn't read")
             case .submodules: ("submodule", "submodules")
+            case .submoduleFiles: ("file in a submodule folder", "files in submodule folders")
             case .unpushedCommits: ("commit on no branch", "commits on no branch")
             case .unreachableCommits: ("unreachable commit", "unreachable commits")
             case .ignoredFiles: ("ignored file", "ignored files")

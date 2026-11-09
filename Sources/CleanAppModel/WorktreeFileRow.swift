@@ -36,8 +36,8 @@ public struct WorktreeFileRow: Identifiable, Hashable, Sendable {
     /// The full path, for Copy path and tooltips.
     public var fullPath: String { url.path }
 
-    /// The rows of a Remove anyway list section that lists files (uncommitted files, hidden edits, ignored
-    /// files); nil for the others (repos, commits, notes).
+    /// The rows of a Remove anyway list section that lists files (uncommitted files, hidden edits, files in a
+    /// submodule folder, ignored files); nil for the others (repos, commits, notes).
     public static func rows(for section: LossList.Section, in worktree: URL) -> [WorktreeFileRow]? {
         switch section.category {
         case .uncommittedFiles:
@@ -49,6 +49,8 @@ public struct WorktreeFileRow: Identifiable, Hashable, Sendable {
             return section.entries.map { WorktreeFileRow(word: "Hidden edit", path: $0.text, detail: nil, in: worktree) }
         case .ignoredFiles:
             return section.entries.map { WorktreeFileRow(word: "Ignored", path: $0.text, detail: nil, in: worktree) }
+        case .submoduleFiles:
+            return section.entries.map { WorktreeFileRow(word: "Not in git", path: $0.text, detail: nil, in: worktree) }
         case .reposWithLocalWork, .unreadableRepos, .submodules, .unpushedCommits, .unreachableCommits, .commitsOnBranch,
              .stashes, .claudeSession:
             return nil

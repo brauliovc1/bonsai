@@ -72,7 +72,12 @@ public struct WorktreeInspector: Sendable {
         }
 
         state.hasSubmodules = FileManager.default.fileExists(atPath: folder.appending(path: ".gitmodules").path)
-        if state.hasSubmodules { state.submodulePaths = await submodulePaths(in: folder) }
+        if state.hasSubmodules {
+            state.submodulePaths = await submodulePaths(in: folder)
+            let walk = SubmoduleFolderWalk.files(in: folder, submodules: state.submodulePaths ?? [])
+            state.submoduleFiles = walk.files
+            state.submoduleFilesIncomplete = walk.incomplete
+        }
         state.operationsInProgress = Self.operationsInProgress(gitDir: gitDir)
 
         var errors: [String] = []
@@ -113,7 +118,10 @@ public struct WorktreeInspector: Sendable {
             return await IgnoredFileFilter(git: git, folder: folder, searchLimit: ignoredSearchLimit).userFiles(ignored)
         } ?? []
         state.gitErrors += errors
-        state.pathStamps = Self.stamps(of: state.changedPaths.map(\.path) + state.hiddenEdits + state.ignoredUserFiles, in: folder)
+        state.pathStamps = Self.stamps(
+            of: state.changedPaths.map(\.path) + state.hiddenEdits + state.ignoredUserFiles + state.submoduleFiles,
+            in: folder
+        )
 
         await findNested(in: folder, knownWorktrees: knownWorktrees, into: &state)
         return state

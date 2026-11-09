@@ -14,6 +14,10 @@ public struct WorktreeState: Sendable, Hashable {
     public var hasSubmodules: Bool
     /// The `submodule.*.path` values of `.gitmodules`; nil when it couldn't be read (or isn't there).
     public var submodulePaths: [String]?
+    /// Files in those folders that have no `.git` (uninitialized submodules), which git doesn't see.
+    public var submoduleFiles: [String]
+    /// The submodule folder whose files couldn't all be listed; nil when they were.
+    public var submoduleFilesIncomplete: String?
     /// `git rev-list --count HEAD --not --remotes`.
     public var localOnlyCommits: Int
     /// Detached only: those commits (full shas, newest first).
@@ -26,7 +30,8 @@ public struct WorktreeState: Sendable, Hashable {
     public var branchStashes: Int
     /// Ignored files and folders that are not regenerable (§4.2), relative to the worktree.
     public var ignoredUserFiles: [String]
-    /// What lstat saw at each path of `changedPaths`, `hiddenEdits` and `ignoredUserFiles` when they were read.
+    /// What lstat saw at each path of `changedPaths`, `hiddenEdits`, `ignoredUserFiles` and `submoduleFiles` when
+    /// they were read.
     public var pathStamps: [String: FileStamp]
     /// Registered worktrees (of any scanned repo) and `.git` files (a linked worktree or submodule of some repo)
     /// inside: nothing is known about what they hold.
@@ -56,6 +61,8 @@ public struct WorktreeState: Sendable, Hashable {
         operationsInProgress: [String] = [],
         hasSubmodules: Bool = false,
         submodulePaths: [String]? = nil,
+        submoduleFiles: [String] = [],
+        submoduleFilesIncomplete: String? = nil,
         localOnlyCommits: Int = 0,
         localOnlyShas: [String] = [],
         reflogOnlyCommits: Int = 0,
@@ -79,6 +86,8 @@ public struct WorktreeState: Sendable, Hashable {
         self.operationsInProgress = operationsInProgress
         self.hasSubmodules = hasSubmodules
         self.submodulePaths = submodulePaths
+        self.submoduleFiles = submoduleFiles
+        self.submoduleFilesIncomplete = submoduleFilesIncomplete
         self.localOnlyCommits = localOnlyCommits
         self.localOnlyShas = localOnlyShas
         self.reflogOnlyCommits = reflogOnlyCommits
