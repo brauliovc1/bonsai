@@ -90,11 +90,15 @@ extension AppModel {
     }
 
     /// A scan of `generation` has just set the scan and the verdicts: what cleanups found out while it (or an
-    /// earlier scan) ran is applied again, the rest is forgotten.
+    /// earlier scan) ran is applied again, the rest is forgotten. A size applied again may itself be out of date
+    /// (the folder could have grown again since, and this scan may have measured that), so one more scan is
+    /// asked for: it begins later, keeps none of these facts, and so asks for nothing more.
     func scanFinished(generation: Int) {
         cleanupFacts.keepUnseen(byScan: generation)
         drop(Set(cleanupFacts.removed.keys))
+        guard !cleanupFacts.sizes.isEmpty else { return }
         apply(cleanupFacts.sizes.mapValues(\.bytes))
+        requestRefresh()
     }
 
     private static func unique(_ worktrees: [Worktree]) -> [Worktree] {

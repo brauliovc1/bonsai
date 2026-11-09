@@ -177,18 +177,73 @@ struct SizesAfterCleanupTests {
         #expect(report.deletedCount == 1)
         #expect((model.row(sibling)?.sizeBytes ?? .max) < 1024 * 1024, "measured again right after the clean")
 
-        // ... and the scan ends with the old reading: the cleaned size stays.
+        // ... and the scan ends with the old reading: the cleaned size stays, and one more scan checks it.
         FileManager.default.createFile(atPath: gate.appending(path: "release").path, contents: nil)
         for _ in 0..<400 where app.isScanning { try await Task.sleep(for: .milliseconds(50)) }
         #expect(!app.isScanning)
-        #expect(app.scanCount == scans + 1, "that one scan, no full rescan after it")
+        #expect(app.scanCount == scans + 2, "that scan, and the one it asked for; no more")
+        #expect(app.cleanupFacts.sizes.isEmpty, "the later scan measured for itself and kept nothing")
         #expect((model.row(sibling)?.sizeBytes ?? .max) < 1024 * 1024, "\(model.row(sibling)?.sizeBytes ?? -1)")
         #expect(app.reclaimableBytes < 1024 * 1024, "the one total doesn't count the freed space again")
+    }
 
-        // A scan that begins after the clean measures for itself; the kept size is dropped then.
+    /// Re-check item 1: the kept size can itself be out of date (dependencies installed again after the clean, and
+    /// the running scan measured that), so the scan that applies it asks for one more, which measures afresh and
+    /// asks for nothing more.
+    @Test func aKeptSizeIsCheckedByOneMoreScanAndNoMore() async throws {
+        let fixture = try GitFixture()
+        defer { fixture.remove() }
+        let aged = AgedRepos(fixture: fixture)
+        let repo = try await aged.repo("india", days: 60, gitignore: ProjectFoldersDemo.gitignore, files: ["package-lock.json": "{}\n"])
+        let sibling = fixture.scanRoot.appending(path: "india-done", directoryHint: .isDirectory)
+        try await aged.git(["worktree", "add", "--quiet", "-b", "done", sibling.path], in: repo, days: 45)
+        try await aged.commitAndPush(sibling, file: "notes/done.md", branch: "done", days: 45)
+        try aged.blob(in: sibling, "node_modules/react/index.bin", megabytes: 4)
+
+        // A du that, while `hold` exists, waits for `release` and only then measures (a scan that gets here late).
+        let gate = fixture.url.appending(path: "gate", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: gate, withIntermediateDirectories: true)
+        let script = fixture.url.appending(path: "late-du")
+        try Data("""
+        #!/bin/sh
+        G='\(gate.path)'
+        if [ -e "$G/hold" ]; then
+          touch "$G/started.$$"
+          while [ ! -e "$G/release" ]; do sleep 0.05; done
+        fi
+        exec /usr/bin/du "$@"
+        """.utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        var environment = fixture.environment(scanRoots: [fixture.scanRoot])
+        environment.tools.du = script
+        let app = AppModel(environment: environment, git: fixture.git)
         await app.refresh()
-        #expect(app.cleanupFacts.sizes.isEmpty)
+        let model = showingAll(WorktreesModel(app: app))
+        let scans = app.scanCount
+
+        FileManager.default.createFile(atPath: gate.appending(path: "hold").path, contents: nil)
+        app.requestRefresh()
+        func started() -> Int {
+            ((try? FileManager.default.contentsOfDirectory(atPath: gate.path)) ?? []).filter { $0.hasPrefix("started.") }.count
+        }
+        for _ in 0..<400 where started() < 2 { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(started() >= 2)
+        try FileManager.default.removeItem(at: gate.appending(path: "hold"))
+
+        let report = await model.confirmLightClean(await model.prepareLightClean(model.ids([sibling])))
+        #expect(report.deletedCount == 1)
         #expect((model.row(sibling)?.sizeBytes ?? .max) < 1024 * 1024)
+        try aged.blob(in: sibling, "node_modules/react/index.bin", megabytes: 4)  // npm install again
+        FileManager.default.createFile(atPath: gate.appending(path: "release").path, contents: nil)
+        for _ in 0..<400 where app.isScanning { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(!app.isScanning)
+        #expect((model.row(sibling)?.sizeBytes ?? 0) >= 4 * 1024 * 1024, "the folder holds 4 MB again")
+        #expect(app.scanCount == scans + 2, "the running scan and one more")
+        #expect(app.cleanupFacts.sizes.isEmpty)
+
+        // No loop: nothing more is scanned afterwards.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!app.isScanning && app.scanCount == scans + 2)
     }
 
     @Test func removingAWorktreeUpdatesItsGroupAtOnce() async throws {

@@ -82,7 +82,13 @@ struct AutoModeScheduleTests {
         let center = NotificationCenter()
         let wake = Notification.Name("test.didWake")
         let scheduler = AutoModeScheduler(model: world.autoMode)
-        scheduler.wakeDelay = .milliseconds(600)
+        // The wake check's wait is held until the test lets it go, so nothing depends on how fast this runs.
+        let delays = Box<[Duration]>([])
+        let wait = Box(Gate())
+        scheduler.sleep = { delay in
+            await MainActor.run { delays.value.append(delay) }
+            await wait.value.wait()
+        }
         scheduler.start(wakeCenter: center, wakeName: wake, hourly: false)
         defer { scheduler.stop() }
 
@@ -91,15 +97,22 @@ struct AutoModeScheduleTests {
         let first = try #require(try world.saved().lastAutoRun?.date)
 
         center.post(name: wake, object: nil)
-        try await Task.sleep(for: .milliseconds(900))
+        #expect(await eventually { scheduler.wakeChecksBegun == 1 })
+        await wait.value.open()
+        await scheduler.wakeCheck?.value
         #expect(try world.saved().lastAutoRun?.date == first, "woke within a day: no run")
 
         world.clock.advance(by: 86_400)
         let scans = world.app.scanCount
+        wait.value = Gate()
         center.post(name: wake, object: nil)
-        try await Task.sleep(for: .milliseconds(200))
+        #expect(await eventually { scheduler.wakeChecksBegun == 2 })
+        #expect(await eventually { delays.value.count == 2 }, "the check is waiting")
         #expect(!world.autoMode.isRunning && world.app.scanCount == scans, "not right at the wake: it waits a while first")
-        #expect(await eventually { (try? world.saved().lastAutoRun?.date) == world.clock.now }, "woke a day later: runs")
+        #expect(delays.value == [AutoSchedule.wakeDelay, AutoSchedule.wakeDelay], "and waits the app's delay")
+        await wait.value.open()
+        await scheduler.wakeCheck?.value
+        #expect(try world.saved().lastAutoRun?.date == world.clock.now, "woke a day later: runs")
         #expect(AutoModeScheduler.identifier == "io.github.brauliovc1.bonsai.auto")
         #expect(AutoSchedule.wakeDelay == .seconds(300))
     }

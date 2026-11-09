@@ -11,10 +11,14 @@ public final class AutoModeScheduler {
     let model: AutoModeModel
     /// How long after a wake the check waits (tests shorten it).
     var wakeDelay: Duration = AutoSchedule.wakeDelay
+    /// Test seam: how the wake check waits `wakeDelay` (tests hold it until they let it go).
+    var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0, tolerance: nil, clock: SuspendingClock()) }
+    /// Wake checks begun since `start` (tests wait for one to begin).
+    private(set) var wakeChecksBegun = 0
     private var activity: NSBackgroundActivityScheduler?
     private var wakeObserver: NSObjectProtocol?
     private var wakeCenter: NotificationCenter?
-    private var wakeCheck: Task<Void, Never>?
+    private(set) var wakeCheck: Task<Void, Never>?
 
     public init(model: AutoModeModel) {
         self.model = model
@@ -48,9 +52,11 @@ public final class AutoModeScheduler {
     private func didWake() {
         wakeCheck?.cancel()
         let delay = wakeDelay
+        let sleep = sleep
+        wakeChecksBegun += 1
         wakeCheck = Task { [weak model] in
             do {
-                try await Task.sleep(for: delay, tolerance: nil, clock: SuspendingClock())
+                try await sleep(delay)
             } catch {
                 return
             }
