@@ -27,14 +27,15 @@ struct OverviewModelTests {
         try DerivedDataFixture.entry(in: root, "Gone-aaa", workspace: goneWorkspace("A"), kibibytes: 40)
         try DerivedDataFixture.entry(in: root, "Gone-bbb", workspace: goneWorkspace("B"), kibibytes: 100)
         try DerivedDataFixture.entry(in: root, "Live-ccc", workspace: "/usr/bin", kibibytes: 500)
-        return World(demo: demo, toolchain: toolchain, models: ScreenModels(app: app, runner: toolchain.runner))
+        let models = ScreenModels(app: app, runner: toolchain.runner, processes: ScriptedProcesses().source)
+        return World(demo: demo, toolchain: toolchain, models: models)
     }
 
     @Test func theWindowOpensOnTheOverviewAndTheSidebarIsInOrder() {
         #expect(NavigationModel().section == .overview)
         #expect(SidebarSection.allCases.map(\.title) == [
-            "Overview", "Worktrees", "Project folders", "Xcode DerivedData", "Docker & Simulators", "Claude usage",
-            "Recently removed",
+            "Overview", "Worktrees", "Project folders", "Xcode DerivedData", "Docker & Simulators", "Tool caches",
+            "Claude usage", "Recently removed",
         ])
         #expect(Set(SidebarSection.allCases.map(\.systemImage)).count == SidebarSection.allCases.count)
     }
@@ -47,6 +48,7 @@ struct OverviewModelTests {
         let rows = world.overview.rows
         #expect(rows.map(\.kind) == [
             .autoReadyWorktrees, .safeWorktrees, .lightClean, .projectFolders, .orphanedDerivedData, .docker, .simulators,
+            .toolCaches,
         ])
 
         // Worktrees: the same estimates the Worktrees screen shows, by status.
@@ -122,6 +124,7 @@ struct OverviewModelTests {
             .orphanedDerivedData: .derivedData,
             .docker: .dockerSimulators,
             .simulators: .dockerSimulators,
+            .toolCaches: .caches,
         ]
         #expect(Set(expected.keys) == Set(OverviewRow.Kind.allCases))
         for (kind, section) in expected {

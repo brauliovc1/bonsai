@@ -15,6 +15,7 @@ public final class OverviewModel {
     public let projects: ProjectsModel
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
+    public let caches: CachesModel
     public let autoMode: AutoModeModel
     public let navigation: NavigationModel
 
@@ -24,6 +25,7 @@ public final class OverviewModel {
         projects: ProjectsModel,
         derivedData: DerivedDataModel,
         dockerSimulators: DockerSimulatorsModel,
+        caches: CachesModel,
         autoMode: AutoModeModel,
         navigation: NavigationModel
     ) {
@@ -32,6 +34,7 @@ public final class OverviewModel {
         self.projects = projects
         self.derivedData = derivedData
         self.dockerSimulators = dockerSimulators
+        self.caches = caches
         self.autoMode = autoMode
         self.navigation = navigation
     }
@@ -49,6 +52,7 @@ public final class OverviewModel {
     /// True while anything the Overview sums is being scanned.
     public var isRefreshing: Bool {
         app.isScanning || derivedData.isScanning || dockerSimulators.isScanning || projects.isScanning
+            || caches.isScanning
     }
 
     // MARK: - Rows
@@ -66,6 +70,7 @@ public final class OverviewModel {
         case .orphanedDerivedData: derivedDataRow()
         case .docker: dockerRow()
         case .simulators: simulatorsRow()
+        case .toolCaches: toolCachesRow()
         }
     }
 
@@ -169,24 +174,39 @@ public final class OverviewModel {
         )
     }
 
+    /// "Tool caches": what the ready entries hold (an owner running or a refusal leaves an entry out).
+    private func toolCachesRow() -> OverviewRow {
+        let title = "Tool caches"
+        guard caches.report != nil else {
+            return OverviewRow(kind: .toolCaches, title: title, detail: "Not scanned yet.", bytes: nil, destination: .caches)
+        }
+        let ready = caches.readyRows.count
+        let waiting = caches.allRows.filter { $0.tone == .waiting }.count
+        var detail = "\(ready) ready to clean"
+        if waiting > 0 { detail += "; \(waiting) wait for their tool to quit" }
+        return OverviewRow(kind: .toolCaches, title: title, detail: detail, bytes: caches.readyBytes, destination: .caches)
+    }
+
     // MARK: - Scanning
 
-    /// Scans everything the Overview sums again: worktrees, DerivedData, Docker and Simulators, and project
-    /// folders when their screen has measured them once.
+    /// Scans everything the Overview sums again: worktrees, DerivedData, Docker and Simulators, tool caches, and
+    /// project folders when their screen has measured them once.
     public func refresh() async {
         async let worktreeScan: Void = app.refresh()
         async let derivedDataScan: Void = derivedData.refresh()
         async let dockerScan: Void = dockerSimulators.refresh()
-        _ = await (worktreeScan, derivedDataScan, dockerScan)
+        async let cachesScan: Void = caches.refresh()
+        _ = await (worktreeScan, derivedDataScan, dockerScan, cachesScan)
         // Project folders are heavy to measure: again only once their screen has measured them.
         if projects.report != nil { await projects.refresh() }
     }
 
-    /// The first look, when the window opens: DerivedData, Docker and Simulators are scanned once (the
-    /// worktree scan starts with the app).
+    /// The first look, when the window opens: DerivedData, Docker and Simulators and the tool caches are scanned
+    /// once (the worktree scan starts with the app).
     public func loadIfNeeded() async {
         async let derivedDataScan: Void = derivedData.loadIfNeeded()
         async let dockerScan: Void = dockerSimulators.loadIfNeeded()
-        _ = await (derivedDataScan, dockerScan)
+        async let cachesScan: Void = caches.loadIfNeeded()
+        _ = await (derivedDataScan, dockerScan, cachesScan)
     }
 }

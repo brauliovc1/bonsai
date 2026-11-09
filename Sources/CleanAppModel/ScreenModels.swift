@@ -12,6 +12,7 @@ public final class ScreenModels {
     public let removals: RemovalsModel
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
+    public let caches: CachesModel
     public let claudeUsage: ClaudeUsageModel
     public let overview: OverviewModel
     public let settings: SettingsModel
@@ -20,11 +21,13 @@ public final class ScreenModels {
     public let launchAtLogin: LaunchAtLoginModel
     public let menuBar: MenuBarModel
 
-    /// `runner`: how docker, xcrun and `defaults` are run; tests pass a scripted one. `notifier` and
+    /// `runner`: how docker, xcrun and `defaults` are run; tests pass a scripted one. `processes`: where the
+    /// Tool caches screen gets process lists (the app adds its NSWorkspace check for Cursor). `notifier` and
     /// `loginItems`: the app passes UNUserNotificationCenter and SMAppService; the defaults do nothing.
     public init(
         app: AppModel,
         runner: CommandRunner = .live,
+        processes: ProcessSource = .live(),
         navigation: NavigationModel = NavigationModel(),
         notifier: (any Notifier)? = nil,
         loginItems: (any LoginItemService)? = nil,
@@ -38,6 +41,7 @@ public final class ScreenModels {
         removals = RemovalsModel(app: app)
         derivedData = DerivedDataModel(app: app, runner: runner)
         dockerSimulators = DockerSimulatorsModel(app: app, runner: runner)
+        caches = CachesModel(app: app, processes: processes)
         claudeUsage = ClaudeUsageModel(app: app)
         settings = SettingsModel(app: app)
         autoMode = AutoModeModel(app: app, notifier: notifier, appName: appName)
@@ -52,6 +56,7 @@ public final class ScreenModels {
             projects: projects,
             derivedData: derivedData,
             dockerSimulators: dockerSimulators,
+            caches: caches,
             autoMode: autoMode,
             navigation: navigation
         )

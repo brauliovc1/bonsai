@@ -25,6 +25,7 @@ struct CleanClaudeApp: App {
         let hasBundle = Bundle.main.bundleIdentifier != nil
         let models = ScreenModels(
             app: app,
+            processes: .live(cursorAppRunning: CursorAppProbe.isRunning),
             navigation: navigation,
             notifier: notifier,
             loginItems: hasBundle ? SystemLoginItems() : nil,

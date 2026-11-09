@@ -12,4 +12,7 @@ public enum RemovalAction: String, Sendable, Codable, Hashable {
     case dockerPrune
     /// `xcrun simctl delete unavailable`; the command is in `notes`.
     case simulatorsDeleteUnavailable
+    /// One tool-cache entry cleaned (PLAN §4.6): `repoPath` is the catalog entry id (`npm`), `path` its folder,
+    /// what was removed in `notes`. Not restorable.
+    case cacheClean
 }
