@@ -3,7 +3,7 @@ import Foundation
 extension ToolCacheCleaner {
     /// What one entry's removal did.
     struct Outcome {
-        /// The names of what went: children, version folders or the backup.
+        /// The paths of what went: children, version folders or the backup.
         var removed: [String] = []
         var failures: [String] = []
     }
@@ -72,7 +72,7 @@ extension ToolCacheCleaner {
     private func removeItem(_ path: String, into outcome: inout Outcome) {
         do {
             try FileManager.default.removeItem(atPath: path)
-            outcome.removed.append((path as NSString).lastPathComponent)
+            outcome.removed.append(path)
         } catch {
             outcome.failures.append("\(shown(path)): \(error.localizedDescription)")
         }
@@ -93,7 +93,8 @@ extension ToolCacheCleaner {
         var notes: [String]
         switch entry.deletion {
         case .cursorAgentVersions:
-            notes = ["removed versions " + (outcome.removed.isEmpty ? "none" : outcome.removed.joined(separator: ", "))]
+            let names = outcome.removed.map { ($0 as NSString).lastPathComponent }
+            notes = ["removed versions " + (names.isEmpty ? "none" : names.joined(separator: ", "))]
             if !inspection.kept.isEmpty {
                 notes.append("kept " + inspection.kept.map { "\($0.name) (\($0.reason))" }.joined(separator: ", "))
             }

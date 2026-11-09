@@ -149,11 +149,11 @@ struct ToolCacheSafetyTests {
         #expect(report.warnings.contains { $0.contains("nothing can be cleaned") })
 
         world.processes.fails = false
-        let ready = try await world.scanner().scan().require(["uv"])
+        let ready = try await world.scanner().scan().require(["cocoapods"])
         world.processes.fails = true
         let result = await world.cleaner().clean(ready)
-        #expect(result.refused.map(\.id) == ["uv"])
-        #expect(world.exists(".cache/uv/archive-v0/x"))
+        #expect(result.refused.map(\.id) == ["cocoapods"])
+        #expect(world.exists("Library/Caches/CocoaPods/Pods/Release/Alamofire/x"))
     }
 }
 

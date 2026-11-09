@@ -47,11 +47,14 @@ public struct ToolCacheFinding: Sendable, Hashable, Identifiable {
     public let note: String
     /// What lstat saw at each present path; the cleaner refuses a backup that was replaced since.
     let identities: [String: FileIdentity]
+    /// The `du` estimate of each removal on its own, so a log entry can name the estimate of what really went.
+    let removalBytes: [String: Int64]
 
     public var id: String { entry.id }
     public var isReady: Bool { verdict == .ready }
 
-    init(inspection: ToolCacheInspection, bytes: Int64?) {
+    init(inspection: ToolCacheInspection, bytes: Int64?, removalBytes: [String: Int64] = [:]) {
+        self.removalBytes = removalBytes
         entry = inspection.entry
         paths = inspection.present.map(\.path)
         removals = inspection.removals

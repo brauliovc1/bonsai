@@ -45,7 +45,11 @@ public struct ToolCacheScanner: Sendable {
         let findings = inspections.map { inspection in
             let paths = inspection.measuredPaths
             let unknown = du == nil || paths.isEmpty || paths.contains(where: failed.contains)
-            return ToolCacheFinding(inspection: inspection, bytes: unknown ? nil : paths.compactMap { sizes[$0] }.reduce(0, +))
+            return ToolCacheFinding(
+                inspection: inspection,
+                bytes: unknown ? nil : paths.compactMap { sizes[$0] }.reduce(0, +),
+                removalBytes: sizes.filter { inspection.removals.contains($0.key) }
+            )
         }
         return ToolCacheReport(
             findings: findings,

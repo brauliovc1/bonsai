@@ -5,7 +5,9 @@ import Foundation
 ///
 /// ps pads or cuts `comm` to exactly 16 characters when it is not the last column (`/opt/homebrew/Ce`), and a
 /// program may rewrite its own title (npm shows `npm exec jest …`), so `comm` is trusted only when it is
-/// shorter than that; the command line in `args` is what owners are matched against.
+/// shorter than that. Each process's executable path comes from the kernel (`proc_pidpath`), so a tool under a
+/// folder with spaces (`…/My Tools/bin/npm`, which args can't split back) is still named; the command line in
+/// `args` is what the argument rules look at.
 public struct ProcessList: Sendable, Hashable {
     public struct Process: Sendable, Hashable {
         public var pid: Int32
@@ -13,11 +15,14 @@ public struct ProcessList: Sendable, Hashable {
         public var command: String
         /// `args`: the whole command line, words joined by spaces (so a path with spaces can't be split back).
         public var arguments: String
+        /// The executable's full path (`proc_pidpath`); nil when it couldn't be read (the process ended).
+        public var executable: String?
 
-        public init(pid: Int32, command: String, arguments: String) {
+        public init(pid: Int32, command: String, arguments: String, executable: String? = nil) {
             self.pid = pid
             self.command = command
             self.arguments = arguments
+            self.executable = executable
         }
     }
 
@@ -38,10 +43,12 @@ public struct ProcessList: Sendable, Hashable {
         self.failure = failure
     }
 
-    /// Runs `/bin/ps` through `runner`. `cursorAppRunning`: the app's NSWorkspace check (nil in the CLI).
+    /// Runs `/bin/ps` through `runner`, then reads each listed process's executable path with `executablePath`.
+    /// `cursorAppRunning`: the app's NSWorkspace check (nil in the CLI).
     public static func capture(
         runner: CommandRunner = .live,
-        cursorAppRunning: (@Sendable () async -> Bool)? = nil
+        cursorAppRunning: (@Sendable () async -> Bool)? = nil,
+        executablePath: @Sendable (Int32) -> String? = ProcessList.executablePath
     ) async -> ProcessList {
         let cursor = await cursorAppRunning?() ?? false
         let result: ProcessResult
@@ -58,11 +65,23 @@ public struct ProcessList: Sendable, Hashable {
             return ProcessList(processes: [], cursorAppRunning: cursor,
                                failure: "ps failed (exit \(result.exitCode))" + (message.isEmpty ? "" : ": \(message)"))
         }
-        let processes = parse(result.stdoutString)
+        let processes = parse(result.stdoutString).map { process in
+            var named = process
+            named.executable = executablePath(process.pid)
+            return named
+        }
         guard !processes.isEmpty else {
             return ProcessList(processes: [], cursorAppRunning: cursor, failure: "ps listed no processes")
         }
         return ProcessList(processes: processes, cursorAppRunning: cursor)
+    }
+
+    /// The executable's path from the kernel; nil when it can't be read (the process ended, or it is protected).
+    public static func executablePath(_ pid: Int32) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        return String(decoding: buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
     /// One process per line: the pid, one space, `comm` in a 16-character column, one space, `args`. A line

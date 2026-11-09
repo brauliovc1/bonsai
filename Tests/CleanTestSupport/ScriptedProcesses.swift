@@ -20,6 +20,7 @@ public final class ScriptedProcesses: @unchecked Sendable {
     private var failing = false
     private var captures = 0
     private var cursorApp = false
+    private var paths: [Int32: String] = [:]
 
     public init(_ output: String = ScriptedProcesses.idle) {
         current = output
@@ -51,6 +52,12 @@ public final class ScriptedProcesses: @unchecked Sendable {
 
     public var captureCount: Int { lock.withLock { captures } }
 
+    /// What `proc_pidpath` answers per pid (nil for any other pid, as for a process that ended).
+    public var executables: [Int32: String] {
+        get { lock.withLock { paths } }
+        set { lock.withLock { paths = newValue } }
+    }
+
     public var source: ProcessSource {
         ProcessSource { [self] in
             let runner = CommandRunner { [self] executable, arguments, _ in
@@ -58,7 +65,8 @@ public final class ScriptedProcesses: @unchecked Sendable {
                 return answer()
             }
             let cursor = cursorAppRunning
-            return await ProcessList.capture(runner: runner, cursorAppRunning: { cursor })
+            let paths = executables
+            return await ProcessList.capture(runner: runner, cursorAppRunning: { cursor }, executablePath: { paths[$0] })
         }
     }
 

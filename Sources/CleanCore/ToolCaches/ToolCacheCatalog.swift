@@ -2,8 +2,8 @@ import Foundation
 
 /// The PLAN §4.6 table as one constant: every tool cache and piece of Cursor's data Bonsai shows, with exactly
 /// what cleaning it deletes, what it never touches, and which programs must not be running. Nothing outside
-/// these paths is ever deleted. Package stores that hard-link into projects (pnpm) and generic app caches in
-/// `~/Library/Caches` are deliberately not here.
+/// these paths is ever deleted. Package stores that hard-link or clone into projects (pnpm, uv: deleting them frees
+/// far less than their size) and generic app caches in `~/Library/Caches` are deliberately not here.
 public enum ToolCacheCatalog {
     /// Cursor's bundle id, for the app's NSWorkspace check.
     public static let cursorBundleID = "com.todesktop.230313mzl4w4u92"
@@ -39,7 +39,7 @@ public enum ToolCacheCatalog {
             owners: [ToolOwner("Yarn", [
                 .command(["yarn", "yarnpkg"]), .argumentName(["yarn.js", "yarn.cjs"]), .argumentContains("/.yarn/releases/"),
             ])],
-            note: "Yarn downloads packages again on the next install."
+            note: "Yarn downloads packages again on the next install; Yarn PnP projects need `yarn install` again."
         ),
         ToolCacheEntry(
             id: "pip", name: "pip", section: .packages,
@@ -48,19 +48,14 @@ public enum ToolCacheCatalog {
             note: "pip downloads packages again on the next install."
         ),
         ToolCacheEntry(
-            id: "uv", name: "uv", section: .packages,
-            paths: [".cache/uv"], never: [".cache"],
-            owners: [ToolOwner("uv", [.command(["uv", "uvx"])])],
-            note: "uv downloads packages again when it needs them."
-        ),
-        ToolCacheEntry(
             id: "pub", name: "Dart/Flutter pub", section: .packages,
-            paths: [".pub-cache/hosted", ".pub-cache/git"], never: [".pub-cache/bin", ".pub-cache/global_packages"],
+            paths: [".pub-cache/hosted"], never: [".pub-cache/git", ".pub-cache/bin", ".pub-cache/global_packages"],
             owners: [
                 ToolOwner("dart", [.command(["dart", "dartaotruntime"])]),
                 ToolOwner("Flutter", [.command(["flutter"]), .argumentContains("flutter_tools")]),
             ],
-            note: "Packages download again; Flutter projects need `flutter pub get`."
+            note: "Packages download again; Flutter projects need `flutter pub get`, and globally activated Dart tools may "
+                + "need `dart pub global activate` again."
         ),
         ToolCacheEntry(
             id: "cocoapods", name: "CocoaPods", section: .packages,

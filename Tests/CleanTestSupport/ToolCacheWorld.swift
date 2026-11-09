@@ -17,8 +17,7 @@ public final class ToolCacheWorld: Sendable {
         ".npm/_cacache/content-v2/sha512/ab/cd/blob", ".npm/_cacache/index-v5/00/idx", ".npm/_npx/abc123/node_modules/pkg/index.js",
         "Library/Caches/Yarn/v6/npm-left-pad/index.js", ".yarn/berry/cache/left-pad.zip",
         "Library/Caches/pip/http-v2/a/b", "Library/Caches/pip/wheels/x.whl",
-        ".cache/uv/archive-v0/x",
-        ".pub-cache/hosted/pub.dev/http-1.0.0/lib/http.dart", ".pub-cache/git/cache/repo/HEAD",
+        ".pub-cache/hosted/pub.dev/http-1.0.0/lib/http.dart",
         "Library/Caches/CocoaPods/Pods/Release/Alamofire/x",
         "Library/Caches/Homebrew/downloads/abc--wget--1.0.bottle.tar.gz",
         ".gradle/caches/modules-2/files-2.1/x.jar",
@@ -36,8 +35,9 @@ public final class ToolCacheWorld: Sendable {
     /// versions and the link, Cursor's live database and what is display-only.
     public static let survivors = [
         ".npm/_logs/2026-11-08-debug.log", ".npm/_update-notifier-last-checked", ".npm/_prebuilds/libvips.tgz",
-        ".yarn/berry/install-state.gz", ".cache/gh/hosts.yml",
+        ".yarn/berry/install-state.gz", ".cache/gh/hosts.yml", ".cache/uv/archive-v0/x",
         ".pub-cache/bin/tool", ".pub-cache/global_packages/tool/pubspec.lock", ".pub-cache/README.md",
+        ".pub-cache/git/cache/repo/HEAD",
         ".gradle/gradle.properties", ".gradle/wrapper/dists/gradle-8.5-bin/gradle.zip",
         "Library/Caches/com.apple.Safari/Cache.db",
         CursorStateBackup.statePath, CursorStateBackup.statePath + "-wal", CursorStateBackup.statePath + "-shm",
@@ -67,7 +67,21 @@ public final class ToolCacheWorld: Sendable {
             atPath: url.appending(path: CursorAgentVersions.linkPath).path,
             withDestinationPath: url.appending(path: Self.versions + "/" + Self.inUseVersion + "/cursor-agent").path
         )
+        try writeState(kibibytes: 4)
         try setBackupAge(days: backupAgeDays, now: now)
+    }
+
+    /// Cursor's `state.vscdb` as an SQLite file of `kibibytes` KiB (the header, then zeros).
+    public func writeState(kibibytes: Int) throws {
+        var data = Data("SQLite format 3\u{0}".utf8)
+        data.append(Data(count: max(0, kibibytes * 1024 - data.count)))
+        try data.write(to: URL(fileURLWithPath: path(CursorStateBackup.statePath)))
+    }
+
+    /// Replaces the backup with `kibibytes` KiB of zeros, `days` old.
+    public func writeBackup(kibibytes: Int, days: Double = 30) throws {
+        try Data(count: kibibytes * 1024).write(to: URL(fileURLWithPath: path(CursorStateBackup.backupPath)))
+        try setBackupAge(days: days)
     }
 
     public var url: URL { home.url }

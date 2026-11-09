@@ -19,7 +19,7 @@ struct CachesOverviewAndCLITests {
 
         let row = models.overview.row(.toolCaches)
         #expect(row.title == "Tool caches")
-        #expect(row.detail == "15 ready to clean; 1 wait for their tool to quit")
+        #expect(row.detail == "14 ready to clean; 1 wait for their tool to quit")
         #expect(row.bytes == models.caches.readyBytes)
         #expect((row.bytes ?? 0) > 0)
         models.overview.jump(to: .toolCaches)
@@ -80,8 +80,10 @@ struct CachesOverviewAndCLITests {
         #expect(result.stdoutString.contains("cursor-agent-versions: "))
         #expect(try FileManager.default.subpathsOfDirectory(atPath: world.url.path).sorted() == before)
 
-        let unknown = try await run(["caches", "clean", "cursor-state", "--home", world.url.path], world: world)
-        #expect(!unknown.succeeded && unknown.stderr.contains("cursor-state is shown only; it is never cleaned"))
+        let shownOnly = try await run(["caches", "clean", "cursor-state", "--home", world.url.path], world: world)
+        #expect(!shownOnly.succeeded && shownOnly.stderr.contains("cursor-state is shown only; it is never cleaned"))
+        let uv = try await run(["caches", "clean", "uv", "--home", world.url.path], world: world)
+        #expect(!uv.succeeded && uv.stderr.contains("uv is not an entry"), "uv left the catalog")
         let outside = try await run(["caches", "--home", "/Users"], world: world)
         #expect(!outside.succeeded && outside.stderr.contains("--home is for tests"))
     }

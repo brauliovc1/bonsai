@@ -8,7 +8,7 @@ import Testing
 @MainActor
 struct CachesModelTests {
     private static let packageIDs = [
-        "npm", "yarn", "pip", "uv", "pub", "cocoapods", "homebrew", "gradle", "swiftpm", "go-build", "playwright",
+        "npm", "yarn", "pip", "pub", "cocoapods", "homebrew", "gradle", "swiftpm", "go-build", "playwright",
         "mongodb-binaries", "xcode-cache",
     ]
 
@@ -48,7 +48,7 @@ struct CachesModelTests {
         #expect(model.selectedRows.map(\.id) == ["npm"])
         #expect(model.canClean)
         model.selectAllReady()
-        #expect(model.selectedRows.count == 16)
+        #expect(model.selectedRows.count == 15)
         #expect(model.readyBytes == model.selectedBytes)
         #expect(model.cursorRunningLine == nil)
     }
@@ -109,7 +109,7 @@ struct CachesModelTests {
         #expect(confirmation.allowed.map(\.id) == ["pip", "mongodb-binaries", "cursor-state-backup"])
         #expect(confirmation.blocked.map(\.leftAloneReason) == ["Quit dart to clean this."])
         let pub = try #require(confirmation.blocked.first)
-        #expect(pub.keeps.contains("~/.pub-cache/bin") && pub.note.contains("flutter pub get"))
+        #expect(pub.keeps.contains("~/.pub-cache/bin") && pub.keeps.contains("~/.pub-cache/git") && pub.note.contains("flutter pub get"))
         #expect(confirmation.allowed.first { $0.id == "mongodb-binaries" }?.note == "Tests download it again, ~300 MB.")
         #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.note.hasPrefix("Cursor's spare copy from ") == true)
         #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.keeps == ["state.vscdb", "state.vscdb-wal", "state.vscdb-shm"])

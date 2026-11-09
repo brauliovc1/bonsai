@@ -5,9 +5,9 @@ extension ProcessList {
     /// one of `paths` (a browser Playwright installed, a mongod from the test-binary cache, a cursor-agent
     /// version): a program running from a cache is using it. nil when the list couldn't be read.
     ///
-    /// This process and any clean-claude (also under `sudo` or `env`) never count: their own command line names
-    /// the entries (`caches clean cursor-agent-versions`). Nor does `du` for `paths`: it only reads, and the
-    /// scanner runs it.
+    /// `du`, `ps`, this process and Bonsai's own (the app, any clean-claude, also under `sudo` or `env`) never count
+    /// under any rule: they only read, or their own command line names the entries (`caches clean
+    /// cursor-agent-versions`, `du -skx …/ms-playwright`).
     public func runningOwners(_ owners: [ToolOwner], mentioning paths: [String]) -> [String]? {
         guard failure == nil else { return nil }
         let facts = otherFacts
@@ -17,7 +17,7 @@ extension ProcessList {
         }
         let needles = paths.map { $0.lowercased() }.filter { !$0.isEmpty }
         guard !needles.isEmpty else { return names }
-        for fact in facts where !fact.names.contains("du") {
+        for fact in facts {
             guard needles.contains(where: fact.line.contains) else { continue }
             let name = fact.process.displayName
             if !names.contains(name) { names.append(name) }
@@ -30,10 +30,13 @@ extension ProcessList {
         failure == nil ? matches(.cursorApp, otherFacts) : cursorAppRunning
     }
 
-    /// Every process but this one and clean-claude's own.
+    /// Names of programs that never count as owners: they only read, or they are Bonsai itself.
+    static let neverOwners: Set<String> = ["du", "ps", "clean-claude", "bonsai", "cleanclaudeapp"]
+
+    /// Every process but this one and the ones named in `neverOwners`.
     private var otherFacts: [Facts] {
         let ownPID = getpid()
-        return processes.map(Facts.init).filter { $0.process.pid != ownPID && !$0.names.contains("clean-claude") }
+        return processes.map(Facts.init).filter { $0.process.pid != ownPID && $0.names.isDisjoint(with: Self.neverOwners) }
     }
 
     /// An executable inside a `Cursor.app` bundle, or one named `Cursor` (or `Cursor Helper …`) in any app's
@@ -89,18 +92,24 @@ extension ProcessList.Process {
         arguments.split(separator: " ", omittingEmptySubsequences: true)
     }
 
-    /// The names this process runs as, in lower case with version-less variants: the file name of `comm` when
-    /// ps didn't cut it, of the first command-line word, and, after an interpreter or wrapper, of the next plain
-    /// words (`node /opt/homebrew/bin/npm install` is npm, `python3 -m pip` is pip, `sudo brew` is brew).
+    /// The names this process runs as, in lower case with version-less variants: the file name of its executable
+    /// (`proc_pidpath`), of `comm` when ps didn't cut it, of the first command-line word, and, after an interpreter
+    /// or wrapper, of the next plain words (`node /opt/homebrew/bin/npm install` is npm, `python3 -m pip` is pip,
+    /// `sudo brew` is brew).
     var commandNames: Set<String> {
         var names = Set<String>()
         var launcher = false
+        if let executable, !executable.isEmpty {
+            let variants = Self.variants(of: Self.fileName(of: executable))
+            names.formUnion(variants)
+            launcher = !Self.launchers.isDisjoint(with: variants)
+        }
         if !command.isEmpty, command.count < ProcessList.commandWidth {
             // A title a program set itself ("npm install") names it by its first word.
             let name = command.hasPrefix("/") ? Substring(command) : command.split(separator: " ").first ?? ""
             let variants = Self.variants(of: Self.fileName(of: name))
             names.formUnion(variants)
-            launcher = !Self.launchers.isDisjoint(with: variants)
+            launcher = launcher || !Self.launchers.isDisjoint(with: variants)
         }
         let words = words
         guard let first = words.first else { return names }
@@ -120,9 +129,10 @@ extension ProcessList.Process {
         return names
     }
 
-    /// What "Quit … to clean this" calls a process found by its command line: its first word's file name.
+    /// What "Quit … to clean this" calls a process found by its command line: its executable's file name, else its
+    /// first word's.
     var displayName: String {
-        let name = words.first.map { Self.fileName(of: $0) } ?? command
+        let name = executable.map { Self.fileName(of: $0) } ?? words.first.map { Self.fileName(of: $0) } ?? command
         return name.isEmpty ? "process \(pid)" : name
     }
 

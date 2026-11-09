@@ -9,7 +9,7 @@ struct ToolCacheCleanerTests {
         let ids = ToolCacheCatalog.entries.map(\.id)
         #expect(Set(ids).count == ids.count)
         #expect(ToolCacheCatalog.cleanableIDs == [
-            "npm", "yarn", "pip", "uv", "pub", "cocoapods", "homebrew", "gradle", "swiftpm", "go-build", "playwright",
+            "npm", "yarn", "pip", "pub", "cocoapods", "homebrew", "gradle", "swiftpm", "go-build", "playwright",
             "mongodb-binaries", "xcode-cache", "cursor-agent-versions", "cursor-state-backup", "cursor-caches",
         ])
         for entry in ToolCacheCatalog.entries {
@@ -20,6 +20,12 @@ struct ToolCacheCleanerTests {
             #expect(entry.isCleanable == !entry.owners.isEmpty, "\(entry.id): a cleanable entry has owners, a display-only one none")
             #expect(entry.isCleanable == !entry.targets.isEmpty)
         }
+        // uv clones into virtualenvs (its estimate would lie), like pnpm: not in the catalog. pub keeps git.
+        #expect(ToolCacheCatalog.entry(id: "uv") == nil)
+        #expect(ToolCacheCatalog.entry(id: "pub")?.targets == [".pub-cache/hosted"])
+        #expect(ToolCacheCatalog.entry(id: "pub")?.never.contains(".pub-cache/git") == true)
+        #expect(ToolCacheCatalog.entry(id: "pub")?.note.contains("dart pub global activate") == true)
+        #expect(ToolCacheCatalog.entry(id: "yarn")?.note.contains("Yarn PnP projects need `yarn install` again") == true)
         // The read-only rows are in the catalog with no targets.
         for id in ["cursor-state", "cursor-snapshots", "cursor-workspace-storage", "cursor-chats", "cursor-projects", "cursor-extensions"] {
             #expect(ToolCacheCatalog.entry(id: id)?.targets == [], "\(id)")
@@ -102,11 +108,11 @@ struct ToolCacheCleanerTests {
         #expect(report.finding(id: "npm") != nil)
 
         try FileManager.default.removeItem(atPath: world.path("Library/Caches/go-build"))
-        let result = await world.cleaner().clean(try report.require(["go-build", "uv"]))
+        let result = await world.cleaner().clean(try report.require(["go-build", "cocoapods"]))
         #expect(result.refused.map(\.id) == ["go-build"])
         #expect(result.refused.first?.reason == "it no longer exists")
-        #expect(result.cleaned.map(\.id) == ["uv"])
-        #expect(try world.logEntries().map(\.repoPath) == ["uv"])
+        #expect(result.cleaned.map(\.id) == ["cocoapods"])
+        #expect(try world.logEntries().map(\.repoPath) == ["cocoapods"])
     }
 
     /// Only catalog entries the scan found ready get through.
@@ -134,9 +140,9 @@ struct ToolCacheCleanerTests {
         defer { world.remove() }
         let report = await world.scanner().scan()
         let asked = CallCounter()
-        let result = await world.cleaner().clean(try report.require(["npm", "pip", "uv"])) { asked.next() < 1 }
+        let result = await world.cleaner().clean(try report.require(["npm", "pip", "cocoapods"])) { asked.next() < 1 }
         #expect(result.cleaned.map(\.id) == ["npm"])
-        #expect(result.refused.map(\.id) == ["pip", "uv"])
+        #expect(result.refused.map(\.id) == ["pip", "cocoapods"])
         #expect(world.exists("Library/Caches/pip/wheels/x.whl"))
     }
 }

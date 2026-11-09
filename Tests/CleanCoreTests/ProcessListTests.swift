@@ -97,6 +97,88 @@ struct ProcessListTests {
         #expect(other.runningOwners(ToolCacheCatalog.entry(id: "playwright")!.owners, mentioning: []) == ["Playwright"])
     }
 
+    /// Review item 4, probe `probeConcurrentDuCountsAsOwner`: du, ps and Bonsai's own processes never count as
+    /// owners under any rule, also the argument-text rules (`du -skx …/ms-playwright`, `…/cursor-agent/versions/<v>`).
+    @Test func duPsAndBonsaiAreNeverOwners() async throws {
+        let world = try ToolCacheWorld()
+        defer { world.remove() }
+        world.processes.run(
+            "/usr/bin/du -skx " + world.path("Library/Caches/ms-playwright"),
+            "/usr/bin/du -skx " + world.path(ToolCacheWorld.versions + "/" + ToolCacheWorld.oldVersions[0]),
+            "/bin/ps -axo pid=,comm=,args= playwright GradleDaemon",
+            "/Applications/Bonsai.app/Contents/MacOS/Bonsai playwright /x/cursor-agent/versions/y",
+            "/Users/me/clean-claude/.build/debug/CleanClaudeApp mongodb-memory-server"
+        )
+        let report = await world.scanner().scan()
+        for id in ["playwright", "cursor-agent-versions", "gradle", "mongodb-binaries", "npm"] {
+            let finding = try report.require(id)
+            #expect(finding.isReady, "\(id): \(finding.verdict)")
+        }
+        // The same command lines from any other program do count.
+        world.processes.run("/usr/local/bin/watch " + world.path("Library/Caches/ms-playwright"))
+        #expect(try await world.scanner().scan().require("playwright").verdict == .refused("Quit Playwright and watch to clean this"))
+    }
+
+    /// Review item 2: a tool under a folder with spaces or accents can't be split back out of `args`; its executable
+    /// path (`proc_pidpath`) names it. Canned: the kernel's path for each pid.
+    @Test func theExecutablePathNamesAToolUnderAPathWithSpaces() async throws {
+        let world = try ToolCacheWorld()
+        defer { world.remove() }
+        let tools = [
+            (3000, "/Users/me/A B C/bin/npm", "install", "npm", "Quit npm to clean this"),
+            (3001, "/Users/me/My Flutter SDK/bin/cache/dart-sdk/bin/dart", "pub get", "pub", "Quit dart to clean this"),
+            (3002, "/Users/me/Dévelöppé Tools/bin/pod", "install", "cocoapods", "Quit pod to clean this"),
+        ]
+        for (pid, path, arguments, id, sentence) in tools {
+            world.processes.output = ScriptedProcesses.idle + "\n" + ScriptedProcesses.line(pid: Int32(pid), arguments: path + " " + arguments)
+            world.processes.executables = [:]
+            #expect(try await world.scanner().scan().require(id).isReady, "\(id): args alone don't name it")
+            world.processes.executables = [Int32(pid): path]
+            #expect(try await world.scanner().scan().require(id).verdict == .refused(sentence), "\(id)")
+        }
+    }
+
+    /// Review item 2 with the real `/bin/ps` and `proc_pidpath` (probe `probeRealPsOwnerDetection`): copies of
+    /// `/bin/sleep` started from folders with spaces and accents, named like the tools, are seen as their owners.
+    @Test func realProcessesUnderAwkwardPathsAreSeen() async throws {
+        let folder = try TemporaryDirectory(prefix: "clean-claude-procs")
+        defer { folder.remove() }
+        let launches = [
+            ("A B C/bin/npm", "npm", "npm"),
+            ("My Flutter SDK/bin/cache/dart-sdk/bin/dart", "pub", "dart"),
+            ("Dévelöppé Tools/bin/pod", "cocoapods", "pod"),
+        ]
+        var started: [Foundation.Process] = []
+        defer {
+            for process in started where process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        }
+        for (path, _, _) in launches {
+            let url = folder.url.appending(path: path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: url)
+            // A copy of a system binary keeps Apple's signature and is killed at launch; an ad-hoc signature runs.
+            let signed = try await ProcessRunner.run(
+                executable: URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", url.path]
+            )
+            #expect(signed.succeeded, "\(signed.stderr)")
+            let process = Foundation.Process()
+            process.executableURL = url
+            process.arguments = ["30"]
+            try process.run()
+            started.append(process)
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        let live = await ProcessList.capture()
+        #expect(live.failure == nil)
+        for ((path, id, owner), process) in zip(launches, started) {
+            let line = try #require(live.processes.first { $0.pid == process.processIdentifier }, "\(path) is in ps")
+            #expect(line.executable.map(CanonicalPath.resolve) == CanonicalPath.resolve(folder.url.appending(path: path)),
+                    "pid \(line.pid) comm [\(line.command)] args [\(line.arguments)] executable \(line.executable ?? "nil")")
+            let single = ProcessList(processes: [line])
+            #expect(single.runningOwners(ToolCacheCatalog.entry(id: id)!.owners, mentioning: []) == [owner], "\(path)")
+        }
+    }
+
     /// The real ps is run by absolute path with the fixed arguments; a failure is a failure, not an empty list.
     @Test func captureRunsPsAndReportsFailures() async throws {
         let scripted = ScriptedCommandRunner { _ in ScriptedCommandRunner.result(stdout: Self.output) }

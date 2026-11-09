@@ -64,7 +64,8 @@ public struct ToolCacheCleaner: Sendable {
                 freed.append(bytes)
                 let cleaned = ToolCacheCleanResult.Cleaned(
                     id: entry.id, name: entry.name, removedCount: outcome.removed.count,
-                    estimatedBytes: finding.bytes, freedBytes: bytes, failures: outcome.failures
+                    estimatedBytes: Self.estimate(of: outcome, entry: entry, finding: finding), freedBytes: bytes,
+                    failures: outcome.failures
                 )
                 result.cleaned.append(cleaned)
                 record(logEntry(for: entry, inspection: inspection, outcome: outcome, cleaned: cleaned), in: &result)
@@ -109,6 +110,19 @@ public struct ToolCacheCleaner: Sendable {
             return .go(entry, fresh, fresh.removals)
         case .contents, .none:
             return .go(entry, fresh, fresh.removals)
+        }
+    }
+
+    /// The scan's estimate of what really went: for versions and the backup, the items removed (fewer than
+    /// confirmed when the keep set changed or one failed); for a contents entry, its target folders. nil when an
+    /// item that went wasn't measured.
+    static func estimate(of outcome: Outcome, entry: ToolCacheEntry, finding: ToolCacheFinding) -> Int64? {
+        switch entry.deletion {
+        case .cursorAgentVersions, .cursorStateBackup:
+            let sizes = outcome.removed.map { finding.removalBytes[$0] }
+            return sizes.contains(nil) ? nil : sizes.compactMap { $0 }.reduce(0, +)
+        case .contents, .none:
+            return finding.bytes
         }
     }
 
