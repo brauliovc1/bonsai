@@ -78,4 +78,18 @@ struct LightCleanPackageCopyTests {
         #expect(result.deleted.isEmpty, "\(result)")
         #expect(FileManager.default.fileExists(atPath: mine.appending(path: "work.txt").path))
     }
+
+    /// P12b review round 2: light clean keeps a `node_modules` holding a repo with work below a clean clone.
+    @Test func nodeModulesHoldingARepoWithWorkBelowACleanCloneIsKept() async throws {
+        let world = try await LightCleanWorld.make()
+        defer { world.remove() }
+        let wt = try await world.fixture.addSiblingWorktree(to: world.repo, name: "npm")
+        let lib = try await PackageCopyInsideTests.cleanCloneIgnoringNodeModules(world.fixture, in: wt, at: "node_modules/lib")
+        let mine = try await PackageCopyInsideTests.repoWithWork(world.fixture, in: lib, at: "node_modules/mine")
+        let worktree = try await world.worktree(wt)
+        let found = await world.finder().candidates(in: worktree, knownWorktrees: try await world.known())
+        #expect(!found.candidates.contains { $0.relativePath == "node_modules" }, "\(found)")
+        #expect(found.skipped.first { $0.relativePath == "node_modules" }?.reason == .nestedCheckout(["lib/node_modules/mine"]))
+        #expect(FileManager.default.fileExists(atPath: mine.appending(path: "work.txt").path))
+    }
 }
