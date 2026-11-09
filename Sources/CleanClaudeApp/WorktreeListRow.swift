@@ -18,7 +18,7 @@ struct WorktreeListRow: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                (showsRepo ? Text(row.repoName).fontWeight(.semibold) + Text(" · " + row.locationText) : Text(row.locationText))
+                (showsRepo ? Text("\(Text(row.repoName).fontWeight(.semibold)) · \(row.locationText)") : Text(row.locationText))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
