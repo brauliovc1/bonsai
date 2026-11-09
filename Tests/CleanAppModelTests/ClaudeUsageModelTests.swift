@@ -59,7 +59,7 @@ struct ClaudeUsageModelTests {
         }
         try transcript(for: try registered("beacon-gone"), kibibytes: 40)  // registered, folder deleted
         try transcript(for: try registered("atlas-archive"), kibibytes: 20)  // still there
-        try transcript(for: URL(fileURLWithPath: "/Users/clean-claude-no-such-user/unknown"), kibibytes: 8)
+        try transcript(for: URL(fileURLWithPath: "/Users/bonsai-no-such-user/unknown"), kibibytes: 8)
         let model = ClaudeUsageModel(app: app)
 
         await model.refresh()

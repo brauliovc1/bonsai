@@ -10,8 +10,8 @@ struct ProjectsCommand: AsyncParsableCommand {
         discussion: "Lists main checkouts and sibling or other worktrees whose light-clean folders git ignores and "
             + "tracks nothing in, biggest first. By default only projects idle at least the settings' threshold "
             + "(30 days) are shown. Claude and Cursor worktrees are only counted: remove them whole with "
-            + "`clean-claude remove`. Nothing is deleted or written; to clean one project, run "
-            + "`clean-claude light-clean <path>` (a dry run) and add --yes."
+            + "`bonsai remove`. Nothing is deleted or written; to clean one project, run "
+            + "`bonsai light-clean <path>` (a dry run) and add --yes."
     )
 
     @OptionGroup var rootOptions: RootOptions

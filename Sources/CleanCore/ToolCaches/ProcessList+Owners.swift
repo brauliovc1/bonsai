@@ -5,9 +5,9 @@ extension ProcessList {
     /// one of `paths` (a browser Playwright installed, a mongod from the test-binary cache, a cursor-agent
     /// version): a program running from a cache is using it. nil when the list couldn't be read.
     ///
-    /// `du`, `ps`, this process and Bonsai's own (the app, any clean-claude, also under `sudo` or `env`) never count
-    /// under any rule: they only read, or their own command line names the entries (`caches clean
-    /// cursor-agent-versions`, `du -skx …/ms-playwright`).
+    /// `du`, `ps`, this process and Bonsai's own (the app, `bonsai` or its old name `clean-claude`, also under
+    /// `sudo` or `env`) never count under any rule: they only read, or their own command line names the entries
+    /// (`caches clean cursor-agent-versions`, `du -skx …/ms-playwright`).
     public func runningOwners(_ owners: [ToolOwner], mentioning paths: [String]) -> [String]? {
         guard failure == nil else { return nil }
         let facts = otherFacts
@@ -30,7 +30,8 @@ extension ProcessList {
         failure == nil ? matches(.cursorApp, otherFacts) : cursorAppRunning
     }
 
-    /// Names of programs that never count as owners: they only read, or they are Bonsai itself.
+    /// Names of programs that never count as owners: they only read, or they are Bonsai itself (`clean-claude` is
+    /// the old name, kept as a link by `make install`).
     static let neverOwners: Set<String> = ["du", "ps", "clean-claude", "bonsai", "cleanclaudeapp"]
 
     /// Every process but this one and the ones named in `neverOwners`.

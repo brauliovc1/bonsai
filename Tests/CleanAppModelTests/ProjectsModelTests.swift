@@ -226,7 +226,7 @@ struct ProjectsModelTests {
         #expect(refused.deletedCount == 0)
         #expect(refused.outcomes.allSatisfy { $0.error == "another cleanup is still running; nothing was deleted" })
 
-        // Another Bonsai or clean-claude holds cleanup.lock.
+        // Another Bonsai holds cleanup.lock.
         let lock = try #require(try CleanupLock.tryAcquire(environment: world.environment))
         let locked = await model.cleanSelected(confirmation)
         lock.release()

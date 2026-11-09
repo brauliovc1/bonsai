@@ -11,7 +11,7 @@ struct DerivedDataScannerTests {
     @Test func everyStateFollowsPlan44() async throws {
         let world = try DerivedDataWorld()
         defer { world.remove() }
-        let gonePath = "/nonexistent-clean-claude-\(UUID().uuidString)/Gone.xcworkspace"
+        let gonePath = "/nonexistent-bonsai-\(UUID().uuidString)/Gone.xcworkspace"
         try world.entry("Gone-aaa", workspace: gonePath, kibibytes: 12)
         try world.entry("Live-bbb", workspace: "/usr/bin")
         try world.entry("Files-ccc", workspace: "/private/var/folders/l0/x/C/com.apple.DeveloperTools/Files.xcfilescontainer")
@@ -95,7 +95,7 @@ struct DerivedDataScannerTests {
     @Test func theScannerListsTheCustomLocation() async throws {
         let world = try DerivedDataWorld()
         defer { world.remove() }
-        try world.entry("Gone-aaa", workspace: "/nonexistent-clean-claude-\(UUID().uuidString)/Gone.xcodeproj")
+        try world.entry("Gone-aaa", workspace: "/nonexistent-bonsai-\(UUID().uuidString)/Gone.xcodeproj")
         let location = await DerivedDataLocator(preferences: FakeXcodePreferences(value: world.root.path), homeDirectory: world.directory.url).locate()
 
         let report = await DerivedDataScanner(root: location.root, du: nil, homeDirectory: world.home).scan()

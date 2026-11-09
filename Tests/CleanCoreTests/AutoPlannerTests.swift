@@ -18,8 +18,8 @@ struct AutoPlannerTests {
         locked: Bool = false
     ) -> WorktreeAssessment {
         let worktree = Worktree(
-            path: "/nonexistent/clean-claude-plan/\(name)",
-            repoPath: "/nonexistent/clean-claude-plan/repo",
+            path: "/nonexistent/bonsai-plan/\(name)",
+            repoPath: "/nonexistent/bonsai-plan/repo",
             head: "0123456789abcdef",
             branch: name,
             isMain: isMain,

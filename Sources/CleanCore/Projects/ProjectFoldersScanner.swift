@@ -1,6 +1,6 @@
 import Foundation
 
-/// The read-only side of the Project folders screen and `clean-claude projects` (PLAN §4.5): for every main
+/// The read-only side of the Project folders screen and `bonsai projects` (PLAN §4.5): for every main
 /// checkout and sibling or other worktree of a scan, `LightCleanFinder`'s candidates with their sizes, the §4.3
 /// idle report read now and whether a process works there. Claude and Cursor worktrees are not listed; their
 /// light-clean folders are only added up for the footer. Deleting is not done here: it goes through `LightCleaner`.

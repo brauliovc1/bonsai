@@ -50,7 +50,7 @@ struct SimulatorReportText {
                 runtime.deletable.map { $0 ? "yes" : "no" } ?? "-",
             ])
         }
-        return ["Runtimes (shown only; remove them in Xcode's Settings, clean-claude never does):"]
+        return ["Runtimes (shown only; remove them in Xcode's Settings, Bonsai never does):"]
             + AlignedColumns.lines(rows, rightAligned: [2]).map { "  " + $0 }
     }
 

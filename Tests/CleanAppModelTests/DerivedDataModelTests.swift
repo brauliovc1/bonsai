@@ -28,7 +28,7 @@ struct DerivedDataModelTests {
         try world.home.derivedDataEntry("Gone-aaa", workspace: goneWorkspace("Gone"), kibibytes: 40)
         try world.home.derivedDataEntry("Live-bbb", workspace: "/usr/bin")
         try world.home.derivedDataEntry("ModuleCache.noindex", workspace: nil)
-        try world.home.derivedDataEntry("Drive-ccc", workspace: "/Volumes/NoSuchDrive-clean-claude/App.xcodeproj")
+        try world.home.derivedDataEntry("Drive-ccc", workspace: "/Volumes/NoSuchDrive-bonsai/App.xcodeproj")
         try world.home.derivedDataEntry("Temp-ddd", workspace: "/var/folders/zz/abc/T/Scratch.xcodeproj")
         let broken = try world.home.derivedDataEntry("Broken-eee", workspace: nil)
         try Data("not a plist".utf8).write(to: broken.appending(path: "info.plist"))

@@ -169,7 +169,7 @@ struct SettingsModelTests {
         let fixture = try GitFixture()
         defer { fixture.remove() }
         let withOverride = AppModel(environment: fixture.environment(scanRoots: [fixture.scanRoot]), git: fixture.git)
-        #expect(SettingsModel(app: withOverride).overrideText?.contains("CLEAN_CLAUDE_SCAN_ROOTS") == true)
+        #expect(SettingsModel(app: withOverride).overrideText?.contains("BONSAI_SCAN_ROOTS") == true)
         let without = AppModel(environment: fixture.environment(), git: fixture.git)
         #expect(SettingsModel(app: without).overrideText == nil)
     }

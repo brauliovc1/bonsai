@@ -11,6 +11,7 @@ struct OverviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             TestModeBanner(app: model.app)
+            LaunchNoticeBanner(app: model.app)
             ScrollView {
                 content
                     .padding(.horizontal, 28)

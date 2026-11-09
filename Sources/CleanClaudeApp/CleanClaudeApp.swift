@@ -15,7 +15,10 @@ struct CleanClaudeApp: App {
     @State private var models: ScreenModels
 
     init() {
-        let app = AppModel(environment: .live())
+        // Moves the settings folder from clean-claude to Bonsai first, when it should (PLAN §10.2).
+        let launch = CleanEnvironment.launch()
+        let app = AppModel(environment: launch.environment)
+        app.launchNotice = launch.notice
         AppDelegate.app = app
         let navigation = NavigationModel()
         let notifier = SystemNotifier { section in

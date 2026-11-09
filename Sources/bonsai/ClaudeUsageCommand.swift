@@ -12,7 +12,7 @@ struct ClaudeUsageCommand: AsyncParsableCommand {
         name: .customLong("root"),
         help: ArgumentHelp(
             "A folder to scan for the repos whose transcript folders get named (repeatable). "
-                + "Default: $CLEAN_CLAUDE_SCAN_ROOTS, else ~/Documents/GitHub.",
+                + "Default: $BONSAI_SCAN_ROOTS, else ~/Documents/GitHub.",
             valueName: "path"
         )
     )
@@ -22,7 +22,7 @@ struct ClaudeUsageCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let environment = CleanEnvironment.live()
+        let environment = Launch.environment
         let explicitRoots = roots.map { CleanEnvironment.expand($0, home: environment.homeDirectory) }
         // Only repos, worktrees and roots are needed to name transcript folders, not their sizes.
         let scan = await Scanner(environment: environment).scan(roots: explicitRoots, includeSizes: false)

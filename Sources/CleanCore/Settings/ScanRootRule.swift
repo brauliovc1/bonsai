@@ -6,7 +6,7 @@ import Foundation
 /// A broader root would make light clean and removal reach checkouts that are not the user's projects:
 /// `/opt/homebrew` is a git checkout whose `/*` ignore rule makes `lib/node_modules` look deletable.
 /// `Settings` applies the rule to a settings file's roots, `SettingsModel` to a folder being added. Explicit
-/// roots (`--root`, `CLEAN_CLAUDE_SCAN_ROOTS`) are not checked: the person typed them for one run.
+/// roots (`--root`, `BONSAI_SCAN_ROOTS`) are not checked: the person typed them for one run.
 public struct ScanRootRule: Sendable {
     /// Why a folder is not accepted, in words for the person; `path` is the folder as it was written.
     public struct Refusal: Error, Sendable, Hashable, CustomStringConvertible {

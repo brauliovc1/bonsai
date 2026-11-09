@@ -82,10 +82,12 @@ struct ProcessListTests {
         #expect(ProcessList(processes: [], failure: "ps timed out").runningOwners([], mentioning: [cache]) == nil)
     }
 
-    /// clean-claude's own command line names entries (`caches clean playwright cursor-agent-versions`), also under
-    /// sudo: it never counts as an owner. This process neither.
-    @Test func cleanClaudeItselfIsNeverAnOwner() {
+    /// bonsai's own command line names entries (`caches clean playwright cursor-agent-versions`), also under its old
+    /// name clean-claude (the link `make install` leaves) and under sudo: it never counts as an owner. This process
+    /// neither.
+    @Test func bonsaiItselfIsNeverAnOwner() {
         let list = ProcessList(processes: [
+            ProcessList.Process(pid: 79, command: "bonsai", arguments: "/Users/me/.local/bin/bonsai caches clean playwright cursor-agent-versions --yes"),
             ProcessList.Process(pid: 80, command: "clean-claude", arguments: "/Users/me/.local/bin/clean-claude caches clean playwright cursor-agent-versions --yes"),
             ProcessList.Process(pid: 81, command: "sudo", arguments: "sudo clean-claude caches clean playwright --yes"),
             ProcessList.Process(pid: getpid(), command: "node", arguments: "node /x/npm-cli.js playwright"),
@@ -107,7 +109,7 @@ struct ProcessListTests {
             "/usr/bin/du -skx " + world.path(ToolCacheWorld.versions + "/" + ToolCacheWorld.oldVersions[0]),
             "/bin/ps -axo pid=,comm=,args= playwright GradleDaemon",
             "/Applications/Bonsai.app/Contents/MacOS/Bonsai playwright /x/cursor-agent/versions/y",
-            "/Users/me/clean-claude/.build/debug/CleanClaudeApp mongodb-memory-server"
+            "/Users/me/bonsai/.build/debug/CleanClaudeApp mongodb-memory-server"
         )
         let report = await world.scanner().scan()
         for id in ["playwright", "cursor-agent-versions", "gradle", "mongodb-binaries", "npm"] {
@@ -141,7 +143,7 @@ struct ProcessListTests {
     /// Review item 2 with the real `/bin/ps` and `proc_pidpath` (probe `probeRealPsOwnerDetection`): copies of
     /// `/bin/sleep` started from folders with spaces and accents, named like the tools, are seen as their owners.
     @Test func realProcessesUnderAwkwardPathsAreSeen() async throws {
-        let folder = try TemporaryDirectory(prefix: "clean-claude-procs")
+        let folder = try TemporaryDirectory(prefix: "bonsai-procs")
         defer { folder.remove() }
         let launches = [
             ("A B C/bin/npm", "npm", "npm"),

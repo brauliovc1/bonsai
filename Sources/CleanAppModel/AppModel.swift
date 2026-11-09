@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// The app's shared state: environment, settings, the last scan with `WorktreeAssessor`'s verdict for
-/// every worktree (the same one `clean-claude scan` prints), the removal log and the disk space.
+/// every worktree (the same one `bonsai scan` prints), the removal log and the disk space.
 ///
 /// Feature models (`WorktreesModel`, `RemovalsModel`, and the ones later phases add) take an `AppModel`,
 /// read from it, and call `cleanupFinished()` after they change anything on disk.
@@ -31,6 +31,9 @@ public final class AppModel {
     public private(set) var logError: String?
     /// Why the last scan found nothing to show: settings unreadable, git missing.
     public private(set) var problem: String?
+    /// What the settings folder's move at launch has to say (PLAN §10.2: both folders there, or not moved
+    /// yet), shown once on the Overview until dismissed; nil otherwise.
+    public var launchNotice: String?
     public private(set) var isScanning = false
     public private(set) var progress: ScanProgress?
     public private(set) var lastScanAt: Date?

@@ -28,7 +28,7 @@ struct CachesOptions: ParsableArguments {
     }
 
     /// The live environment, or one whose home is the test folder (settings still follow
-    /// `CLEAN_CLAUDE_SETTINGS_DIR`).
+    /// `BONSAI_SETTINGS_DIR`).
     func environment() throws -> CleanEnvironment {
         guard let home else { return try CommandContext.load().environment }
         let environment = CleanEnvironment.make(

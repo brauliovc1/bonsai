@@ -12,7 +12,7 @@ struct DockerCleanerTests {
     private let logFolder: TemporaryDirectory
 
     init() throws {
-        logFolder = try TemporaryDirectory(prefix: "clean-claude-docker-log")
+        logFolder = try TemporaryDirectory(prefix: "bonsai-docker-log")
     }
 
     private func cleaner(

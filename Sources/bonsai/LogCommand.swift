@@ -5,7 +5,7 @@ import Foundation
 struct LogCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "log",
-        abstract: "Show every cleanup clean-claude has done (removals.jsonl), oldest first."
+        abstract: "Show every cleanup Bonsai has done (removals.jsonl), oldest first."
     )
 
     @Flag(help: "Print the entries as JSON.")

@@ -72,7 +72,7 @@ public enum SafetyReason: Sendable, Hashable, Codable {
     public var sentence: String {
         switch self {
         case .mainCheckout:
-            return "This is the repo's main checkout; clean-claude never removes it."
+            return "This is the repo's main checkout; Bonsai never removes it."
         case .missingFolder:
             return "The folder no longer exists; use prune to clear git's record of it instead."
         case .locked(let reason):
@@ -106,7 +106,7 @@ public enum SafetyReason: Sendable, Hashable, Codable {
             return "\(count) \(count == 1 ? "commit is" : "commits are") only in this worktree's HEAD reflog "
                 + "(no branch, tag or remote has them); removing it would lose them."
         case .submodules:
-            return "It has submodules; git removes those only with --force, which clean-claude never uses."
+            return "It has submodules; git removes those only with --force, which Bonsai never uses."
         case .nestedCheckouts(let paths):
             return "Other git checkouts live inside it and would be deleted with it: \(Self.list(paths))."
         case .localOnlyCommits(let count, let onBranch):

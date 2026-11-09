@@ -90,8 +90,8 @@ struct SimulatorsModelTests {
     /// went unavailable meanwhile was deleted too. Now only a devices listing sits between the confirm and
     /// the delete.
     @Test func onlyAListingOfDevicesSitsBetweenTheConfirmAndTheDelete() async throws {
-        let marker = FileManager.default.temporaryDirectory.appending(path: "clean-claude-du-\(UUID().uuidString).log")
-        let duScript = FileManager.default.temporaryDirectory.appending(path: "clean-claude-du-\(UUID().uuidString).sh")
+        let marker = FileManager.default.temporaryDirectory.appending(path: "bonsai-du-\(UUID().uuidString).log")
+        let duScript = FileManager.default.temporaryDirectory.appending(path: "bonsai-du-\(UUID().uuidString).sh")
         try "#!/bin/sh\necho x >> '\(marker.path)'\nexec /usr/bin/du \"$@\"\n".write(to: duScript, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: duScript.path)
         defer {

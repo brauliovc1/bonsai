@@ -61,7 +61,7 @@ public struct DockerReport: Sendable, Codable, Equatable {
         self.usageFailure = usageFailure
     }
 
-    /// The daemon identified itself as Docker Desktop, the only daemon clean-claude prunes (PLAN §7).
+    /// The daemon identified itself as Docker Desktop, the only daemon Bonsai prunes (PLAN §7).
     public var isDockerDesktop: Bool {
         daemonOperatingSystem?.lowercased().hasPrefix("docker desktop") == true
     }
@@ -77,7 +77,7 @@ public struct DockerReport: Sendable, Codable, Equatable {
         case .running:
             guard isDockerDesktop else {
                 let found = daemonOperatingSystem.map { "\"\($0)\"" } ?? "unknown"
-                return "The Docker daemon reports itself as \(found), not Docker Desktop, and clean-claude only "
+                return "The Docker daemon reports itself as \(found), not Docker Desktop, and Bonsai only "
                     + "prunes Docker Desktop. Check DOCKER_HOST and your docker context (docker context show)."
             }
             return nil

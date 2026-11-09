@@ -39,10 +39,10 @@ public final class SettingsModel {
         app.roots.isEmpty ? "Nothing to scan yet." : "Scanning " + app.roots.map(\.path).joined(separator: ", ")
     }
 
-    /// `CLEAN_CLAUDE_SCAN_ROOTS` replaces the list for this run (development); the list is still saved.
+    /// `BONSAI_SCAN_ROOTS` replaces the list for this run (development); the list is still saved.
     public var overrideText: String? {
         app.environment.scanRootsOverride.map {
-            "This run scans " + $0.map(\.path).joined(separator: ", ") + " (CLEAN_CLAUDE_SCAN_ROOTS); the list below is kept for other runs."
+            "This run scans " + $0.map(\.path).joined(separator: ", ") + " (BONSAI_SCAN_ROOTS); the list below is kept for other runs."
         }
     }
 

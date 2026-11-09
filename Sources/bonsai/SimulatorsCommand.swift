@@ -24,7 +24,7 @@ struct SimulatorsCommand: AsyncParsableCommand {
     }
 
     func run() async throws {
-        let environment = CleanEnvironment.live()
+        let environment = Launch.environment
         let lock = try CommandContext.holdCleanupLock(if: yes, environment: environment)
         defer { lock?.release() }
         let report = await SimulatorScanner(environment: environment).scan()

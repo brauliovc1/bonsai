@@ -109,7 +109,7 @@ struct WorktreeStatusTextTests {
             + "extra worktrees; use Clean dependencies to free space here.", "PLAN §8.5, exact copy")
         #expect(WorktreeStatusText.sentence(for: .claudeSession) == SafetyReason.claudeSessionWarning)
         // The CLI keeps its words.
-        #expect(SafetyReason.mainCheckout.sentence.contains("clean-claude"))
+        #expect(SafetyReason.mainCheckout.sentence == "This is the repo's main checkout; Bonsai never removes it.")
         #expect(WorktreeStatus.safe.label == "SAFE")
     }
 

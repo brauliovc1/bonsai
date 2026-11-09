@@ -5,7 +5,7 @@ struct RootOptions: ParsableArguments {
     @Option(
         name: .customLong("root"),
         help: ArgumentHelp(
-            "A folder to scan (repeatable). Default: $CLEAN_CLAUDE_SCAN_ROOTS, else the settings' scan roots, "
+            "A folder to scan (repeatable). Default: $BONSAI_SCAN_ROOTS, else the settings' scan roots, "
                 + "else ~/Documents/GitHub.",
             valueName: "path"
         )

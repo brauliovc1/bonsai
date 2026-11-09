@@ -37,7 +37,7 @@ enum VerdictText {
             let kept = worktree.branch.map { "branch \($0)" } ?? "commit \(worktree.head?.prefix(12) ?? "?") (restore with --detach)"
             lines.append("  kept: \(kept)")
         } else if safety.blockers.contains(.missingFolder) {
-            lines.append("  instead: clean-claude prune (clears git's record of missing folders)")
+            lines.append("  instead: bonsai prune (clears git's record of missing folders)")
         }
         return lines.joined(separator: "\n")
     }

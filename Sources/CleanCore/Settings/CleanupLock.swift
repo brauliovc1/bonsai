@@ -6,7 +6,7 @@ import Foundation
 public enum CleanupLock {
     public static let fileName = "cleanup.lock"
     /// Why a cleanup was refused while another process (or another app model) holds the lock.
-    public static let busyMessage = "another Bonsai or clean-claude cleanup is running"
+    public static let busyMessage = "another Bonsai cleanup is running"
 
     public static func url(environment: CleanEnvironment) -> URL {
         environment.settingsDirectory.appending(path: fileName)

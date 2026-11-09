@@ -3,7 +3,7 @@ import CleanTestSupport
 import Foundation
 
 /// `fixture-world <folder>`: builds `DemoWorld` in an empty folder inside the temp dir, adds
-/// `ProjectFoldersDemo`'s idle projects with build folders, then runs the assessment `clean-claude scan` runs
+/// `ProjectFoldersDemo`'s idle projects with build folders, then runs the assessment `bonsai scan` runs
 /// (default settings) and exits 1 when any worktree didn't get the status it was built for. Dev tool only; it
 /// never touches anything outside `<folder>`.
 @main
@@ -32,7 +32,7 @@ struct FixtureWorld {
         let matched = await check(world, items: items)
         print("")
         print("Run the app against it:")
-        print("  CLEAN_CLAUDE_SETTINGS_DIR=$(mktemp -d) CLEAN_CLAUDE_SCAN_ROOTS=\"\(folder.path)\" make run")
+        print("  BONSAI_SETTINGS_DIR=$(mktemp -d) BONSAI_SCAN_ROOTS=\"\(folder.path)\" make run")
         exit(matched ? 0 : 1)
     }
 
@@ -47,7 +47,7 @@ struct FixtureWorld {
         }
     }
 
-    /// Scans the world like `clean-claude scan` and compares each verdict with what was built.
+    /// Scans the world like `bonsai scan` and compares each verdict with what was built.
     private static func check(_ world: DemoWorld, items: [DemoWorld.Item]) async -> Bool {
         let environment = CleanEnvironment.live()
         let settings = Settings()
@@ -62,7 +62,7 @@ struct FixtureWorld {
         let assessments = await WorktreeAssessor(git: git, settings: settings, environment: environment).assess(scan)
 
         print("")
-        print("Assessment (as `clean-claude scan`, default settings: idle threshold \(settings.idleThresholdDays) days):")
+        print("Assessment (as `bonsai scan`, default settings: idle threshold \(settings.idleThresholdDays) days):")
         let rows = assessments.map { assessment -> [String] in
             let idle = assessment.idle.idleDays.map { "\($0)d" } ?? (assessment.worktree.isMain ? "main" : "-")
             let size = assessment.estimatedBytes.map(ByteFormatting.string) ?? "-"

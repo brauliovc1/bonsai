@@ -80,9 +80,13 @@ struct SafeguardTests {
         ])
         #expect(install.succeeded, "\(install.stderr)")
         let lines = install.stdoutString.split(separator: "\n").map(String.init)
-        let removeCLI = try #require(lines.firstIndex(of: "rm -f \"\(destination)/bin/clean-claude\""))
-        let copyCLI = try #require(lines.firstIndex { $0.hasPrefix("cp ") && $0.hasSuffix("\"\(destination)/bin/clean-claude\"") })
+        let removeCLI = try #require(lines.firstIndex(of: "rm -f \"\(destination)/bin/bonsai\""))
+        let copyCLI = try #require(lines.firstIndex { $0.hasPrefix("cp ") && $0.hasSuffix("\"\(destination)/bin/bonsai\"") })
         #expect(removeCLI < copyCLI, "a symlinked target is replaced, not written through")
+        // The old name stays as a link to the new one, so old scripts keep working (PLAN §10.2).
+        let removeOld = try #require(lines.firstIndex(of: "rm -f \"\(destination)/bin/clean-claude\""))
+        let linkOld = try #require(lines.firstIndex(of: "ln -s \"bonsai\" \"\(destination)/bin/clean-claude\""))
+        #expect(copyCLI < removeOld && removeOld < linkOld)
         #expect(install.stdoutString.contains("is running from"), "the running-app check comes before anything is replaced")
     }
 }

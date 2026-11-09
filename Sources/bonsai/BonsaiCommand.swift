@@ -1,9 +1,9 @@
 import ArgumentParser
 
 @main
-struct CleanClaudeCommand: AsyncParsableCommand {
+struct BonsaiCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "clean-claude",
+        commandName: "bonsai",
         abstract: "Find git worktrees and developer caches, and remove only what is safe to remove.",
         subcommands: [
             ScanCommand.self,

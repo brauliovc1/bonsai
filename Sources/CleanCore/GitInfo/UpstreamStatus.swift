@@ -1,6 +1,6 @@
 import Foundation
 
-/// A branch's upstream and how far apart they are, as of the last fetch (clean-claude never fetches).
+/// A branch's upstream and how far apart they are, as of the last fetch (Bonsai never fetches).
 public struct UpstreamStatus: Sendable, Codable, Hashable {
     /// "origin/feature".
     public var name: String

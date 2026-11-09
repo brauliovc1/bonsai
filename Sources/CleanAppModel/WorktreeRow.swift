@@ -95,7 +95,7 @@ public struct WorktreeRow: Identifiable, Hashable, Sendable {
     }
 
     public var status: WorktreeStatus { assessment.status }
-    /// Exactly what `clean-claude scan` prints in its STATUS column.
+    /// Exactly what `bonsai scan` prints in its STATUS column.
     public var statusLabel: String { status.label }
 
     public var tone: Tone {

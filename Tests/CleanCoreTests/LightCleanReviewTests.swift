@@ -156,7 +156,7 @@ struct LightCleanReviewTests {
         try await world.fixture.run(["add", "-f", "node_modules/vendored.js"], in: wt)
         try await world.fixture.commitAll(in: wt, message: "Vendor one file")
         var finder = world.finder()
-        // As if clean-claude were started from a git hook with another index.
+        // As if Bonsai were started from a git hook with another index.
         finder.git.inheritedEnvironment = ProcessInfo.processInfo.environment
             .merging(["GIT_INDEX_FILE": world.fixture.url.appending(path: "no-such-index").path]) { _, new in new }
 

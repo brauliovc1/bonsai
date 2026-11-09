@@ -2,7 +2,7 @@ import AppKit
 import CleanAppModel
 import SwiftUI
 
-/// The menu-bar window: the app's name (and a "Test mode" tag under CLEAN_CLAUDE_SCAN_ROOTS) with Refresh,
+/// The menu-bar window: the app's name (and a "Test mode" tag under BONSAI_SCAN_ROOTS) with Refresh,
 /// free space, what Bonsai can free (the Overview's one total; its tooltip lists the parts and a click opens the
 /// Overview), one status line for the last scan and auto mode, and the app's commands.
 struct MenuContentView: View {

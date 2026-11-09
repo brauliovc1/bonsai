@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "clean-claude",
+    name: "Bonsai",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "CleanCore", targets: ["CleanCore"]),
-        .executable(name: "clean-claude", targets: ["clean-claude"]),
+        .executable(name: "bonsai", targets: ["bonsai"]),
         .executable(name: "CleanClaudeApp", targets: ["CleanClaudeApp"]),
     ],
     dependencies: [
@@ -14,8 +14,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "CleanCore"),
+        // The `bonsai` command (`make install` adds a `clean-claude` link to it for old scripts).
         .executableTarget(
-            name: "clean-claude",
+            name: "bonsai",
             dependencies: [
                 "CleanCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
@@ -47,8 +48,8 @@ let package = Package(
         ),
         .testTarget(
             name: "CleanAppModelTests",
-            // clean-claude: so its binary is built for the test that compares app rows with `scan --json`.
-            dependencies: ["CleanAppModel", "CleanTestSupport", "clean-claude"]
+            // bonsai: so its binary is built for the test that compares app rows with `scan --json`.
+            dependencies: ["CleanAppModel", "CleanTestSupport", "bonsai"]
         ),
     ],
     swiftLanguageModes: [.v6]

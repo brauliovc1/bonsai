@@ -1,7 +1,7 @@
 import CleanAppModel
 import SwiftUI
 
-/// A slim strip saying the app scans only the folders in CLEAN_CLAUDE_SCAN_ROOTS (a demo world), so its
+/// A slim strip saying the app scans only the folders in BONSAI_SCAN_ROOTS (a demo world), so its
 /// repos aren't taken for the Mac's own. A long folder is cut in the middle; the words around it stay.
 struct TestModeBanner: View {
     let app: AppModel
@@ -10,7 +10,7 @@ struct TestModeBanner: View {
         if let folders = app.testModeFolders, let text = app.testModeText {
             HStack(spacing: 6) {
                 Image(systemName: "testtube.2").foregroundStyle(.orange)
-                TestModeSentence(folders: folders, suffix: " (CLEAN_CLAUDE_SCAN_ROOTS)")
+                TestModeSentence(folders: folders, suffix: " (BONSAI_SCAN_ROOTS)")
             }
             .font(.callout)
             .frame(maxWidth: .infinity, alignment: .leading)
