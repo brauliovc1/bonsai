@@ -8,9 +8,7 @@ struct OverviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let testMode = model.app.testModeText {
-                TestModeBanner(text: testMode)
-            }
+            TestModeBanner(app: model.app)
             content
         }
         .navigationTitle("Overview")

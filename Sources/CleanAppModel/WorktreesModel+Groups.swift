@@ -43,8 +43,19 @@ extension WorktreesModel {
         return byName.contains(first.keyPath) ? first.order : .forward
     }
 
+    /// What the table lists, top to bottom: each group's header, then its rows unless it is collapsed.
+    public var tableItems: [WorktreeTableItem] {
+        groups.flatMap { group in
+            [WorktreeTableItem.group(group)] + (isExpanded(group.repoPath) ? group.rows.map(WorktreeTableItem.worktree) : [])
+        }
+    }
+
     public func isExpanded(_ repoPath: String) -> Bool {
         !collapsedRepos.contains(repoPath)
+    }
+
+    public func toggleExpanded(_ repoPath: String) {
+        setExpanded(!isExpanded(repoPath), repo: repoPath)
     }
 
     /// Collapsing a group also deselects its rows, so nothing hidden is removed or cleaned.

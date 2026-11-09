@@ -11,12 +11,12 @@ struct MenuBarLabel: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        let _ = colorScheme
         Image(nsImage: MenuBarImage.make(
             fraction: model.fillFraction, level: model.level, description: model.accessibilityText
         ))
         .accessibilityLabel(model.accessibilityText)
         .help(model.helpText)
-        .id(colorScheme)
         // The label lives as long as the app, so a notification click can open the main window through it.
         .onAppear { WindowOpener.shared.openWindow = openWindow }
     }

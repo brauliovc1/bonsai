@@ -100,7 +100,9 @@ public final class WorktreesModel {
     public var allRows: [WorktreeRow] {
         let scan = app.scan
         let home = app.environment.homeDirectory
-        let now = app.environment.now()
+        // The scan's time, not the clock's: rows stay equal between scans, so the table doesn't redraw every
+        // row each time it asks for them ("3d ago" is as of the last scan, which runs at least every few minutes).
+        let now = app.lastScanAt ?? app.environment.now()
         return app.assessments.enumerated().map { order, assessment in
             let worktree = assessment.worktree
             return WorktreeRow(

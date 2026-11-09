@@ -2,21 +2,38 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The first column: the repo name and how many worktrees on a group header, the branch on a worktree.
+/// The first column: on a group header the open/close chevron, the repo name and how many worktrees; on a
+/// worktree, indented under it, the branch.
 struct WorktreeNameCell: View {
     let item: WorktreeTableItem
+    let isExpanded: Bool
+    let toggle: () -> Void
 
     var body: some View {
         switch item {
         case .group(let group):
-            HStack(spacing: 6) {
-                Text(group.name).fontWeight(.semibold)
+            HStack(spacing: 4) {
+                Button(action: toggle) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 14, height: 14)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help(isExpanded ? "Hide this repo's worktrees" : "Show this repo's worktrees")
+                .accessibilityLabel(isExpanded ? "Collapse \(group.name)" : "Expand \(group.name)")
+                Text(group.name).fontWeight(.semibold).layoutPriority(1)
                 Text(group.countText).foregroundStyle(.secondary)
             }
             .lineLimit(1)
             .help(group.folderText)
         case .worktree(let row):
-            Text(row.branchText).lineLimit(1).help(row.path)
+            Text(row.branchText)
+                .lineLimit(1)
+                .padding(.leading, 18)
+                .help(row.path)
         }
     }
 }

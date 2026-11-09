@@ -20,6 +20,9 @@ DIST = $(ROOT)/dist
 # swift-argument-parser is linked into the CLI only (the app binary has none of it), so this file goes
 # next to clean-claude in the zip and, as a courtesy, next to the app in the dmg.
 NOTICES = $(ROOT)/THIRD_PARTY_NOTICES
+# The app icon, made by `make icon` from Resources/Icon/MakeIcon.swift and the menu-bar glyph's shape. It is
+# committed, so building the app never needs the generator.
+ICNS = $(ROOT)/Resources/AppIcon.icns
 
 # Written into the assembled bundle's Info.plist, never into Resources/Info.plist. A release passes VERSION
 # (the tag without its "v"); otherwise it comes from git. `version-check` stops anything unusable.
@@ -53,17 +56,19 @@ CLI_ZIP = $(DIST)/$(CLI)-$(VERSION)-macos.zip
 # put the products in. The version numbers go into the bundle's copy of Info.plist; signing comes last, so
 # the signature covers them.
 define bundle_app
+test -f "$(ICNS)" || { echo "error: $(ICNS) is missing; run make icon"; exit 1; }; \
 rm -rf "$(BUNDLE)"; \
 mkdir -p "$(BUNDLE)/Contents/MacOS" "$(BUNDLE)/Contents/Resources"; \
 cp "$$bin/$(APP_PRODUCT)" "$(BUNDLE)/Contents/MacOS/$(EXECUTABLE)"; \
 cp "$(ROOT)/Resources/Info.plist" "$(BUNDLE)/Contents/Info.plist"; \
+cp "$(ICNS)" "$(BUNDLE)/Contents/Resources/AppIcon.icns"; \
 plutil -replace CFBundleShortVersionString -string "$(VERSION)" "$(BUNDLE)/Contents/Info.plist"; \
 plutil -replace CFBundleVersion -string "$(BUILD)" "$(BUNDLE)/Contents/Info.plist"; \
 plutil -lint -s "$(BUNDLE)/Contents/Info.plist"; \
 $(CODESIGN) "$(BUNDLE)"
 endef
 
-.PHONY: app run install test clean root version-check universal dmg cli-zip checksums dist
+.PHONY: app run install test clean root version-check universal dmg cli-zip checksums dist icon
 
 root:
 	@test -n "$(ROOT)" && test -f "$(ROOT)/Package.swift" && test -f "$(ROOT)/Resources/Info.plist" || \
@@ -111,6 +116,19 @@ install: app
 
 test: root
 	swift test --package-path "$(ROOT)"
+
+# Draws the icon at every size iconutil wants (Resources/Icon/MakeIcon.swift compiled with the glyph's shape,
+# Sources/CleanClaudeApp/BonsaiGlyph.swift) and writes Resources/AppIcon.icns. Commit the result.
+icon: root
+	@set -e; \
+	work="$(ROOT)/build/icon"; \
+	rm -rf "$$work"; \
+	mkdir -p "$$work"; \
+	swiftc -swift-version 6 -parse-as-library -O -o "$$work/make-icon" \
+		"$(ROOT)/Resources/Icon/MakeIcon.swift" "$(ROOT)/Sources/CleanClaudeApp/BonsaiGlyph.swift"; \
+	"$$work/make-icon" "$$work/AppIcon.iconset"; \
+	iconutil -c icns -o "$(ICNS)" "$$work/AppIcon.iconset"; \
+	echo "Wrote $(ICNS)"
 
 # The app and the CLI built for both architectures: build/$(APP_NAME).app and build/cli/$(CLI), ad-hoc signed.
 universal: root version-check

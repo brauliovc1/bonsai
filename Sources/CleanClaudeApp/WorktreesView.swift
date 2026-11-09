@@ -9,9 +9,7 @@ struct WorktreesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let testMode = model.app.testModeText {
-                TestModeBanner(text: testMode)
-            }
+            TestModeBanner(app: model.app)
             if let problem = model.app.problem {
                 ProblemBanner(text: problem)
             }
@@ -24,7 +22,7 @@ struct WorktreesView: View {
         .toolbar { toolbar }
         .inspector(isPresented: $model.isShowingDetails) {
             WorktreeDetailsView(model: model)
-                .inspectorColumnWidth(min: 280, ideal: 330, max: 460)
+                .inspectorColumnWidth(min: 270, ideal: 310, max: 460)
         }
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
@@ -37,39 +35,39 @@ struct WorktreesView: View {
 
     private var table: some View {
         Table(of: WorktreeTableItem.self, selection: tableSelection, sortOrder: tableSortOrder) {
-            TableColumn("Worktree", value: \WorktreeTableItem.nameSortKey) { WorktreeNameCell(item: $0) }
-                .width(min: 120, ideal: 170)
+            TableColumn("Worktree", value: \WorktreeTableItem.nameSortKey) { item in
+                WorktreeNameCell(item: item, isExpanded: isExpanded(item)) { toggle(item) }
+            }
+            .width(min: 96, ideal: 170)
             TableColumn("Kind", value: \WorktreeTableItem.kindText) { item in
                 if let row = item.row { Badge(kind: row.kind) }
             }
-            .width(min: 54, ideal: 62)
+            .width(min: 52, ideal: 62)
             TableColumn("Last commit", value: \WorktreeTableItem.lastCommitSortKey) { LastCommitCell(item: $0) }
-                .width(min: 150, ideal: 240)
+                .width(min: 110, ideal: 240)
             TableColumn("Folder", value: \WorktreeTableItem.folderText) { FolderCell(item: $0) }
-                .width(min: 110, ideal: 210)
+                .width(min: 80, ideal: 210)
             TableColumn("Size", value: \WorktreeTableItem.sizeSortKey) { SizeCell(item: $0) }
-                .width(min: 60, ideal: 74)
+                .width(min: 56, ideal: 74)
             TableColumn("Deps", value: \WorktreeTableItem.dependencySortKey) { item in
                 if let row = item.row { DepsCell(row: row) }
             }
-            .width(min: 60, ideal: 74)
+            .width(min: 56, ideal: 74)
             TableColumn("Idle", value: \WorktreeTableItem.idleSortKey) { item in
                 if let row = item.row {
                     Text(row.idleText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
-            .width(min: 44, ideal: 52)
+            .width(min: 40, ideal: 52)
             TableColumn("Status", value: \WorktreeTableItem.statusSortKey) { item in
                 if let row = item.row { StatusCell(row: row) }
             }
-            .width(min: 130, ideal: 210)
+            .width(min: 120, ideal: 210)
         } rows: {
-            ForEach(model.groups) { group in
-                DisclosureTableRow(WorktreeTableItem.group(group), isExpanded: expanded(group)) {
-                    ForEach(group.rows) { row in
-                        TableRow(WorktreeTableItem.worktree(row))
-                    }
-                }
+            // Plain rows, not DisclosureTableRow: its expansion binding makes SwiftUI expand rows from inside
+            // an NSTableView delegate call ("reentrant operation", which AppKit says will become an assert).
+            ForEach(model.tableItems) { item in
+                TableRow(item)
             }
         }
         .sheet(isPresented: $model.isShowingPruneSheet, onDismiss: { model.dismissPrune() }) {
@@ -78,7 +76,13 @@ struct WorktreesView: View {
         .contextMenu(forSelectionType: WorktreeTableItem.ID.self) { ids in
             contextMenu(for: rowIDs(ids))
         } primaryAction: { ids in
-            FolderActions.reveal(rows(rowIDs(ids)).filter(\.isOpenableFolder).map(\.url))
+            let rows = rows(rowIDs(ids))
+            if rows.isEmpty {
+                // A double-click on a group header opens or closes it.
+                for case .group(let repoPath) in ids { model.toggleExpanded(repoPath) }
+            } else {
+                FolderActions.reveal(rows.filter(\.isOpenableFolder).map(\.url))
+            }
         }
         .overlay {
             if model.allRows.isEmpty, !model.app.isScanning {
@@ -108,11 +112,13 @@ struct WorktreesView: View {
         )
     }
 
-    private func expanded(_ group: WorktreeGroup) -> Binding<Bool> {
-        Binding(
-            get: { model.isExpanded(group.repoPath) },
-            set: { model.setExpanded($0, repo: group.repoPath) }
-        )
+    private func isExpanded(_ item: WorktreeTableItem) -> Bool {
+        if case .group(let group) = item { return model.isExpanded(group.repoPath) }
+        return true
+    }
+
+    private func toggle(_ item: WorktreeTableItem) {
+        if case .group(let group) = item { model.toggleExpanded(group.repoPath) }
     }
 
     private func rowIDs(_ ids: Set<WorktreeTableItem.ID>) -> Set<WorktreeRow.ID> {

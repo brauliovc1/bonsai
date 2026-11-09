@@ -119,11 +119,16 @@ struct WorktreeGroupsTests {
         #expect(!model.isExpanded(beacon))
         #expect(model.selection == model.ids([archive, web]), "collapsing deselects the hidden rows")
         #expect(model.rows.count == model.allRows.count, "collapsed rows still count as shown")
+        #expect(model.tableItems.count == 3 + 5 + 4, "three headers, atlas's and cobalt's rows, none of beacon's")
+        #expect(model.tableItems.contains(.group(try #require(model.groups.first { $0.repoPath == beacon }))))
+        #expect(!model.tableItems.contains { $0.row?.worktree.repoPath == beacon })
         let confirmation = await model.prepareRemoval(model.selection)
         #expect(Set(confirmation.allowed.map(\.worktree.url.lastPathComponent)) == ["atlas-archive", "cobalt-web"])
         #expect(confirmation.blocked.isEmpty)
-        model.setExpanded(true, repo: beacon)
+        model.toggleExpanded(beacon)
         #expect(model.isExpanded(beacon))
+        #expect(model.tableItems.count == 3 + model.allRows.count)
+        #expect(model.tableItems.first == .group(try #require(model.groups.first)), "a header comes first")
     }
 
     @Test func theTableSortOrderMapsToTheModels() {

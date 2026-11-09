@@ -12,11 +12,10 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let testMode = app.testModeText {
-                Label {
-                    Text(testMode).lineLimit(1).truncationMode(.middle)
-                } icon: {
+            if let folders = app.testModeFolders, let testMode = app.testModeText {
+                HStack(spacing: 5) {
                     Image(systemName: "testtube.2").foregroundStyle(.orange)
+                    TestModeSentence(folders: folders)
                 }
                 .font(.caption)
                 .help(testMode)

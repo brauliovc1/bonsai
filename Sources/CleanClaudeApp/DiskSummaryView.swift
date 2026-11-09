@@ -14,8 +14,7 @@ struct DiskSummaryView: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            ProgressView(value: disk.usedFraction ?? 0)
-                .tint(tint)
+            FullnessBar(fraction: disk.usedFraction ?? 0, level: level)
             if let volume = disk.volumeName {
                 Text(volume)
                     .font(.caption)
@@ -23,14 +22,6 @@ struct DiskSummaryView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-        }
-    }
-
-    private var tint: Color {
-        switch level {
-        case .low: .orange
-        case .veryLow: .red
-        case .normal, .unknown: .accentColor
         }
     }
 }
