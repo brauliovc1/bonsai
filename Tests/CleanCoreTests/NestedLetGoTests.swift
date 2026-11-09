@@ -53,17 +53,29 @@ struct NestedLetGoTests {
         #expect(report.blockers.isEmpty, "\(at): \(report)")
     }
 
-    /// When git can't list what the copy tracks (here: no index), its bare-shaped folder keeps the rule: blocking is
-    /// the safe side.
-    @Test func withoutTheCopysListingTheFixtureKeepsTheRule() async throws {
+    enum Unlisted: String, CaseIterable {
+        /// git lists nothing: the copy has no index.
+        case noIndex
+        /// git isn't asked: the copy's config names a command (a filter).
+        case configRunsSomething
+    }
+
+    /// When the copy's tracked files aren't listed, its bare-shaped folder keeps the rule: blocking is the safe side.
+    @Test(arguments: Unlisted.allCases)
+    func withoutTheCopysListingTheFixtureKeepsTheRule(_ why: Unlisted) async throws {
         let world = try await SafetyWorld.make()
         defer { world.remove() }
         let wt = try await world.sibling("pkg")
         let lib = try await Self.remote(world.fixture, "gitlib", files: Self.bareFixture)
         let copy = try await Self.clone(world.fixture, lib, to: wt.appending(path: ".build/checkouts/gitlib", directoryHint: .isDirectory))
-        try FileManager.default.removeItem(at: copy.appending(path: ".git/index"))
+        switch why {
+        case .noIndex:
+            try FileManager.default.removeItem(at: copy.appending(path: ".git/index"))
+        case .configRunsSomething:
+            try await world.fixture.run(["config", "filter.lfs.clean", "cat"], in: copy)
+        }
         let report = try await world.check(wt)
-        #expect(report.blockers == [.nestedCheckouts([".build/checkouts/gitlib/Tests/Fixtures/testrepo.git"])], "\(report)")
+        #expect(report.blockers == [.nestedCheckouts([".build/checkouts/gitlib/Tests/Fixtures/testrepo.git"])], "\(why): \(report)")
     }
 
     /// A real bare repo the clean clone doesn't track (in its ignored node_modules) still blocks.
