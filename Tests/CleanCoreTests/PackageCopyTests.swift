@@ -45,8 +45,12 @@ struct PackageCopyTests {
         #expect(state.nestedUnreadable.isEmpty && state.nestedLocalWork.isEmpty && state.nestedClones.isEmpty)
         // Decided from the path and git's checks on build/, asked from outside: git never ran in a copy, nor read
         // a copy's config.
+        let touched = spy.touchedPaths()
+        #expect(touched.contains { $0.hasPrefix(CanonicalPath.resolve(wt)) }, "the spy saw git's calls: \(touched)")
         for copy in [good.checkout, good.mirror, broken.checkout, broken.mirror] {
-            let inside = spy.touchedPaths().filter { $0.hasPrefix(copy.path) || $0.hasPrefix(copy.resolvingSymlinksInPath().path) }
+            // git names folders by their real path (/private/var/...); the fixture by /var/....
+            let forms = [copy.path, "/private" + copy.path, CanonicalPath.resolve(copy)]
+            let inside = touched.filter { path in forms.contains { path.hasPrefix($0) } }
             #expect(inside.isEmpty, "git was given \(inside)")
         }
     }
@@ -66,6 +70,8 @@ struct PackageCopyTests {
         case vendorFolder
         /// SourcePackages inside a build folder git tracks a file in.
         case trackedBuildFolder
+        /// The same, the tracked file named in another case (`Build/config.txt`; APFS is case-insensitive).
+        case trackedInAnotherCase
         /// SourcePackages inside a build folder git doesn't ignore.
         case notIgnored
         /// SourcePackages with no §4.2 folder above it.
@@ -90,11 +96,22 @@ struct PackageCopyTests {
             base = "build/ios/SourcePackages"
         case .notIgnored:
             base = "build/ios/SourcePackages"
+        case .trackedInAnotherCase:
+            try world.fixture.write("build/\n", to: ".git/info/exclude", in: world.repo)
+            base = "build/ios/SourcePackages"
         case .noBuildFolder:
             try world.fixture.write("SourcePackages/\n", to: ".git/info/exclude", in: world.repo)
             base = "SourcePackages"
         }
         let wt = try await world.sibling("elsewhere")
+        if place == .trackedInAnotherCase {
+            // git's ignore check alone says "ignored" here; only `ls-files :(icase)build` sees the tracked file.
+            try world.fixture.write("v1\n", to: "build/config.txt", in: wt)
+            try await world.fixture.run(["add", "-f", "build/config.txt"], in: wt)
+            try await world.fixture.run(["mv", "build/config.txt", "Build/config.txt"], in: wt)
+            try await world.fixture.run(["commit", "--quiet", "-m", "Track Build/config.txt"], in: wt)
+            try #require(FileManager.default.fileExists(atPath: wt.appending(path: "build/config.txt").path))
+        }
         let (checkout, _) = try await world.fixture.xcodePackage("firebase-ios-sdk", in: wt, base: base, broken: true)
         await brokenGitFails(world, checkout)
 

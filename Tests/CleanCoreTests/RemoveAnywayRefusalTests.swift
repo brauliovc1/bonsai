@@ -142,10 +142,10 @@ struct RemoveAnywayRefusalTests {
         case .editedPath:
             try fixture.write("tracked edit\n", to: "README.md", in: target)
         case .sneakyEdit:
-            // The same path, still untracked, its date put back: only its size tells.
-            let date = try #require(try FileManager.default.attributesOfItem(atPath: draft.path)[.modificationDate] as? Date)
+            // The same path, still untracked, dated an hour back: the idle clock sees no new activity, only the
+            // list's stamp of the path tells.
             try fixture.write("draft, longer now\n", to: "draft.md", in: target)
-            try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: draft.path)
+            try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-3_600)], ofItemAtPath: draft.path)
         case .newCommitDetached:
             try fixture.write("two\n", to: "two.txt", in: target)
             try await fixture.run(["add", "two.txt"], in: target)
@@ -185,16 +185,15 @@ struct RemoveAnywayRefusalTests {
         #expect(try world.log.entries().isEmpty)
     }
 
-    /// The sneaky edit is caught by the list alone (the idle clock doesn't see it): the stamp differs.
+    /// The sneaky edit changes the list: the path's stamp differs.
     @Test func anEditKeepingTheDateIsAChangeInTheList() async throws {
         let world = try await RemoveAnywayWorld.make()
         defer { world.remove() }
         let target = try await world.safety.sibling("target")
         let draft = try world.fixture.write("draft\n", to: "draft.md", in: target)
         let before = try #require(try await world.assess(target).removeAnyway.lossList)
-        let date = try #require(try FileManager.default.attributesOfItem(atPath: draft.path)[.modificationDate] as? Date)
         try world.fixture.write("draft, longer now\n", to: "draft.md", in: target)
-        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: draft.path)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-3_600)], ofItemAtPath: draft.path)
         let after = try #require(try await world.assess(target).removeAnyway.lossList)
         #expect(after.changes(since: before) == ["Uncommitted or untracked files: changed: draft.md."])
         #expect(before.changes(since: before).isEmpty)
