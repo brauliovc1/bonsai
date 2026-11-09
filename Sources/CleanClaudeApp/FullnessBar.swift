@@ -16,7 +16,7 @@ struct FullnessBar: View {
                     .frame(width: proxy.size.width * min(max(fraction, 0), 1))
             }
         }
-        .frame(height: 6)
+        .frame(height: 8)
         .accessibilityElement()
         .accessibilityLabel("Disk used")
         .accessibilityValue("\(Int((fraction * 100).rounded())) percent")
