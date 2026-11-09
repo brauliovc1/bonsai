@@ -60,7 +60,8 @@ struct DirectorySizerItemsTests {
         #expect(try await sizer.allocatedSize(ofItem: missing) == nil)
 
         let many = await sizer.allocatedSizes(ofItems: [file, folder, missing])
-        #expect(many.sizes == [file.path: 12 * 1024, folder.path: 12 * 1024])
+        let expected: [String: Int64] = [file.path: 12 * 1024, folder.path: 12 * 1024]
+        #expect(many.sizes == expected)
         #expect(many.issues.isEmpty)
     }
 
