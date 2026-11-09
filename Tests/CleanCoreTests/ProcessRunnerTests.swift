@@ -17,32 +17,38 @@ struct ProcessRunnerTests {
         #expect(!result.timedOut)
     }
 
+    /// The child is stopped by the timeout and the call returns: it ends by SIGTERM (not by exiting on its own), long
+    /// before the 120 s it would sleep. The bound is generous, so a loaded machine or a slow CI runner can't fail it.
     @Test func timeoutTerminates() async throws {
         let clock = ContinuousClock()
         let start = clock.now
         let result = try await ProcessRunner.run(
             executable: url("/bin/sleep"),
-            arguments: ["5"],
+            arguments: ["120"],
             timeout: .milliseconds(500)
         )
         #expect(result.timedOut)
         #expect(!result.succeeded)
-        #expect(start.duration(to: clock.now) < .seconds(3))
+        #expect(result.exitCode == SIGTERM, "ended by the timeout's SIGTERM: \(result.exitCode)")
+        #expect(start.duration(to: clock.now) < .seconds(60), "returned long before the child's own exit")
     }
 
+    /// A child that ignores SIGTERM gets SIGKILL after the grace period: it ends by SIGKILL, no sooner than the grace
+    /// period, and long before the 120 s it would sleep.
     @Test func timeoutEscalatesToSIGKILL() async throws {
         // A process that ignores SIGTERM (test-only use of sh; ProcessRunner itself never runs a shell).
         let clock = ContinuousClock()
         let start = clock.now
         let result = try await ProcessRunner.run(
             executable: url("/bin/sh"),
-            arguments: ["-c", "trap '' TERM; exec /bin/sleep 10"],
+            arguments: ["-c", "trap '' TERM; exec /bin/sleep 120"],
             timeout: .milliseconds(300)
         )
         let elapsed = start.duration(to: clock.now)
         #expect(result.timedOut)
-        #expect(elapsed >= .seconds(2))
-        #expect(elapsed < .seconds(8))
+        #expect(result.exitCode == SIGKILL, "escalated to SIGKILL: \(result.exitCode)")
+        #expect(elapsed >= .seconds(2), "SIGTERM had its grace period first")
+        #expect(elapsed < .seconds(60), "returned long before the child's own exit")
     }
 
     @Test func stderrCaptured() async throws {
