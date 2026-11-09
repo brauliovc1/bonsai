@@ -8,6 +8,7 @@ public final class ScreenModels {
     public let app: AppModel
     public let navigation: NavigationModel
     public let worktrees: WorktreesModel
+    public let projects: ProjectsModel
     public let removals: RemovalsModel
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
@@ -33,6 +34,7 @@ public final class ScreenModels {
         self.app = app
         self.navigation = navigation
         worktrees = WorktreesModel(app: app)
+        projects = ProjectsModel(app: app)
         removals = RemovalsModel(app: app)
         derivedData = DerivedDataModel(app: app, runner: runner)
         dockerSimulators = DockerSimulatorsModel(app: app, runner: runner)
@@ -47,6 +49,7 @@ public final class ScreenModels {
         overview = OverviewModel(
             app: app,
             worktrees: worktrees,
+            projects: projects,
             derivedData: derivedData,
             dockerSimulators: dockerSimulators,
             autoMode: autoMode,

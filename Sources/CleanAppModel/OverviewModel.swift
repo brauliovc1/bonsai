@@ -12,6 +12,7 @@ public final class OverviewModel {
 
     public let app: AppModel
     public let worktrees: WorktreesModel
+    public let projects: ProjectsModel
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
     public let autoMode: AutoModeModel
@@ -20,6 +21,7 @@ public final class OverviewModel {
     public init(
         app: AppModel,
         worktrees: WorktreesModel,
+        projects: ProjectsModel,
         derivedData: DerivedDataModel,
         dockerSimulators: DockerSimulatorsModel,
         autoMode: AutoModeModel,
@@ -27,6 +29,7 @@ public final class OverviewModel {
     ) {
         self.app = app
         self.worktrees = worktrees
+        self.projects = projects
         self.derivedData = derivedData
         self.dockerSimulators = dockerSimulators
         self.autoMode = autoMode
@@ -45,7 +48,7 @@ public final class OverviewModel {
 
     /// True while anything the Overview sums is being scanned.
     public var isRefreshing: Bool {
-        app.isScanning || derivedData.isScanning || dockerSimulators.isScanning
+        app.isScanning || derivedData.isScanning || dockerSimulators.isScanning || projects.isScanning
     }
 
     // MARK: - Rows
@@ -59,6 +62,7 @@ public final class OverviewModel {
         case .autoReadyWorktrees: worktreeRow(kind, title: "Worktrees ready for auto mode", status: .autoReady)
         case .safeWorktrees: worktreeRow(kind, title: "Other safe worktrees", status: .safe)
         case .lightClean: lightCleanRow()
+        case .projectFolders: projectFoldersRow()
         case .orphanedDerivedData: derivedDataRow()
         case .docker: dockerRow()
         case .simulators: simulatorsRow()
@@ -100,6 +104,17 @@ public final class OverviewModel {
         let detail = "\(DisplayText.worktrees(measured.count)) with folders to delete. Overlaps the rows above: "
             + "removing a whole worktree removes its dependencies too."
         return OverviewRow(kind: .lightClean, title: title, detail: detail, bytes: bytes, destination: .worktrees)
+    }
+
+    private func projectFoldersRow() -> OverviewRow {
+        let title = "Project build folders"
+        guard projects.report != nil else {
+            let detail = projects.isScanning ? "Measuring…" : "Measured when you open Project folders."
+            return OverviewRow(kind: .projectFolders, title: title, detail: detail, bytes: nil, destination: .projects)
+        }
+        let idle = projects.idleTotal
+        let detail = "In \(idle.count) idle \(idle.count == 1 ? "project" : "projects") (\(projects.threshold)+ days, nothing running inside)."
+        return OverviewRow(kind: .projectFolders, title: title, detail: detail, bytes: idle.bytes, destination: .projects)
     }
 
     private func derivedDataRow() -> OverviewRow {
@@ -156,12 +171,15 @@ public final class OverviewModel {
 
     // MARK: - Scanning
 
-    /// Scans everything the Overview sums again: worktrees, DerivedData, Docker and Simulators.
+    /// Scans everything the Overview sums again: worktrees, DerivedData, Docker and Simulators, and project
+    /// folders when their screen has measured them once.
     public func refresh() async {
         async let worktreeScan: Void = app.refresh()
         async let derivedDataScan: Void = derivedData.refresh()
         async let dockerScan: Void = dockerSimulators.refresh()
         _ = await (worktreeScan, derivedDataScan, dockerScan)
+        // Project folders are heavy to measure: again only once their screen has measured them.
+        if projects.report != nil { await projects.refresh() }
     }
 
     /// The first look, when the window opens: DerivedData, Docker and Simulators are scanned once (the

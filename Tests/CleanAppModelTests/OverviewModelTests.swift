@@ -33,7 +33,8 @@ struct OverviewModelTests {
     @Test func theWindowOpensOnTheOverviewAndTheSidebarIsInOrder() {
         #expect(NavigationModel().section == .overview)
         #expect(SidebarSection.allCases.map(\.title) == [
-            "Overview", "Worktrees", "Xcode DerivedData", "Docker & Simulators", "Claude usage", "Recently removed",
+            "Overview", "Worktrees", "Project folders", "Xcode DerivedData", "Docker & Simulators", "Claude usage",
+            "Recently removed",
         ])
         #expect(Set(SidebarSection.allCases.map(\.systemImage)).count == SidebarSection.allCases.count)
     }
@@ -45,7 +46,7 @@ struct OverviewModelTests {
 
         let rows = world.overview.rows
         #expect(rows.map(\.kind) == [
-            .autoReadyWorktrees, .safeWorktrees, .lightClean, .orphanedDerivedData, .docker, .simulators,
+            .autoReadyWorktrees, .safeWorktrees, .lightClean, .projectFolders, .orphanedDerivedData, .docker, .simulators,
         ])
 
         // Worktrees: the same estimates the Worktrees screen shows, by status.
@@ -117,6 +118,7 @@ struct OverviewModelTests {
             .autoReadyWorktrees: .worktrees,
             .safeWorktrees: .worktrees,
             .lightClean: .worktrees,
+            .projectFolders: .projects,
             .orphanedDerivedData: .derivedData,
             .docker: .dockerSimulators,
             .simulators: .dockerSimulators,

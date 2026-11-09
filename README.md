@@ -135,6 +135,7 @@ It skips Claude's worktrees unless you turn that on in Settings, and it never ru
 ## Known limits
 
 - Sizes are estimates. APFS lets files share disk blocks, so the space you really get back is measured from the disk afterwards and can be lower.
+- Hard links shared between projects (pnpm's store, for example) are counted once per project, so the Project folders totals can add the same files up more than once.
 - Time Machine's local snapshots can hold deleted data until they expire.
 - The first scan of `~/Documents` makes macOS ask once whether Bonsai may access files in your Documents folder.
 - The app is unsigned (see Install). Building from source avoids the "Open Anyway" step.

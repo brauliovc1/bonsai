@@ -1,6 +1,6 @@
 import Foundation
 
-/// A `/bin/sleep 30` whose working folder is inside a fixture, for the "in use" tests. Safe to start from a
+/// A `/bin/sleep 30` (or `seconds`) whose working folder is inside a fixture, for the "in use" tests. Safe to start from a
 /// `@Sendable` hook and to stop from `defer`.
 ///
 /// `stop()` never calls `Process.waitUntilExit()`: that waits on the current run loop, which a Swift
@@ -8,14 +8,18 @@ import Foundation
 public final class SleepingProcess: @unchecked Sendable {
     private let lock = NSLock()
     private var process: Process?
+    private let seconds: Int
 
-    public init() {}
+    /// `seconds`: how long it lives unless stopped; longer for a test that runs scans while it is inside.
+    public init(seconds: Int = 30) {
+        self.seconds = seconds
+    }
 
     /// Starts the process in `folder` and waits briefly so lsof can see it.
     public func start(in folder: URL) throws {
         let sleeper = Process()
         sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        sleeper.arguments = ["30"]
+        sleeper.arguments = ["\(seconds)"]
         sleeper.currentDirectoryURL = folder
         try sleeper.run()
         lock.withLock { process = sleeper }

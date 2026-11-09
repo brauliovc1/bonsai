@@ -126,25 +126,12 @@ extension WorktreesModel {
     }
 
     /// git's current record of each row's worktree (nil when git no longer lists it), the repos' full
-    /// listings, and why a repo could not be listed. Shared by the remove and light-clean sheets.
+    /// listings, and why a repo could not be listed. The same reading the light-clean sheets start with.
     func freshRecords(
         of chosen: [WorktreeRow],
         git: Git
     ) async -> (records: [Worktree?], listings: [String: [Worktree]], failures: [String: String]) {
-        let scanner = WorktreeScanner(git: git, cursorWorktreesDirectory: app.environment.cursorWorktreesDirectory)
-        var listings: [String: [Worktree]] = [:]
-        var failures: [String: String] = [:]
-        for repo in Set(chosen.map(\.worktree.repoPath)) {
-            do {
-                listings[repo] = try await scanner.worktrees(in: URL(fileURLWithPath: repo, isDirectory: true))
-            } catch {
-                failures[repo] = "\(error)"
-            }
-        }
-        let records: [Worktree?] = chosen.map { row in
-            listings[row.worktree.repoPath]?.first { CanonicalPath.same($0.url, row.url) }
-        }
-        return (records, listings, failures)
+        await LightCleanFlow(app: app).freshRecords(of: chosen.map(\.worktree), git: git)
     }
 
     /// A blocked sheet item for a row that can't be looked at afresh.

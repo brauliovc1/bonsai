@@ -4,6 +4,7 @@
 public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     case overview
     case worktrees
+    case projects
     case derivedData
     case dockerSimulators
     case claudeUsage
@@ -15,6 +16,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .overview: "Overview"
         case .worktrees: "Worktrees"
+        case .projects: "Project folders"
         case .derivedData: "Xcode DerivedData"
         case .dockerSimulators: "Docker & Simulators"
         case .claudeUsage: "Claude usage"
@@ -27,6 +29,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .overview: "gauge.with.dots.needle.33percent"
         case .worktrees: "folder.badge.gearshape"
+        case .projects: "cube.box"
         case .derivedData: "hammer"
         case .dockerSimulators: "shippingbox"
         case .claudeUsage: "sparkles"
