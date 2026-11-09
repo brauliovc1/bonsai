@@ -20,7 +20,8 @@ struct RemoveAnywayLastMomentTests {
     /// A git that, right after the first time it lists the ignored files (in the middle of the re-check's slow
     /// inspection, after its `git status`, operation markers and ignored listing), does what `during` says, as another
     /// process could.
-    private func triggerGit(_ fixture: GitFixture, worktree: URL, gitDir: URL, _ during: During) throws -> Git {
+    /// `onListing`: which ignored listing it acts after (1: the slow inspection's; 2: the last-moment check's own).
+    private func triggerGit(_ fixture: GitFixture, worktree: URL, gitDir: URL, _ during: During, onListing: Int = 1) throws -> Git {
         let folder = fixture.url.appending(path: "trigger-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let fired = folder.appending(path: "fired")
@@ -43,8 +44,8 @@ struct RemoveAnywayLastMomentTests {
             rc=$?
             case "$*" in
               *--others*--ignored*)
-                if [ ! -e '\(fired.path)' ]; then
-                  : > '\(fired.path)'
+                printf 'x\\n' >> '\(fired.path)'
+                if [ "$(wc -l < '\(fired.path)' | tr -d ' ')" = '\(onListing)' ]; then
                   \(action)
                 fi ;;
             esac
@@ -124,6 +125,32 @@ struct RemoveAnywayLastMomentTests {
         )
         #expect(result.entry.notes.contains("  libs/library/MyPatch.swift"))
         #expect(!FileManager.default.fileExists(atPath: wt.path))
+    }
+
+    /// The most volatile facts are read last in the last-moment check: a change right after its own ignored listing is
+    /// still caught.
+    @Test(arguments: [During.rebaseStarted, .fileWritten])
+    func aChangeAfterTheLastMomentListingIsCaught(_ during: During) async throws {
+        let world = try await RemoveAnywayWorld.make()
+        defer { world.remove() }
+        let wt = try await world.safety.sibling("dirty")
+        try world.fixture.write("draft\n", to: "draft.md", in: wt)
+        let assessment = try await world.assess(wt)
+        let list = try #require(assessment.removeAnyway.lossList)
+        let git = try triggerGit(world.fixture, worktree: wt, gitDir: try await world.gitDir(of: wt), during, onListing: 2)
+        var remover = Remover(git: git, settings: Settings(), environment: world.fixture.environment())
+        remover.captureCwdIndex = { ProcessCwdIndex(entries: []) }
+
+        await #expect("\(during)") {
+            try await remover.removeAnyway(
+                assessment.worktree, confirmed: list, expectation: RemovalExpectation(assessment: assessment),
+                estimatedBytes: nil, knownWorktrees: try await world.known()
+            )
+        } throws: { error in
+            (error as? RemovalExpectation.Mismatch)?.changes.isEmpty == false
+        }
+        #expect(FileManager.default.fileExists(atPath: wt.appending(path: "draft.md").path))
+        #expect(try world.log.entries().isEmpty)
     }
 
     enum Moved: String, CaseIterable {
