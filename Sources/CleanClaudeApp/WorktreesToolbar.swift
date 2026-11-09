@@ -2,7 +2,8 @@ import CleanAppModel
 import SwiftUI
 
 /// The Worktrees toolbar (PLAN §8.4): the segmented filter with counts, Remove… (enabled only when the selection
-/// holds something that can be removed; otherwise its tooltip says why) and More. ⌘R scans again.
+/// holds something that can be removed; otherwise its tooltip says why) and More. (⌘R lives on the screen itself,
+/// `WorktreesView`, so it works when More is in the overflow menu.)
 struct WorktreesToolbar: ToolbarContent {
     @Bindable var model: WorktreesModel
 
@@ -17,13 +18,17 @@ struct WorktreesToolbar: ToolbarContent {
             .fixedSize()
             .help("Worktrees that can be removed, those with local work that needs you, or all of them")
         }
-        ToolbarItemGroup(placement: .primaryAction) {
+        // Two items, not one group: when the window is narrow, More goes to the overflow menu first and Remove…
+        // stays as long as it fits.
+        ToolbarItem(placement: .primaryAction) {
             Button { Task { await model.removeSelection() } } label: {
                 Label("Remove…", systemImage: "trash")
             }
             .labelStyle(.titleAndIcon)
             .disabled(!model.canRemoveSelection)
             .help(model.removeDisabledReason ?? "Remove the selected worktrees (you confirm first)")
+        }
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 WorktreesMoreMenu(model: model)
             } label: {
@@ -31,14 +36,6 @@ struct WorktreesToolbar: ToolbarContent {
             }
             .labelStyle(.titleAndIcon)
             .help("More actions for the selection")
-            .background {
-                // ⌘R from anywhere in the window (a menu item's shortcut only works while its menu is open).
-                Button("Refresh") { model.app.requestRefresh() }
-                    .keyboardShortcut("r")
-                    .opacity(0)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
         }
     }
 }
