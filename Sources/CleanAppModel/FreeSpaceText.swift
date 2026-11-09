@@ -1,8 +1,8 @@
 import Foundation
 
-/// Free space for the menu bar: whole gigabytes ("31 GB"), one decimal under 10 GB ("9.4 GB"). The same unit
-/// as every other size in the app (`ByteFormatting`: 1 GB = 1024³ bytes), so the menu bar and the Overview
-/// agree; the low-space warning counts in it too.
+/// Free space for the menu bar's tooltip: whole gigabytes ("31 GB"), one decimal under 10 GB ("9.4 GB"). The
+/// same unit as every other size in the app (`ByteFormatting`: 1 GB = 1024³ bytes), so the menu bar and the
+/// Overview agree; the low-space warning counts in it too.
 public enum FreeSpaceText {
     public static let gigabyte: Double = 1024 * 1024 * 1024
 
@@ -20,5 +20,19 @@ public enum FreeSpaceText {
     public static func isLow(_ bytes: Int64?, warningGB: Int) -> Bool {
         guard let bytes else { return false }
         return Double(bytes) < Double(warningGB) * gigabyte
+    }
+
+    /// True when `bytes` is below half of `warningGB` gigabytes.
+    public static func isVeryLow(_ bytes: Int64?, warningGB: Int) -> Bool {
+        guard let bytes else { return false }
+        return Double(bytes) < Double(warningGB) * gigabyte / 2
+    }
+
+    /// The menu window's line: "23.0 GB free of 460 GB (95% used)"; "Free space unknown" without a reading.
+    public static func summary(free: Int64?, total: Int64?) -> String {
+        guard let free else { return "Free space unknown" }
+        guard let total, total > 0 else { return "\(DisplayText.bytes(free)) free" }
+        let used = Double(total - free) / Double(total)
+        return "\(DisplayText.bytes(free)) free of \(label(total)) (\(Int((used * 100).rounded()))% used)"
     }
 }

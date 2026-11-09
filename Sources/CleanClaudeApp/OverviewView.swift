@@ -7,6 +7,17 @@ struct OverviewView: View {
     let model: OverviewModel
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let testMode = model.app.testModeText {
+                TestModeBanner(text: testMode)
+            }
+            content
+        }
+        .navigationTitle("Overview")
+        .task { await model.loadIfNeeded() }
+    }
+
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if let problem = model.app.problem {
@@ -42,8 +53,6 @@ struct OverviewView: View {
             .frame(maxWidth: 760, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .navigationTitle("Overview")
-        .task { await model.loadIfNeeded() }
     }
 }
 

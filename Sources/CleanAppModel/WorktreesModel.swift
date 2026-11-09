@@ -2,10 +2,10 @@ import CleanCore
 import Foundation
 import Observation
 
-/// The Worktrees screen: rows from the shared scan, sorting, filters, selection, the Deps column
-/// (`WorktreesModel+Dependencies`), and the remove, prune and light-clean flows (`WorktreesModel+Remove`,
-/// `+Prune`, `+LightClean`). Removal goes only through `Remover` (manual mode), prune only through `Pruner`,
-/// light clean only through `LightCleaner`.
+/// The Worktrees screen: rows from the shared scan grouped by repo (`WorktreesModel+Groups`), sorting,
+/// filters, selection, the details panel (`details`), the Deps column (`WorktreesModel+Dependencies`), and
+/// the remove, prune and light-clean flows (`WorktreesModel+Remove`, `+Prune`, `+LightClean`). Removal goes
+/// only through `Remover` (manual mode), prune only through `Pruner`, light clean only through `LightCleaner`.
 @MainActor
 @Observable
 public final class WorktreesModel {
@@ -35,7 +35,18 @@ public final class WorktreesModel {
     /// Only rows idle at least this many days (idle unknown is left out).
     public var minimumIdleDays: Int?
     public var searchText = ""
-    public var selection: Set<WorktreeRow.ID> = []
+    /// Selecting exactly one row opens the details panel.
+    public var selection: Set<WorktreeRow.ID> = [] {
+        didSet {
+            if selection.count == 1, selection != oldValue { isShowingDetails = true }
+        }
+    }
+    /// Repos whose group is collapsed (by repo path).
+    public internal(set) var collapsedRepos: Set<String> = []
+    /// The details panel on the right.
+    public var isShowingDetails = false
+    /// What the details panel loads only when it opens: recent commits, upstream.
+    public let details: WorktreeDetailsModel
 
     // Removal sheet (WorktreesModel+Remove).
     public var isShowingRemovalSheet = false
@@ -80,21 +91,34 @@ public final class WorktreesModel {
 
     public init(app: AppModel) {
         self.app = app
+        self.details = WorktreeDetailsModel(git: app.git)
     }
 
     // MARK: - Rows
 
     /// Every worktree of the last scan, in scan order.
     public var allRows: [WorktreeRow] {
-        app.assessments.enumerated().map { order, assessment in
-            let id = WorktreeRow.ID(assessment.worktree)
-            return WorktreeRow(assessment: assessment, scanOrder: order, dependencies: dependencySizes[id] ?? .notMeasured)
+        let scan = app.scan
+        let home = app.environment.homeDirectory
+        let now = app.environment.now()
+        return app.assessments.enumerated().map { order, assessment in
+            let worktree = assessment.worktree
+            return WorktreeRow(
+                assessment: assessment,
+                scanOrder: order,
+                dependencies: dependencySizes[WorktreeRow.ID(worktree)] ?? .notMeasured,
+                lastCommit: scan?.lastCommit(of: worktree),
+                remotes: scan?.remotes(of: worktree) ?? [],
+                home: home,
+                now: now
+            )
         }
     }
 
-    /// The rows shown: filtered, searched and sorted.
+    /// The rows shown (filtered and searched), in the order the table shows them: group by group, each
+    /// group sorted with the main checkout first. Rows of collapsed groups are included.
     public var rows: [WorktreeRow] {
-        allRows.filter(matches).sorted(using: sortOrder + [KeyPathComparator(\WorktreeRow.scanOrder)])
+        groups.flatMap(\.rows)
     }
 
     /// The shown rows that are selected.
@@ -117,7 +141,7 @@ public final class WorktreesModel {
         minimumIdleDays = nil
     }
 
-    private func matches(_ row: WorktreeRow) -> Bool {
+    func matches(_ row: WorktreeRow) -> Bool {
         if let kindFilter, row.kind != kindFilter { return false }
         if let statusFilter, row.status.group != statusFilter.rawValue { return false }
         if let minimumIdleDays {
@@ -125,7 +149,7 @@ public final class WorktreesModel {
         }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return true }
-        return [row.repoName, row.branchText, row.path].contains { $0.localizedCaseInsensitiveContains(query) }
+        return row.searchableTexts.contains { $0.localizedCaseInsensitiveContains(query) }
     }
 
     /// The root of the volume holding `url` (or its nearest existing parent).

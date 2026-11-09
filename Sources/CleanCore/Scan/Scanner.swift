@@ -30,11 +30,14 @@ public struct Scanner: Sendable {
     }
 
     /// `includeDependencies` also finds every worktree's light-clean folders and sums their sizes
-    /// (`ScanResult.dependencyBytes`); it is slow, so it is off unless asked for.
+    /// (`ScanResult.dependencyBytes`); it is slow, so it is off unless asked for. `includeGitDetails` reads
+    /// each worktree's last commit and each repo's remotes (`ScanResult.lastCommits`, `.remotes`): one
+    /// `git log -1` per distinct HEAD and one `git remote -v` per repo, read-only.
     public func scan(
         roots explicitRoots: [URL] = [],
         includeSizes: Bool = true,
         includeDependencies: Bool = false,
+        includeGitDetails: Bool = false,
         progress: @escaping @Sendable (ScanProgress) -> Void = { _ in }
     ) async -> ScanResult {
         let startedAt = environment.now()
@@ -69,6 +72,14 @@ public struct Scanner: Sendable {
             issues += listing.issues
         }
 
+        var lastCommits: [String: CommitSummary]?
+        var remotes: [String: [GitRemote]]?
+        if includeGitDetails, let git {
+            let reader = GitInfoReader(git: git)
+            lastCommits = await reader.lastCommits(of: worktrees)
+            remotes = await reader.remotes(of: discovery.repos)
+        }
+
         var sizes: [String: Int64] = [:]
         if includeSizes, !worktrees.isEmpty {
             if let du = environment.tools.du {
@@ -100,7 +111,9 @@ public struct Scanner: Sendable {
             issues: issues,
             startedAt: startedAt,
             duration: start.duration(to: clock.now) / .seconds(1),
-            dependencyBytes: dependencyBytes
+            dependencyBytes: dependencyBytes,
+            lastCommits: lastCommits,
+            remotes: remotes
         )
     }
 

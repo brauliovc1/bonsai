@@ -2,13 +2,16 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The Worktrees screen: every worktree of the last scan with its verdict and its Deps; remove, prune and
-/// light clean from here.
+/// The Worktrees screen: every worktree of the last scan, grouped by repo, with its last commit, folder,
+/// verdict and Deps; a details panel for the selection; remove, prune and light clean from here.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
 
     var body: some View {
         VStack(spacing: 0) {
+            if let testMode = model.app.testModeText {
+                TestModeBanner(text: testMode)
+            }
             if let problem = model.app.problem {
                 ProblemBanner(text: problem)
             }
@@ -17,8 +20,12 @@ struct WorktreesView: View {
             ScanStatusBar(app: model.app, shown: model.rows.count, total: model.allRows.count)
         }
         .navigationTitle("Worktrees")
-        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch or path")
+        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch, folder, remote or commit")
         .toolbar { toolbar }
+        .inspector(isPresented: $model.isShowingDetails) {
+            WorktreeDetailsView(model: model)
+                .inspectorColumnWidth(min: 280, ideal: 330, max: 460)
+        }
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
         }
@@ -29,43 +36,49 @@ struct WorktreesView: View {
     }
 
     private var table: some View {
-        Table(model.rows, selection: $model.selection, sortOrder: $model.sortOrder) {
-            TableColumn("Repo", value: \.repoName) { row in
-                Text(row.repoName).help(row.path)
+        Table(of: WorktreeTableItem.self, selection: tableSelection, sortOrder: tableSortOrder) {
+            TableColumn("Worktree", value: \WorktreeTableItem.nameSortKey) { WorktreeNameCell(item: $0) }
+                .width(min: 120, ideal: 170)
+            TableColumn("Kind", value: \WorktreeTableItem.kindText) { item in
+                if let row = item.row { Badge(kind: row.kind) }
             }
-            .width(min: 90, ideal: 130)
-            TableColumn("Branch", value: \.branchText) { row in
-                Text(row.branchText).help(row.path)
+            .width(min: 54, ideal: 62)
+            TableColumn("Last commit", value: \WorktreeTableItem.lastCommitSortKey) { LastCommitCell(item: $0) }
+                .width(min: 150, ideal: 240)
+            TableColumn("Folder", value: \WorktreeTableItem.folderText) { FolderCell(item: $0) }
+                .width(min: 110, ideal: 210)
+            TableColumn("Size", value: \WorktreeTableItem.sizeSortKey) { SizeCell(item: $0) }
+                .width(min: 60, ideal: 74)
+            TableColumn("Deps", value: \WorktreeTableItem.dependencySortKey) { item in
+                if let row = item.row { DepsCell(row: row) }
             }
-            .width(min: 110, ideal: 190)
-            TableColumn("Kind", value: \.kindText) { row in
-                Badge(kind: row.kind)
+            .width(min: 60, ideal: 74)
+            TableColumn("Idle", value: \WorktreeTableItem.idleSortKey) { item in
+                if let row = item.row {
+                    Text(row.idleText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
-            .width(min: 56, ideal: 66)
-            TableColumn("Size", value: \.sizeSortKey) { row in
-                Text(row.sizeText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
+            .width(min: 44, ideal: 52)
+            TableColumn("Status", value: \WorktreeTableItem.statusSortKey) { item in
+                if let row = item.row { StatusCell(row: row) }
             }
-            .width(min: 64, ideal: 78)
-            TableColumn("Deps", value: \.dependencySortKey) { row in
-                DepsCell(row: row)
+            .width(min: 130, ideal: 210)
+        } rows: {
+            ForEach(model.groups) { group in
+                DisclosureTableRow(WorktreeTableItem.group(group), isExpanded: expanded(group)) {
+                    ForEach(group.rows) { row in
+                        TableRow(WorktreeTableItem.worktree(row))
+                    }
+                }
             }
-            .width(min: 64, ideal: 78)
-            TableColumn("Idle", value: \.idleSortKey) { row in
-                Text(row.idleText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .width(min: 48, ideal: 58)
-            TableColumn("Status", value: \.statusSortKey) { row in
-                StatusCell(row: row)
-            }
-            .width(min: 150, ideal: 260)
         }
         .sheet(isPresented: $model.isShowingPruneSheet, onDismiss: { model.dismissPrune() }) {
             PruneSheet(model: model)
         }
-        .contextMenu(forSelectionType: WorktreeRow.ID.self) { ids in
-            contextMenu(for: ids)
+        .contextMenu(forSelectionType: WorktreeTableItem.ID.self) { ids in
+            contextMenu(for: rowIDs(ids))
         } primaryAction: { ids in
-            FolderActions.reveal(rows(ids).filter(\.isOpenableFolder).map(\.url))
+            FolderActions.reveal(rows(rowIDs(ids)).filter(\.isOpenableFolder).map(\.url))
         }
         .overlay {
             if model.allRows.isEmpty, !model.app.isScanning {
@@ -75,6 +88,38 @@ struct WorktreesView: View {
                 ContentUnavailableView.search(text: model.searchText)
             }
         }
+    }
+
+    /// The table selects rows and group headers; the model keeps only the rows.
+    private var tableSelection: Binding<Set<WorktreeTableItem.ID>> {
+        Binding(
+            get: { Set(model.selection.map { WorktreeTableItem.ID.worktree($0) }) },
+            set: { model.selection = rowIDs($0) }
+        )
+    }
+
+    private var tableSortOrder: Binding<[KeyPathComparator<WorktreeTableItem>]> {
+        Binding(
+            get: { WorktreeTableItem.tableSortOrder(model.sortOrder) },
+            set: { order in
+                let rows = WorktreeTableItem.rowSortOrder(order)
+                if !rows.isEmpty { model.sortOrder = rows }
+            }
+        )
+    }
+
+    private func expanded(_ group: WorktreeGroup) -> Binding<Bool> {
+        Binding(
+            get: { model.isExpanded(group.repoPath) },
+            set: { model.setExpanded($0, repo: group.repoPath) }
+        )
+    }
+
+    private func rowIDs(_ ids: Set<WorktreeTableItem.ID>) -> Set<WorktreeRow.ID> {
+        Set(ids.compactMap { id in
+            if case .worktree(let rowID) = id { return rowID }
+            return nil
+        })
     }
 
     @ViewBuilder
@@ -130,6 +175,10 @@ struct WorktreesView: View {
             }
             .help("Remove the selected worktrees (you confirm first)")
             .disabled(model.selectedRows.isEmpty || model.app.isCleaningUp)
+            Button { model.isShowingDetails.toggle() } label: {
+                Label("Details", systemImage: "sidebar.trailing")
+            }
+            .help(model.isShowingDetails ? "Hide the details panel" : "Show the details panel")
         }
     }
 

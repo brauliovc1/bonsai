@@ -41,7 +41,7 @@ struct CleanClaudeApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(app: models.app, autoMode: models.autoMode)
+            MenuContentView(app: models.app, autoMode: models.autoMode, menuBar: models.menuBar)
         } label: {
             MenuBarLabel(model: models.menuBar)
         }
@@ -50,7 +50,7 @@ struct CleanClaudeApp: App {
         Window(AppInfo.name, id: AppInfo.mainWindowID) {
             MainWindowView(models: models)
         }
-        .defaultSize(width: 1040, height: 640)
+        .defaultSize(width: 1280, height: 700)
 
         Settings {
             SettingsView(model: models.settings, autoMode: models.autoMode, launchAtLogin: models.launchAtLogin)

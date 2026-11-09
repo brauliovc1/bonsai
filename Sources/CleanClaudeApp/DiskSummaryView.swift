@@ -1,30 +1,36 @@
 import CleanAppModel
 import SwiftUI
 
-/// "123.4 GB free", a used-space bar with the percentage, "of 460.4 GB on Macintosh HD".
+/// "23.0 GB free of 460 GB (95% used)", the used-space bar (orange below the low-space warning, red under
+/// half of it, like the menu-bar label), and which disk it is.
 struct DiskSummaryView: View {
     let disk: DiskSpaceModel
+    let level: MenuBarModel.Level
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(DisplayText.bytes(disk.freeBytes)) free")
-                    .font(.headline)
-                    .monospacedDigit()
-                Spacer()
-                if let used = disk.usedFraction {
-                    Text("\(used, format: .percent.precision(.fractionLength(0))) used")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-            ProgressView(value: disk.usedFraction ?? 0)
-                .tint((disk.usedFraction ?? 0) > 0.9 ? .red : .accentColor)
-            Text("of \(DisplayText.bytes(disk.totalBytes))" + (disk.volumeName.map { " on \($0)" } ?? ""))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(FreeSpaceText.summary(free: disk.freeBytes, total: disk.totalBytes))
+                .font(.headline)
+                .monospacedDigit()
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .minimumScaleFactor(0.8)
+            ProgressView(value: disk.usedFraction ?? 0)
+                .tint(tint)
+            if let volume = disk.volumeName {
+                Text(volume)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+    }
+
+    private var tint: Color {
+        switch level {
+        case .low: .orange
+        case .veryLow: .red
+        case .normal, .unknown: .accentColor
         }
     }
 }
