@@ -6,8 +6,9 @@ import Testing
 /// P12c review: launches at the same moment, and how long a launch waits for the locks. Temp folders only.
 @Suite("Settings folder move: launches at once")
 struct SettingsFolderMoveRaceTests {
-    /// Launches that look while another one swaps (each tries without waiting, again and again): one moves, and
-    /// none ever says there are two folders.
+    /// Launches that look while another one swaps (each tries without waiting, again and again): one moves, none
+    /// ever says there are two folders or that something is in the way; the only other answer is "the lock is
+    /// busy" (they don't wait).
     @Test func aLaunchLookingDuringAnotherOnesSwapNeverSaysTwoFolders() throws {
         for round in 0..<60 {
             let world = try SettingsFolderWorld()
@@ -33,6 +34,9 @@ struct SettingsFolderMoveRaceTests {
             let all = outcomes.value + [main]
             #expect(all.filter { $0 == .moved }.count == 1, "round \(round)")
             #expect(!all.contains(.bothExist), "round \(round): \(all.filter { $0 == .bothExist }.count) times")
+            for case .notMoved(let why) in all {
+                #expect(why.contains("is locked by another process"), "round \(round): \(why)")
+            }
             #expect(world.entry(world.old) == .link("Bonsai") && world.entry(world.new) == .folder)
         }
     }

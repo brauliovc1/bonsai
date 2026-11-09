@@ -42,15 +42,19 @@ extension SettingsFolderMove {
         }
         let atNew = Entry(paths.new)
         if atNew.isFreeForTheMove { return .move }
+        // Anything else at Bonsai may come from a look that straddled another launch's swap (Bonsai read as a link
+        // and then as no link, or as the folder just swapped in, while clean-claude is a link by now): look at
+        // clean-claude again before deciding anything from it.
+        guard Entry(paths.old) == .folder else { return lookAgain(paths, attempts: attempts) }
         guard atNew == .folder, paths.newNameOnDisk == newName else { return .keepOld(inTheWay(atNew, paths)) }
-        // Two real folders, unless this look straddled another launch's swap (then clean-claude is a link by
-        // now): look at it again, and compare both folders' device and inode, before saying so.
-        guard Entry(paths.old) == .folder, let oldID = FileID(paths.old, follow: false),
-              let newID = FileID(paths.new, follow: false), oldID != newID
-        else {
-            return attempts > 1 ? decide(paths, attempts: attempts - 1) : .keepOld("the folders changed while Bonsai looked")
-        }
+        // Two real folders: different device and inode too.
+        guard let oldID = FileID(paths.old, follow: false), let newID = FileID(paths.new, follow: false), oldID != newID
+        else { return lookAgain(paths, attempts: attempts) }
         return .bothExist
+    }
+
+    private static func lookAgain(_ paths: Paths, attempts: Int) -> Decision {
+        attempts > 1 ? decide(paths, attempts: attempts - 1) : .keepOld("the folders changed while Bonsai looked")
     }
 
     /// `clean-claude` is a link. After a move it leads to `Bonsai`: use that. A link to a folder elsewhere (the
