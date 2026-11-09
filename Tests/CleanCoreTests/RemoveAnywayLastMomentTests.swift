@@ -11,6 +11,8 @@ import Testing
 struct RemoveAnywayLastMomentTests {
     enum During: String, CaseIterable {
         case rebaseStarted, fileWritten, both, listedFileEdited
+        /// Only for the submodule world: a file appears in the uninitialized submodule's folder.
+        case submoduleFileWritten
     }
 
     /// A git that, the first time it is asked for the ignored files (in the middle of the re-check's slow inspection,
@@ -22,11 +24,13 @@ struct RemoveAnywayLastMomentTests {
         let rebase = "mkdir -p '\(gitDir.path)/rebase-merge'"
         let write = "printf 'written during the re-check\\n' > '\(worktree.path)/late.txt'"
         let edit = "printf 'draft, edited during the re-check\\n' > '\(worktree.path)/draft.md'"
+        let submodule = "printf 'late\\n' > '\(worktree.path)/libs/library/Late.swift'"
         let action = switch during {
         case .rebaseStarted: rebase
         case .fileWritten: write
         case .both: rebase + "\n      " + write
         case .listedFileEdited: edit
+        case .submoduleFileWritten: submodule
         }
         let text = """
             #!/bin/sh
@@ -48,7 +52,7 @@ struct RemoveAnywayLastMomentTests {
         return git
     }
 
-    @Test(arguments: During.allCases)
+    @Test(arguments: [During.rebaseStarted, .fileWritten, .both, .listedFileEdited])
     func aChangeDuringTheRecheckIsCaught(_ during: During) async throws {
         let world = try await RemoveAnywayWorld.make()
         defer { world.remove() }
@@ -113,6 +117,36 @@ struct RemoveAnywayLastMomentTests {
         )
         #expect(result.entry.notes.contains("  libs/library/MyPatch.swift"))
         #expect(!FileManager.default.fileExists(atPath: wt.path))
+    }
+
+    /// A file put in the uninitialized submodule's folder while the slow re-check runs (after it walked that folder):
+    /// only the last-moment walk sees it.
+    @Test func aSubmoduleFolderFileWrittenDuringTheRecheckIsCaught() async throws {
+        let world = try await RemoveAnywayWorld.make()
+        defer { world.remove() }
+        let fixture = world.fixture
+        let (library, _) = try await fixture.xcodePackage("library", in: fixture.url, base: "libraries")
+        try await fixture.run(["-c", "protocol.file.allow=always", "submodule", "add", "--quiet", library.path, "libs/library"],
+                              in: world.repo)
+        try await fixture.run(["commit", "--quiet", "-m", "Add a submodule"], in: world.repo)
+        try await fixture.run(["push", "--quiet", "origin", "main"], in: world.repo)
+        let wt = try await world.safety.sibling("subs")
+        try fixture.write("my patch\n", to: "libs/library/MyPatch.swift", in: wt)
+        let assessment = try await world.assess(wt)
+        let list = try #require(assessment.removeAnyway.lossList)
+        var remover = Remover(git: try triggerGit(fixture, worktree: wt, gitDir: try await world.gitDir(of: wt), .submoduleFileWritten),
+                              settings: Settings(), environment: fixture.environment())
+        remover.captureCwdIndex = { ProcessCwdIndex(entries: []) }
+
+        await #expect {
+            try await remover.removeAnyway(
+                assessment.worktree, confirmed: list, expectation: RemovalExpectation(assessment: assessment),
+                estimatedBytes: nil, knownWorktrees: try await world.known()
+            )
+        } throws: { error in
+            (error as? RemovalExpectation.Mismatch)?.changes.contains { $0.contains("Late.swift") } == true
+        }
+        #expect(FileManager.default.fileExists(atPath: wt.appending(path: "libs/library/Late.swift").path))
     }
 
     /// A submodule folder that can't be listed whole makes Remove anyway unavailable.
