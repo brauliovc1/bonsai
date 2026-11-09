@@ -2,8 +2,8 @@ import Foundation
 import UniformTypeIdentifiers
 
 /// Whether and how "Open" opens a file from a worktree's file list, so that it never runs anything (P12b review): an
-/// allowlist, not a list of what runs. Images and PDFs open in their default app; text and source code open as text
-/// in TextEdit (a script's default app can be Terminal, an HTML file's a browser); everything else (archives such as
+/// allowlist, not a list of what runs. Images and PDFs open in their default app; text, source code and SVG open as
+/// text in TextEdit (a script's default app can be Terminal, an HTML file's or an SVG's a browser); everything else (archives such as
 /// `.jar`, Java classes, Terminal sessions, executable files, apps and other packages, symlinks) gets no Open: Show in
 /// Finder and Copy path only.
 public enum FileOpening: Equatable, Sendable {
@@ -22,6 +22,8 @@ public enum FileOpening: Equatable, Sendable {
         if values.isDirectory == true { return values.isPackage == true ? .finderOnly : .defaultApp }
         guard values.isRegularFile == true, values.isExecutable != true else { return .finderOnly }
         let type = values.contentType ?? UTType(filenameExtension: url.pathExtension) ?? .data
+        // An SVG is text that can hold a script, and its default app is often a browser, which runs it.
+        if type.conforms(to: .svg) { return .asText }
         if type.conforms(to: .image) || type.conforms(to: .pdf) { return .defaultApp }
         if type.conforms(to: .text) || type.conforms(to: .sourceCode) { return .asText }
         return .finderOnly

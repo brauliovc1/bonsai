@@ -84,7 +84,7 @@ struct UnsavedFilesTests {
         try FileManager.default.createDirectory(at: folder.appending(path: "Tool.app/Contents"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: folder.appending(path: "docs"), withIntermediateDirectories: true)
         for name in ["notes.md", "page.html", "Main.swift", "deploy.command", "run.sh", "script", "tool.jar", "Main.class",
-                     "session.term", "logo.png", "spec.pdf", "Makefile"] {
+                     "session.term", "logo.png", "spec.pdf", "Makefile", "logo.svg"] {
             try Data("x\n".utf8).write(to: folder.appending(path: name))
         }
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.appending(path: "script").path)
@@ -94,7 +94,8 @@ struct UnsavedFilesTests {
         func way(_ name: String) -> FileOpening { FileOpening.way(for: folder.appending(path: name)) }
         #expect(way("logo.png") == .defaultApp && way("spec.pdf") == .defaultApp)
         #expect(FileOpening.way(for: folder.appending(path: "docs", directoryHint: .isDirectory)) == .defaultApp, "Finder")
-        for name in ["page.html", "Main.swift", "deploy.command", "run.sh", "Makefile"] {
+        // An SVG is an image that can hold a script, and a browser may be its default app: as text.
+        for name in ["page.html", "Main.swift", "deploy.command", "run.sh", "Makefile", "logo.svg"] {
             #expect(way(name) == .asText, "\(name)")
         }
         for name in ["script", "notes.md", "tool.jar", "Main.class", "link.sh", "missing.txt"] {
