@@ -76,24 +76,31 @@ struct UnsavedFilesTests {
         #expect(try #require(model.row(wt)).unsavedFiles.isEmpty)
     }
 
+    /// Open is an allowlist (P12b review): images and PDFs in their default app, text and source code as text, and
+    /// nothing for anything else (archives such as `.jar`, Java classes, Terminal sessions, executables, apps, links).
     @Test func openNeverRunsAnything() throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: "opening-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: folder) }
         try FileManager.default.createDirectory(at: folder.appending(path: "Tool.app/Contents"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: folder.appending(path: "docs"), withIntermediateDirectories: true)
-        for name in ["notes.md", "deploy.command", "run.sh", "script"] {
+        for name in ["notes.md", "page.html", "Main.swift", "deploy.command", "run.sh", "script", "tool.jar", "Main.class",
+                     "session.term", "logo.png", "spec.pdf", "Makefile"] {
             try Data("x\n".utf8).write(to: folder.appending(path: name))
         }
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.appending(path: "script").path)
-        try FileManager.default.createSymbolicLink(at: folder.appending(path: "link"), withDestinationURL: folder.appending(path: "notes.md"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.appending(path: "notes.md").path)
+        try FileManager.default.createSymbolicLink(at: folder.appending(path: "link.sh"), withDestinationURL: folder.appending(path: "run.sh"))
 
-        #expect(FileOpening.way(for: folder.appending(path: "notes.md")) == .defaultApp)
-        #expect(FileOpening.way(for: folder.appending(path: "docs", directoryHint: .isDirectory)) == .defaultApp)
-        #expect(FileOpening.way(for: folder.appending(path: "deploy.command")) == .asText)
-        #expect(FileOpening.way(for: folder.appending(path: "run.sh")) == .asText)
-        #expect(FileOpening.way(for: folder.appending(path: "script")) == .asText)
+        func way(_ name: String) -> FileOpening { FileOpening.way(for: folder.appending(path: name)) }
+        #expect(way("logo.png") == .defaultApp && way("spec.pdf") == .defaultApp)
+        #expect(FileOpening.way(for: folder.appending(path: "docs", directoryHint: .isDirectory)) == .defaultApp, "Finder")
+        for name in ["page.html", "Main.swift", "deploy.command", "run.sh", "Makefile"] {
+            #expect(way(name) == .asText, "\(name)")
+        }
+        for name in ["script", "notes.md", "tool.jar", "Main.class", "link.sh", "missing.txt"] {
+            #expect(way(name) == .finderOnly, "\(name): executable, not text, a link or missing")
+        }
+        #expect(way("session.term") != .defaultApp)
         #expect(FileOpening.way(for: folder.appending(path: "Tool.app", directoryHint: .isDirectory)) == .finderOnly)
-        #expect(FileOpening.way(for: folder.appending(path: "link")) == .finderOnly)
-        #expect(FileOpening.way(for: folder.appending(path: "missing.txt")) == .finderOnly)
     }
 }

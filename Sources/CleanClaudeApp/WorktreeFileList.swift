@@ -23,7 +23,8 @@ struct WorktreeFileList: View {
 }
 
 /// One file: its state in a plain word, the path relative to the worktree (middle-truncated; in full in the
-/// tooltip), and Show in Finder, Open and Copy path. A deleted file offers Copy path only.
+/// tooltip), and Show in Finder, Open (only for text, source code, images and PDFs, `FileOpening`) and Copy path. A
+/// deleted file offers Copy path only.
 struct WorktreeFileRowView: View {
     static let height: CGFloat = 26
     let file: WorktreeFileRow
@@ -42,9 +43,12 @@ struct WorktreeFileRowView: View {
             if !file.isGone {
                 Button { FileActions.reveal(file.url) } label: { Image(systemName: "folder") }
                     .help("Show in Finder")
-                Button { FileActions.open(file.url) } label: { Image(systemName: "arrow.up.forward.square") }
-                    .help("Open (scripts open as text, apps only in Finder)")
             }
+            Button { FileActions.open(file.url) } label: { Image(systemName: "arrow.up.forward.square") }
+                .help(file.opening == .asText ? "Open as text" : "Open")
+                .opacity(file.opening == .finderOnly ? 0 : 1)
+                .disabled(file.opening == .finderOnly)
+                .accessibilityHidden(file.opening == .finderOnly)
             Button { FolderActions.copy([file.fullPath]) } label: { Image(systemName: "doc.on.doc") }
                 .help("Copy path")
         }

@@ -19,6 +19,7 @@ enum FileActions {
             }
             NSWorkspace.shared.open([url], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration())
         case .finderOnly:
+            // No Open is offered for these; if asked anyway, Finder only shows it.
             reveal(url)
         }
     }

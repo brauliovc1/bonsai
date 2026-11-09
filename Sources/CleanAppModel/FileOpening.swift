@@ -1,30 +1,29 @@
 import Foundation
+import UniformTypeIdentifiers
 
-/// How "Open" opens a file from a worktree's file list without running anything: Finder runs an app and Terminal
-/// runs a script it is asked to open, so those open as text (or are shown in Finder) instead of in their default app.
+/// Whether and how "Open" opens a file from a worktree's file list, so that it never runs anything (P12b review): an
+/// allowlist, not a list of what runs. Images and PDFs open in their default app; text and source code open as text
+/// in TextEdit (a script's default app can be Terminal, an HTML file's a browser); everything else (archives such as
+/// `.jar`, Java classes, Terminal sessions, executable files, apps and other packages, symlinks) gets no Open: Show in
+/// Finder and Copy path only.
 public enum FileOpening: Equatable, Sendable {
-    /// Its default app (a document, an image, a plain folder in Finder).
+    /// Its default app: an image, a PDF, or a plain folder (Finder).
     case defaultApp
-    /// As text, in TextEdit: a script or an executable file.
+    /// As text, in TextEdit: text or source code.
     case asText
-    /// Only shown in Finder: an app or another package, or something that can't be looked at.
+    /// No Open; only shown in Finder.
     case finderOnly
-
-    /// Extensions that open in Terminal or Script Editor and run there.
-    static let runnableExtensions: Set<String> = [
-        "command", "tool", "terminal", "sh", "zsh", "bash", "csh", "ksh", "fish", "py", "rb", "pl", "php", "js",
-        "workflow", "scpt", "applescript", "action",
-    ]
 
     /// Looks at the item itself (symlinks not followed).
     public static func way(for url: URL) -> FileOpening {
-        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey, .isSymbolicLinkKey,
-                                                            .isExecutableKey, .isRegularFileKey])
-        else { return .finderOnly }
-        if values.isSymbolicLink == true { return .finderOnly }
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .isSymbolicLinkKey, .isExecutableKey,
+                                         .isRegularFileKey, .contentTypeKey]
+        guard let values = try? url.resourceValues(forKeys: keys), values.isSymbolicLink != true else { return .finderOnly }
         if values.isDirectory == true { return values.isPackage == true ? .finderOnly : .defaultApp }
-        guard values.isRegularFile == true else { return .finderOnly }
-        if values.isExecutable == true || runnableExtensions.contains(url.pathExtension.lowercased()) { return .asText }
-        return .defaultApp
+        guard values.isRegularFile == true, values.isExecutable != true else { return .finderOnly }
+        let type = values.contentType ?? UTType(filenameExtension: url.pathExtension) ?? .data
+        if type.conforms(to: .image) || type.conforms(to: .pdf) { return .defaultApp }
+        if type.conforms(to: .text) || type.conforms(to: .sourceCode) { return .asText }
+        return .finderOnly
     }
 }

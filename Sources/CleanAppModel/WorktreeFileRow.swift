@@ -3,7 +3,7 @@ import Foundation
 
 /// One file of a worktree as the details panel's "Unsaved changes" and the Remove anyway list show it: a plain word
 /// for its state and its path relative to the worktree. Read-only: the actions on it (Show in Finder, Open, Copy
-/// path) never change it; a deleted file offers Copy path only.
+/// path) never change it; Open only where it can't run anything (`FileOpening`); a deleted file offers Copy path only.
 public struct WorktreeFileRow: Identifiable, Hashable, Sendable {
     /// "Modified", "New", "Deleted", "Renamed"; "Hidden edit" and "Ignored" in the Remove anyway list.
     public let word: String
@@ -14,6 +14,8 @@ public struct WorktreeFileRow: Identifiable, Hashable, Sendable {
     public let url: URL
     /// Nothing is at the path (deleted, or gone since the scan): only its path can be copied.
     public let isGone: Bool
+    /// How "Open" opens it; `.finderOnly` = no Open (`FileOpening`).
+    public let opening: FileOpening
 
     public var id: String { path }
 
@@ -25,6 +27,7 @@ public struct WorktreeFileRow: Identifiable, Hashable, Sendable {
         url = worktree.appending(path: trimmed, directoryHint: path.hasSuffix("/") ? .isDirectory : .inferFromPath)
         // lstat: a symlink is there even when what it points to isn't.
         isGone = (try? FileManager.default.attributesOfItem(atPath: url.path)) == nil
+        opening = isGone ? .finderOnly : FileOpening.way(for: url)
     }
 
     /// An entry of `git status`.
