@@ -9,7 +9,7 @@ struct RestoreCommand: AsyncParsableCommand {
         discussion: "Without --yes this is a dry run that checks everything and prints the git command."
     )
 
-    @Argument(help: ArgumentHelp("The log entry id (from `clean-claude log`); a unique prefix is enough.", valueName: "id"))
+    @Argument(help: ArgumentHelp("The log entry id (from `bonsai log`); a unique prefix is enough.", valueName: "id"))
     var id: String
 
     @Flag(help: "Restore for real. Without it nothing is changed.")

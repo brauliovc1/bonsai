@@ -10,7 +10,8 @@ import Testing
 @MainActor
 struct AutoModeReviewTests {
     /// 1. Two app instances on one settings folder run at once: `cleanup.lock` lets one remove, once; the
-    /// other skips, and a manual removal in it is refused while the first runs.
+    /// other skips, and a manual removal in it is refused while the first runs. Either instance may win the
+    /// lock: each has the manual removal of the other ready, run by whichever plans first.
     @Test func twoInstancesOnOneSettingsFolderRemoveOnce() async throws {
         let world = try await AutoWorld.make(enabledDaysAgo: 8)
         defer { world.remove() }
@@ -19,24 +20,38 @@ struct AutoModeReviewTests {
             runner: FakeToolchain().runner,
             notifier: RecordingNotifier()
         )
-        await other.app.refresh()
         let review = try world.url("atlas-review")
-        let confirmation = await other.worktrees.prepareRemoval(other.worktrees.ids([review]))
+        let instances = [world.models, other]
+        var confirmations: [RemovalConfirmation] = []
+        for instance in instances {
+            await instance.app.refresh()
+            confirmations.append(await instance.worktrees.prepareRemoval(instance.worktrees.ids([review])))
+        }
         let manual = Box<[RemovalOutcome]>([])
-        world.autoMode.afterPlanning = { manual.value = await other.worktrees.confirmRemoval(confirmation) }
+        let hooksRun = Box(0)
+        for (index, instance) in instances.enumerated() {
+            // Runs in the instance that holds the lock; the manual removal goes to the one that doesn't.
+            let loser = instances[1 - index], confirmation = confirmations[1 - index]
+            instance.autoMode.afterPlanning = {
+                hooksRun.value += 1
+                manual.value = await loser.worktrees.confirmRemoval(confirmation)
+            }
+        }
 
         async let first = world.autoMode.runNow()
         async let second = other.autoMode.runNow()
         let results = await [first, second]
 
         #expect(results.compactMap { $0 }.count == 1, "one instance ran")
+        #expect(hooksRun.value == 1, "only the instance that ran planned")
         #expect(try world.removedNames() == ["atlas-archive"], "removed once, one log entry")
         let errors = [world.autoMode.error, other.autoMode.error].compactMap { $0 }
         #expect(errors == ["Auto mode waited: \(CleanupLock.busyMessage). The next check tries again."])
         #expect(manual.value.map(\.error) == [CleanupLock.busyMessage])
         #expect(try world.exists("atlas-review"))
 
-        await other.autoMode.checkSchedule()
+        let skipped = try #require(results.firstIndex { $0 == nil }.map { instances[$0] })
+        await skipped.autoMode.checkSchedule()
         #expect(try world.removedNames() == ["atlas-archive"], "a day hasn't passed: the other skips")
     }
 
@@ -46,7 +61,7 @@ struct AutoModeReviewTests {
         defer { world.remove() }
         let archive = try world.url("atlas-archive")
         let environment = [
-            "CLEAN_CLAUDE_SETTINGS_DIR": world.environment.settingsDirectory.path,
+            "BONSAI_SETTINGS_DIR": world.environment.settingsDirectory.path,
             "CLAUDE_CONFIG_DIR": world.environment.claudeConfigDirectory.path,
         ]
         let commands = [

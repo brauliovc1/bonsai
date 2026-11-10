@@ -22,9 +22,10 @@ public final class FileLock: @unchecked Sendable {
         release()
     }
 
-    /// Takes the lock when it is free; nil while another handle holds it. Creates the file (and its folder).
-    public static func tryLock(_ url: URL) throws -> FileLock? {
-        let descriptor = try open(url)
+    /// Takes the lock when it is free; nil while another handle holds it. Creates the file, and its folder unless
+    /// `createsFolder` is false (then a missing folder throws).
+    public static func tryLock(_ url: URL, createsFolder: Bool = true) throws -> FileLock? {
+        let descriptor = try open(url, createsFolder: createsFolder)
         if flock(descriptor, LOCK_EX | LOCK_NB) == 0 { return FileLock(url: url, descriptor: descriptor) }
         let failure = errno
         close(descriptor)
@@ -35,11 +36,11 @@ public final class FileLock: @unchecked Sendable {
     }
 
     /// Waits up to `timeout` for the lock, on a clock that doesn't count sleep.
-    public static func lock(_ url: URL, timeout: Duration) throws -> FileLock {
+    public static func lock(_ url: URL, timeout: Duration, createsFolder: Bool = true) throws -> FileLock {
         let clock = SuspendingClock()
         let deadline = clock.now.advanced(by: timeout)
         while true {
-            if let lock = try tryLock(url) { return lock }
+            if let lock = try tryLock(url, createsFolder: createsFolder) { return lock }
             guard clock.now < deadline else { throw LockError(description: "\(url.path) is locked by another process") }
             usleep(10_000)
         }
@@ -55,8 +56,10 @@ public final class FileLock: @unchecked Sendable {
         }
     }
 
-    private static func open(_ url: URL) throws -> Int32 {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    private static func open(_ url: URL, createsFolder: Bool) throws -> Int32 {
+        if createsFolder {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
         let descriptor = Darwin.open(url.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
         guard descriptor >= 0 else {
             throw LockError(description: "cannot open \(url.path): \(String(cString: strerror(errno)))")

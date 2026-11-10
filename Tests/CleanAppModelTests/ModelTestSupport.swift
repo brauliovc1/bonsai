@@ -47,7 +47,7 @@ extension DemoWorld {
     }
 }
 
-/// The `clean-claude` binary the test run built (the test target depends on it).
+/// The `bonsai` binary the test run built (the test target depends on it).
 enum CLIBinary {
     static func url(file: String = #filePath) throws -> URL {
         let packageRoot = URL(fileURLWithPath: file)
@@ -55,10 +55,10 @@ enum CLIBinary {
         let folders = Bundle.allBundles.map { $0.bundleURL.deletingLastPathComponent() }
             + [packageRoot.appending(path: ".build/debug")]
         for folder in folders {
-            let candidate = folder.appending(path: "clean-claude")
+            let candidate = folder.appending(path: "bonsai")
             if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
         }
-        throw SetupError(description: "clean-claude binary not found in \(folders.map(\.path))")
+        throw SetupError(description: "bonsai binary not found in \(folders.map(\.path))")
     }
 }
 

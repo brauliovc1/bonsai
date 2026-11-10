@@ -4,7 +4,7 @@ import Foundation
 /// A throwaway world of real git repos in a temp folder:
 ///
 /// ```
-/// <tmp>/clean-claude-fixture-<uuid>/
+/// <tmp>/bonsai-fixture-<uuid>/
 ///   home/       HOME for git and for `environment()` (.claude, .cursor/worktrees, Library/...)
 ///   remotes/    one bare remote per repo
 ///   root/       the scan root; main clones go here by default
@@ -26,7 +26,7 @@ public final class GitFixture: Sendable {
     static let tools = ToolPaths.resolve()
 
     public convenience init() throws {
-        try self.init(directory: TemporaryDirectory(prefix: "clean-claude-fixture"))
+        try self.init(directory: TemporaryDirectory(prefix: "bonsai-fixture"))
     }
 
     /// A fixture in `folder` (inside the temp dir), left in place when the fixture goes away.

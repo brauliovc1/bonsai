@@ -23,7 +23,7 @@ struct DerivedDataReviewTests {
         let mounted = try #require(try FileManager.default.contentsOfDirectory(atPath: "/Volumes").first)
         let world = try DerivedDataWorld()
         defer { world.remove() }
-        try world.entry("App-gone", workspace: "/Volumes/\(mounted)/nonexistent-clean-claude-\(UUID().uuidString)/App.xcodeproj")
+        try world.entry("App-gone", workspace: "/Volumes/\(mounted)/nonexistent-bonsai-\(UUID().uuidString)/App.xcodeproj")
 
         let report = await world.scanner().scan()
         #expect(report.entries.map(\.state) == [.orphaned])

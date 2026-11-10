@@ -15,7 +15,7 @@ public struct SimulatorReport: Sendable, Codable, Equatable {
     public var cachesBytes: Int64?
     /// Devices whose runtime is gone. `xcrun simctl delete unavailable` removes exactly these.
     public var unavailableDevices: [SimulatorDevice]
-    /// Installed runtimes, biggest first. Shown only; clean-claude never deletes a runtime.
+    /// Installed runtimes, biggest first. Shown only; Bonsai never deletes a runtime.
     public var runtimes: [SimulatorRuntime]
     /// Things that went wrong without stopping the scan.
     public var warnings: [String]

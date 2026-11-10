@@ -12,7 +12,7 @@ struct EnvironmentAndSupportTests {
         #expect(environment.claudeConfigDirectory.path == "/Users/tester/.claude")
         #expect(environment.claudeDesktopDirectory.path == "/Users/tester/Library/Application Support/Claude")
         #expect(environment.cursorWorktreesDirectory.path == "/Users/tester/.cursor/worktrees")
-        #expect(environment.settingsDirectory.path == "/Users/tester/Library/Application Support/clean-claude")
+        #expect(environment.settingsDirectory.path == "/Users/tester/Library/Application Support/Bonsai")
         #expect(environment.scanRootsOverride == nil)
     }
 
@@ -21,8 +21,8 @@ struct EnvironmentAndSupportTests {
             homeDirectory: home,
             variables: [
                 "CLAUDE_CONFIG_DIR": "/opt/claude-config",
-                "CLEAN_CLAUDE_SETTINGS_DIR": "~/tmp/settings",
-                "CLEAN_CLAUDE_SCAN_ROOTS": "/a:~/b::/c/../d",
+                "BONSAI_SETTINGS_DIR": "~/tmp/settings",
+                "BONSAI_SCAN_ROOTS": "/a:~/b::/c/../d",
             ],
             tools: ToolPaths()
         )
@@ -34,7 +34,7 @@ struct EnvironmentAndSupportTests {
     @Test func emptyVariablesAreUnset() {
         let environment = CleanEnvironment.make(
             homeDirectory: home,
-            variables: ["CLAUDE_CONFIG_DIR": "", "CLEAN_CLAUDE_SCAN_ROOTS": "::"],
+            variables: ["CLAUDE_CONFIG_DIR": "", "BONSAI_SCAN_ROOTS": "::"],
             tools: ToolPaths()
         )
         #expect(environment.claudeConfigDirectory.path == "/Users/tester/.claude")

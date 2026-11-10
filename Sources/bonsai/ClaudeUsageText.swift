@@ -7,7 +7,7 @@ struct ClaudeUsageText {
     let homeDirectory: URL
 
     func render() -> String {
-        var lines = ["Claude data: \(ByteFormatting.string(report.totalBytes)) in total. clean-claude only reads these folders.", ""]
+        var lines = ["Claude data: \(ByteFormatting.string(report.totalBytes)) in total. Bonsai only reads these folders.", ""]
 
         let transcripts = report.transcripts
         lines.append("Transcripts: \(ByteFormatting.string(transcripts.totalBytes)) in \(transcripts.projectCount) project folders")

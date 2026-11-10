@@ -11,7 +11,7 @@ struct SimulatorCleanerTests {
     private let logFolder: TemporaryDirectory
 
     init() throws {
-        logFolder = try TemporaryDirectory(prefix: "clean-claude-simulator-log")
+        logFolder = try TemporaryDirectory(prefix: "bonsai-simulator-log")
     }
 
     private func cleaner(_ runner: ScriptedCommandRunner, freeSpace: [Int64?] = [1, 1]) -> SimulatorCleaner {

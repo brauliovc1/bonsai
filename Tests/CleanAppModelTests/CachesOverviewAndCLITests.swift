@@ -108,7 +108,7 @@ struct CachesOverviewAndCLITests {
         try await ProcessRunner.run(
             executable: try CLIBinary.url(),
             arguments: arguments,
-            environmentAdditions: ["CLEAN_CLAUDE_SETTINGS_DIR": world.environment.settingsDirectory.path],
+            environmentAdditions: ["BONSAI_SETTINGS_DIR": world.environment.settingsDirectory.path],
             timeout: .seconds(120)
         )
     }

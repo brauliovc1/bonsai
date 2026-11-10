@@ -187,7 +187,7 @@ struct ProjectsReviewTests {
             executable: try CLIBinary.url(),
             arguments: ["light-clean", world.url("foxtrot").path, "--root", world.fixture.scanRoot.path, "--yes"],
             environmentAdditions: [
-                "CLEAN_CLAUDE_SETTINGS_DIR": environment.settingsDirectory.path,
+                "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
             ],
             timeout: .seconds(120)

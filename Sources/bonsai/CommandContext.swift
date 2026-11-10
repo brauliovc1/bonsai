@@ -9,7 +9,7 @@ struct CommandContext {
 
     /// Loads the settings; a settings file that exists but can't be read stops the command.
     static func load() throws -> CommandContext {
-        let environment = CleanEnvironment.live()
+        let environment = Launch.environment
         do {
             let settings = try SettingsStore(environment: environment).load()
             return CommandContext(environment: environment, settings: settings)
@@ -20,7 +20,7 @@ struct CommandContext {
     }
 
     /// `cleanup.lock` for the whole command when it changes anything (`--yes`), so it never runs together
-    /// with the app's cleanups, auto mode or another clean-claude. Refused (exit 1) while someone holds it.
+    /// with the app's cleanups, auto mode or another `bonsai`. Refused (exit 1) while someone holds it.
     /// Keep the result alive until the command ends; nil without `--yes`.
     static func holdCleanupLock(if yes: Bool, environment: CleanEnvironment) throws -> FileLock? {
         guard yes else { return nil }

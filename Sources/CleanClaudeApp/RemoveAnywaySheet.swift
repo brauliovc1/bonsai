@@ -46,7 +46,8 @@ struct RemoveAnywaySheet: View {
                 StatusChip(words: WorktreeStatusText.chip(for: confirmation.assessment))
                 SizeText(bytes: confirmation.assessment.estimatedBytes, isMeasuring: false)
                     .foregroundStyle(.secondary)
-                Text(confirmation.worktree.path)
+                // As the rows show it (~/…); the full path in the tooltip.
+                Text(TildePath.abbreviate(confirmation.worktree.path, home: model.app.environment.homeDirectory))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)

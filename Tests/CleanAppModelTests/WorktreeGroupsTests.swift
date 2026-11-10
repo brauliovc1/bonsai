@@ -143,16 +143,16 @@ struct WorktreeGroupsTests {
         let fixture = try GitFixture()
         defer { fixture.remove() }
         let set = AppModel(environment: fixture.environment(scanRoots: [fixture.scanRoot]), git: fixture.git)
-        #expect(set.testModeText == "Test mode: scanning only \(fixture.scanRoot.path) (CLEAN_CLAUDE_SCAN_ROOTS)")
+        #expect(set.testModeText == "Test mode: scanning only \(fixture.scanRoot.path) (BONSAI_SCAN_ROOTS)")
         let unset = AppModel(environment: fixture.environment(), git: fixture.git)
         #expect(unset.testModeText == nil)
 
         let home = URL(fileURLWithPath: "/Users/me", isDirectory: true)
-        let live = CleanEnvironment.make(homeDirectory: home, variables: ["CLEAN_CLAUDE_SCAN_ROOTS": "~/demo:/tmp/w"],
+        let live = CleanEnvironment.make(homeDirectory: home, variables: ["BONSAI_SCAN_ROOTS": "~/demo:/tmp/w"],
                                          tools: ToolPaths())
         #expect(AppModel(environment: live, git: fixture.git).testModeText
-            == "Test mode: scanning only ~/demo, /tmp/w (CLEAN_CLAUDE_SCAN_ROOTS)")
-        let empty = CleanEnvironment.make(homeDirectory: home, variables: ["CLEAN_CLAUDE_SCAN_ROOTS": ""], tools: ToolPaths())
+            == "Test mode: scanning only ~/demo, /tmp/w (BONSAI_SCAN_ROOTS)")
+        let empty = CleanEnvironment.make(homeDirectory: home, variables: ["BONSAI_SCAN_ROOTS": ""], tools: ToolPaths())
         #expect(AppModel(environment: empty, git: fixture.git).testModeText == nil)
     }
 }

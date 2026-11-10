@@ -3,7 +3,7 @@ import CleanTestSupport
 import Foundation
 import Testing
 
-@Suite("clean-claude projects")
+@Suite("bonsai projects")
 struct ProjectsCommandTests {
     private struct Output: Decodable {
         struct Total: Decodable, Equatable {
@@ -48,7 +48,7 @@ struct ProjectsCommandTests {
             executable: try CLIBinary.url(),
             arguments: ["projects", "--json", "--root", fixture.scanRoot.path] + arguments,
             environmentAdditions: [
-                "CLEAN_CLAUDE_SETTINGS_DIR": environment.settingsDirectory.path,
+                "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
             ],
             timeout: .seconds(120)

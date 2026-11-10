@@ -1,7 +1,9 @@
 APP_NAME = Bonsai
 EXECUTABLE = Bonsai
 APP_PRODUCT = CleanClaudeApp
-CLI = clean-claude
+CLI = bonsai
+# The old name of the CLI: `make install` leaves a link by that name to it, so old scripts keep working.
+OLD_CLI = clean-claude
 INSTALL_DIR = /Applications
 BIN_DIR = $(HOME)/.local/bin
 # Both slices of a release build; `make universal` fails if either is missing from the result.
@@ -18,7 +20,7 @@ ROOT := $(shell cd -- "$(dir $(lastword $(MAKEFILE_LIST)))" 2>/dev/null && pwd -
 BUNDLE = $(ROOT)/build/$(APP_NAME).app
 DIST = $(ROOT)/dist
 # swift-argument-parser is linked into the CLI only (the app binary has none of it), so this file goes
-# next to clean-claude in the zip and, as a courtesy, next to the app in the dmg.
+# next to bonsai in the zip and, as a courtesy, next to the app in the dmg.
 NOTICES = $(ROOT)/THIRD_PARTY_NOTICES
 # The app icon, made by `make icon` from Resources/Icon/MakeIcon.swift and the menu-bar glyph's shape. It is
 # committed, so building the app never needs the generator.
@@ -72,7 +74,7 @@ endef
 
 root:
 	@test -n "$(ROOT)" && test -f "$(ROOT)/Package.swift" && test -f "$(ROOT)/Resources/Info.plist" || \
-		{ echo "error: can't find the clean-claude folder; run make there, or make -C <folder>"; exit 1; }
+		{ echo "error: can't find the Bonsai folder; run make there, or make -C <folder>"; exit 1; }
 
 version-check:
 	@LC_ALL=C; case "$$VERSION" in \
@@ -88,12 +90,13 @@ app: root version-check
 	swift build --package-path "$(ROOT)" -c release --product $(APP_PRODUCT)
 	@set -e; bin="$$(swift build --package-path "$(ROOT)" -c release --show-bin-path)"; $(bundle_app)
 
-# Runs the bundle's binary directly (not `open`), so CLEAN_CLAUDE_SETTINGS_DIR and
-# CLEAN_CLAUDE_SCAN_ROOTS reach it during development.
+# Runs the bundle's binary directly (not `open`), so BONSAI_SETTINGS_DIR and
+# BONSAI_SCAN_ROOTS reach it during development.
 run: app
 	"$(BUNDLE)/Contents/MacOS/$(EXECUTABLE)"
 
-# Replaces the installed app and puts the CLI in ~/.local/bin. No sudo. Refuses while the installed copy runs.
+# Replaces the installed app and puts the CLI in ~/.local/bin, with $(OLD_CLI) as a link to it. No sudo. Refuses
+# while the installed copy runs.
 install: app
 	@for pid in $$(pgrep -x "$(EXECUTABLE)"); do \
 		case "$$(ps -o command= -p $$pid)" in \
@@ -108,7 +111,9 @@ install: app
 	mkdir -p "$(BIN_DIR)"
 	rm -f "$(BIN_DIR)/$(CLI)"
 	cp "$$(swift build --package-path "$(ROOT)" -c release --show-bin-path)/$(CLI)" "$(BIN_DIR)/$(CLI)"
-	@echo "Installed $(INSTALL_DIR)/$(APP_NAME).app and $(BIN_DIR)/$(CLI)"
+	rm -f "$(BIN_DIR)/$(OLD_CLI)"
+	ln -s "$(CLI)" "$(BIN_DIR)/$(OLD_CLI)"
+	@echo "Installed $(INSTALL_DIR)/$(APP_NAME).app and $(BIN_DIR)/$(CLI) ($(BIN_DIR)/$(OLD_CLI) is a link to it)"
 	@case ":$$PATH:" in \
 		*":$(BIN_DIR):"*) ;; \
 		*) echo "$(BIN_DIR) is not on your PATH; add it, e.g.: echo 'export PATH=\"$(BIN_DIR):\$$PATH\"' >> ~/.zprofile" ;; \

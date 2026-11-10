@@ -29,11 +29,11 @@ struct LocksAndTimeoutsTests {
         defer { fixture.remove() }
         let environment = fixture.environment()
         let held = try #require(try CleanupLock.tryAcquire(environment: environment))
-        #expect(CleanupLock.url(environment: environment).path.hasSuffix("clean-claude/cleanup.lock"))
+        #expect(CleanupLock.url(environment: environment).path.hasSuffix("Bonsai/cleanup.lock"))
         #expect(try CleanupLock.tryAcquire(environment: environment) == nil)
         held.release()
         #expect(try CleanupLock.tryAcquire(environment: environment) != nil)
-        #expect(CleanupLock.busyMessage == "another Bonsai or clean-claude cleanup is running")
+        #expect(CleanupLock.busyMessage == "another Bonsai cleanup is running")
     }
 
     /// A settings read-modify-write waits for `settings.lock`, so it can't put back a value another process

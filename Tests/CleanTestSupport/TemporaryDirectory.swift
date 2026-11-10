@@ -10,7 +10,7 @@ public final class TemporaryDirectory: Sendable {
     /// False for a folder adopted with `init(keeping:)`: it outlives this object.
     public let removesOnDeinit: Bool
 
-    public init(prefix: String = "clean-claude-test") throws {
+    public init(prefix: String = "bonsai-test") throws {
         url = FileManager.default.temporaryDirectory
             .appending(path: "\(prefix)-\(UUID().uuidString)", directoryHint: .isDirectory)
         removesOnDeinit = true

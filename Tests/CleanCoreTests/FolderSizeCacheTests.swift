@@ -17,7 +17,7 @@ struct FolderSizeCacheTests {
     }
 
     @Test func aFolderIsMeasuredAgainWhenItOrAFirstLevelEntryChanges() async throws {
-        let temp = try TemporaryDirectory(prefix: "clean-claude-sizes")
+        let temp = try TemporaryDirectory(prefix: "bonsai-sizes")
         defer { temp.remove() }
         let fixture = try GitFixture()
         defer { fixture.remove() }
@@ -46,7 +46,7 @@ struct FolderSizeCacheTests {
 
     @Test func entriesLastAnHourAndABrokenFileIsAnEmptyCache() async throws {
         #expect(FolderSizeCache.maxAge == 3_600)
-        let temp = try TemporaryDirectory(prefix: "clean-claude-sizes")
+        let temp = try TemporaryDirectory(prefix: "bonsai-sizes")
         defer { temp.remove() }
         let fixture = try GitFixture()
         defer { fixture.remove() }
@@ -72,7 +72,7 @@ struct FolderSizeCacheTests {
     }
 
     @Test func aCleanupLoggedForTheCheckoutAfterTheMeasurementMakesItStale() async throws {
-        let temp = try TemporaryDirectory(prefix: "clean-claude-sizes")
+        let temp = try TemporaryDirectory(prefix: "bonsai-sizes")
         defer { temp.remove() }
         let fixture = try GitFixture()
         defer { fixture.remove() }

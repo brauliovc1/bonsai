@@ -22,7 +22,7 @@ struct CleanupLoggingTests {
     private let folder: TemporaryDirectory
 
     init() throws {
-        folder = try TemporaryDirectory(prefix: "clean-claude-cleanup-log")
+        folder = try TemporaryDirectory(prefix: "bonsai-cleanup-log")
     }
 
     private var log: RemovalLog { RemovalLog(directory: folder.url) }

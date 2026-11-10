@@ -11,7 +11,7 @@ final class DerivedDataWorld: Sendable {
     let directory: TemporaryDirectory
 
     init() throws {
-        directory = try TemporaryDirectory(prefix: "clean-claude-derived-data")
+        directory = try TemporaryDirectory(prefix: "bonsai-derived-data")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)

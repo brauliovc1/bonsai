@@ -155,7 +155,7 @@ struct RestorerTests {
             .split(separator: "/").last.map(String.init))
         // Point the registration at a drive that isn't mounted (only the fixture's own admin file changes).
         let gitdirFile = world.repo.appending(path: ".git/worktrees/\(name)/gitdir")
-        let unplugged = "/Volumes/clean-claude-fixture-\(UUID().uuidString)/away"
+        let unplugged = "/Volumes/bonsai-fixture-\(UUID().uuidString)/away"
         try Data("\(unplugged)/.git\n".utf8).write(to: gitdirFile)
         let pruner = Pruner(git: world.fixture.git, environment: world.fixture.environment())
 

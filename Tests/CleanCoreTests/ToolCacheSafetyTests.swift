@@ -76,7 +76,7 @@ struct ToolCacheSafetyTests {
     @Test func symlinkChildrenGoAsLinks() async throws {
         let world = try ToolCacheWorld()
         defer { world.remove() }
-        let outside = try TemporaryDirectory(prefix: "clean-claude-outside")
+        let outside = try TemporaryDirectory(prefix: "bonsai-outside")
         defer { outside.remove() }
         let keep = outside.url.appending(path: "keep.txt")
         try Data("keep".utf8).write(to: keep)

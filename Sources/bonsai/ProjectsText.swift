@@ -36,9 +36,9 @@ struct ProjectsText {
         }
         if report.leftOut.count > 0 {
             let what = report.leftOut.count == 1 ? "1 Claude/Cursor worktree holds" : "\(report.leftOut.count) Claude/Cursor worktrees hold"
-            lines.append("\(what) \(ByteFormatting.string(report.leftOut.bytes)) more; see `clean-claude scan` (remove them whole).")
+            lines.append("\(what) \(ByteFormatting.string(report.leftOut.bytes)) more; see `bonsai scan` (remove them whole).")
         }
-        lines.append("Sizes are estimates. To clean one project: clean-claude light-clean <path> --yes (without --yes it is a dry run).")
+        lines.append("Sizes are estimates. To clean one project: bonsai light-clean <path> --yes (without --yes it is a dry run).")
         return lines.joined(separator: "\n")
     }
 

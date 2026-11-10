@@ -1,6 +1,6 @@
 import Foundation
 
-/// Absolute paths of the external tools clean-claude runs. A nil tool is missing: callers show that as a
+/// Absolute paths of the external tools Bonsai runs. A nil tool is missing: callers show that as a
 /// clear state, never crash.
 public struct ToolPaths: Sendable, Equatable {
     public var git: URL?

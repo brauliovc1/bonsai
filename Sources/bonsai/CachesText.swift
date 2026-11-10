@@ -28,7 +28,7 @@ struct CachesText {
         let ready = report.ready
         lines.append("")
         lines.append("\(ready.count) \(ready.count == 1 ? "entry" : "entries") ready to clean, "
-            + "\(ByteFormatting.string(report.readyBytes)) (estimate). Clean with: clean-claude caches clean <entry-id>… --yes")
+            + "\(ByteFormatting.string(report.readyBytes)) (estimate). Clean with: bonsai caches clean <entry-id>… --yes")
         return lines.joined(separator: "\n")
     }
 

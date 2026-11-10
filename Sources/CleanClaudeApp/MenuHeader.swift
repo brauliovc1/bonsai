@@ -2,7 +2,7 @@ import CleanAppModel
 import SwiftUI
 
 /// The menu window's top line: the bonsai mark and the app's name, a "Test mode" tag while
-/// CLEAN_CLAUDE_SCAN_ROOTS is set (the folders it scans are in its tooltip), and Refresh, which turns into a
+/// BONSAI_SCAN_ROOTS is set (the folders it scans are in its tooltip), and Refresh, which turns into a
 /// spinner while a scan runs.
 struct MenuHeader: View {
     let app: AppModel

@@ -21,7 +21,7 @@ struct DockerReportText {
             } else {
                 let found = report.daemonOperatingSystem.map { "\"\($0)\"" } ?? "unknown"
                 lines.append("Docker: running\(version), but the daemon reports \(found), not Docker Desktop. "
-                    + "clean-claude will not prune it.")
+                    + "Bonsai will not prune it.")
             }
         }
 
@@ -55,7 +55,7 @@ struct DockerReportText {
             + [
                 "",
                 "Reclaimable in total: \(ByteFormatting.string(report.reclaimableBytes)) (as docker system df counts it).",
-                "Sizes are 1024-based like the rest of clean-claude; docker system df prints 1000-based sizes, which look larger.",
+                "Sizes are 1024-based like the rest of Bonsai; docker system df prints 1000-based sizes, which look larger.",
             ]
     }
 }

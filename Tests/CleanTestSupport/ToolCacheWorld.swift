@@ -119,7 +119,7 @@ public final class ToolCacheWorld: Sendable {
     /// copy, which must survive whatever the test does.
     @discardableResult
     public func replaceWithLink(_ relative: String) throws -> URL {
-        let outside = FileManager.default.temporaryDirectory.appending(path: "clean-claude-outside-\(UUID().uuidString)")
+        let outside = FileManager.default.temporaryDirectory.appending(path: "bonsai-outside-\(UUID().uuidString)")
         try FileManager.default.moveItem(atPath: path(relative), toPath: outside.path)
         try FileManager.default.createSymbolicLink(atPath: path(relative), withDestinationPath: outside.path)
         return outside

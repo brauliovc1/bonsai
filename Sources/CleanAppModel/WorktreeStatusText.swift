@@ -1,6 +1,6 @@
 import CleanCore
 
-/// The words the app uses for a worktree's status (PLAN §8.4), from the same verdict `clean-claude scan` prints.
+/// The words the app uses for a worktree's status (PLAN §8.4), from the same verdict `bonsai scan` prints.
 /// `SafetyReason` and the CLI keep their own words; these live only in the app. Pure functions: exhaustive
 /// switches, so a new `WorktreeStatus` or `SafetyReason` case doesn't compile until it has words here.
 ///

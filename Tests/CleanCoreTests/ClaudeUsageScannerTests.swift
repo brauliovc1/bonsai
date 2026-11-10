@@ -217,7 +217,7 @@ struct ClaudeUsageScannerTests {
     @Test func honorsAClaudeConfigDirectoryOutsideHome() async throws {
         let home = try FakeHome()
         defer { home.remove() }
-        let elsewhere = try TemporaryDirectory(prefix: "clean-claude-config")
+        let elsewhere = try TemporaryDirectory(prefix: "bonsai-config")
         defer { elsewhere.remove() }
         let project = elsewhere.url.appending(path: "projects/-p", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

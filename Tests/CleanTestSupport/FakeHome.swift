@@ -7,7 +7,7 @@ public final class FakeHome: Sendable {
     private let directory: TemporaryDirectory
 
     public init() throws {
-        directory = try TemporaryDirectory(prefix: "clean-claude-home")
+        directory = try TemporaryDirectory(prefix: "bonsai-home")
     }
 
     public var url: URL { directory.url }

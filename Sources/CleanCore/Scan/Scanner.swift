@@ -10,7 +10,7 @@ public struct Scanner: Sendable {
         self.settings = settings
     }
 
-    /// Scan roots: explicit roots, else `$CLEAN_CLAUDE_SCAN_ROOTS`, else `settings.scanRoots` (only the ones
+    /// Scan roots: explicit roots, else `$BONSAI_SCAN_ROOTS` (`EnvironmentName`), else `settings.scanRoots` (only the ones
     /// `ScanRootRule` accepts, canonical), else `~/Documents/GitHub` if it exists.
     public static func resolveRoots(
         explicit: [URL],
@@ -139,7 +139,7 @@ public struct Scanner: Sendable {
             issues.append(ScanIssue(
                 kind: .gitUnsupported,
                 path: executable.path,
-                message: "\(found) is not supported; clean-claude needs git \(GitVersion.minimumSupported) or newer"
+                message: "\(found) is not supported; Bonsai needs git \(GitVersion.minimumSupported) or newer"
             ))
             return nil
         }

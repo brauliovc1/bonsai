@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where Claude's own data takes disk space. Read-only: clean-claude only measures these folders and
+/// Where Claude's own data takes disk space. Read-only: Bonsai only measures these folders and
 /// points to Claude's own Settings > This computer > Storage.
 public struct ClaudeUsageReport: Sendable, Codable, Equatable {
     /// A file or folder and its allocated size.

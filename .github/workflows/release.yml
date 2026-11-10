@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag like v1.2.3 tests the code, builds Bonsai-1.2.3.dmg and clean-claude-1.2.3-macos.zip with a
+# Pushing a tag like v1.2.3 tests the code, builds Bonsai-1.2.3.dmg and bonsai-1.2.3-macos.zip with a
 # SHA256SUMS file, and attaches them to a new GitHub release. A tag with a "-" in it (v1.2.3-rc.1) is marked
 # as a pre-release.
 #

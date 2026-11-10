@@ -1,6 +1,6 @@
 import Foundation
 
-/// The JSON format clean-claude writes and reads: pretty-printed, sorted keys, ISO 8601 dates.
+/// The JSON format Bonsai writes and reads: pretty-printed, sorted keys, ISO 8601 dates.
 public enum CleanJSON {
     public static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()

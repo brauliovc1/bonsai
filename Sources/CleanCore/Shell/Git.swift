@@ -16,7 +16,7 @@ public struct Git: Sendable {
 
     /// Inherited variables with this prefix never reach git: `GIT_DIR`, `GIT_INDEX_FILE`, `GIT_WORK_TREE`,
     /// `GIT_CEILING_DIRECTORIES` and the like would make it answer about something else. The ones
-    /// clean-claude sets itself (`ProcessRunner.addedEnvironment`, `environmentAdditions`) are added after.
+    /// Bonsai sets itself (`ProcessRunner.addedEnvironment`, `environmentAdditions`) are added after.
     public static let strippedEnvironmentPrefix = "GIT_"
 
     public init(

@@ -197,7 +197,7 @@ extension FakeHome {
 /// A workspace path that does not exist and is not under `/var/folders` or `/Volumes`: its DerivedData
 /// folder is orphaned.
 func goneWorkspace(_ name: String) -> String {
-    "/Users/clean-claude-no-such-user/\(name)/\(name).xcodeproj"
+    "/Users/bonsai-no-such-user/\(name)/\(name).xcodeproj"
 }
 
 /// Holds one call of the fake toolchain until the test lets it go: `toolchain.onCall = gate.hold { … }`

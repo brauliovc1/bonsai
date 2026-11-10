@@ -54,7 +54,7 @@ struct ProcessRunnerTests {
     @Test func stderrCaptured() async throws {
         let result = try await ProcessRunner.run(
             executable: url("/bin/ls"),
-            arguments: ["/nonexistent-clean-claude-path"]
+            arguments: ["/nonexistent-bonsai-path"]
         )
         #expect(result.exitCode != 0)
         #expect(result.stderr.contains("No such file or directory"))
@@ -74,13 +74,13 @@ struct ProcessRunnerTests {
             executable: url("/usr/bin/env"),
             arguments: [],
             directory: directory.url,
-            environmentAdditions: ["CLEAN_CLAUDE_TEST_VAR": "yes"]
+            environmentAdditions: ["BONSAI_TEST_VAR": "yes"]
         )
         let lines = Set(result.stdoutString.split(separator: "\n").map(String.init))
         #expect(lines.contains("LC_ALL=C"))
         #expect(lines.contains("GIT_TERMINAL_PROMPT=0"))
         #expect(lines.contains("GIT_OPTIONAL_LOCKS=0"))
-        #expect(lines.contains("CLEAN_CLAUDE_TEST_VAR=yes"))
+        #expect(lines.contains("BONSAI_TEST_VAR=yes"))
         #expect(lines.contains { $0.hasPrefix("PATH=") }, "inherits the parent environment")
 
         let pwd = try await ProcessRunner.run(executable: url("/bin/pwd"), arguments: ["-P"], directory: directory.url)

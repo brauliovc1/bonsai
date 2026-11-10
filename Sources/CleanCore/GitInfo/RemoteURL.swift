@@ -1,6 +1,6 @@
 import Foundation
 
-/// Remote URLs as clean-claude keeps and shows them. A remote can carry a credential
+/// Remote URLs as Bonsai keeps and shows them. A remote can carry a credential
 /// (`https://user:token@host/...`, `https://token@host/...`, `?access_token=...`), so every URL read from
 /// git goes through `redacted` before it is stored, shown, logged or put in JSON.
 public enum RemoteURL {

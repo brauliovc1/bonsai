@@ -7,7 +7,7 @@ import Testing
 @Suite("App model")
 @MainActor
 struct AppModelTests {
-    /// The app and `clean-claude scan --json` must give every worktree the same verdict (one verdict for
+    /// The app and `bonsai scan --json` must give every worktree the same verdict (one verdict for
     /// both: they share `WorktreeAssessor`). Both use the git the environment resolves.
     @Test func everyRowMatchesTheCLIVerdict() async throws {
         let world = try await DemoWorld.build()
@@ -22,7 +22,7 @@ struct AppModelTests {
             executable: try CLIBinary.url(),
             arguments: ["scan", "--json", "--root", world.folder.path],
             environmentAdditions: [
-                "CLEAN_CLAUDE_SETTINGS_DIR": environment.settingsDirectory.path,
+                "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
             ],
             timeout: .seconds(120)
