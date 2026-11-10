@@ -185,7 +185,7 @@ public final class ProjectsModel {
             report = await scanner(git: git).scan(
                 scan.worktrees,
                 knownWorktrees: scan.worktrees,
-                cwdIndex: await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof),
+                cwdIndex: await ProcessCwdIndex.capture(in: app.environment),
                 log: app.logEntries,
                 progress: { [weak self] step in Task { @MainActor in self?.receive(step) } }
             )
@@ -229,7 +229,7 @@ public final class ProjectsModel {
         let partial = await scanner(git: git).scan(
             targets,
             knownWorktrees: scan.worktrees,
-            cwdIndex: await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof),
+            cwdIndex: await ProcessCwdIndex.capture(in: app.environment),
             log: app.logEntries,
             includeLeftOut: false
         )

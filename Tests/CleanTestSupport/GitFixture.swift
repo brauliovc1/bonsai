@@ -12,6 +12,10 @@ import Foundation
 ///
 /// Every git call runs with `HOME=<home>`, `GIT_CONFIG_NOSYSTEM=1` and fixed `-c` settings, so the user's
 /// global git config, hooks and commit signing never apply. Call `remove()` when done (also on deinit).
+///
+/// git is the real binary (`TestTools`), and `git` and `environment()` give the code under test `TestWait.limit`
+/// for every git and lsof call: on a crowded machine a slow answer stays an answer. The fixture's own git calls
+/// (`run`, `makeRepo`…) wait for a slot in `ProcessLimit.helpers`.
 public final class GitFixture: Sendable {
     public struct FixtureError: Error, CustomStringConvertible {
         public var description: String
@@ -23,7 +27,8 @@ public final class GitFixture: Sendable {
     public let scanRoot: URL
     public let git: Git
 
-    static let tools = ToolPaths.resolve()
+    /// What `environment()` gives the code under test.
+    public static let timeouts = ToolTimeouts(git: TestWait.limit, gitVersion: TestWait.limit, lsof: TestWait.limit)
 
     public convenience init() throws {
         try self.init(directory: TemporaryDirectory(prefix: "bonsai-fixture"))
@@ -35,7 +40,7 @@ public final class GitFixture: Sendable {
     }
 
     init(directory: TemporaryDirectory) throws {
-        guard let executable = Self.tools.git else { throw FixtureError(description: "git not found") }
+        guard let executable = TestTools.paths.git else { throw FixtureError(description: "git not found") }
         self.directory = directory
         home = directory.url.appending(path: "home", directoryHint: .isDirectory)
         remotes = directory.url.appending(path: "remotes", directoryHint: .isDirectory)
@@ -55,7 +60,8 @@ public final class GitFixture: Sendable {
                 "-c", "user.email=fixture@example.invalid",
                 "-c", "commit.gpgsign=false",
                 "-c", "init.defaultBranch=main",
-            ]
+            ],
+            timeout: Self.timeouts.git
         )
     }
 
@@ -68,15 +74,18 @@ public final class GitFixture: Sendable {
 
     /// A `CleanEnvironment` whose home, Claude dirs, Cursor dir and settings dir all live in `home`.
     public func environment(scanRoots: [URL]? = nil) -> CleanEnvironment {
-        var environment = CleanEnvironment.make(homeDirectory: home, variables: [:], tools: Self.tools)
+        var environment = CleanEnvironment.make(homeDirectory: home, variables: [:], tools: TestTools.paths)
         environment.scanRootsOverride = scanRoots
+        environment.timeouts = Self.timeouts
         return environment
     }
 
-    /// Runs git with the fixture's isolation settings.
+    /// Runs git with the fixture's isolation settings, plus `environment` (author and committer dates, say).
     @discardableResult
-    public func run(_ args: [String], in directory: URL) async throws -> String {
-        try await git.gitString(args, in: directory)
+    public func run(_ args: [String], in directory: URL, adding environment: [String: String] = [:]) async throws -> String {
+        var git = self.git
+        git.environmentAdditions.merge(environment) { _, added in added }
+        return try await ProcessLimit.helpers.run { [git] in try await git.gitString(args, in: directory) }
     }
 
     /// A bare remote plus a main clone at `<parent>/<name>` with one commit pushed to `origin/main`.

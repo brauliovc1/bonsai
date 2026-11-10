@@ -20,6 +20,8 @@ public struct CleanEnvironment: Sendable {
     public var scanRootsOverride: [URL]?
     public var now: @Sendable () -> Date
     public var tools: ToolPaths
+    /// What git and lsof get, when they are run with these `tools`.
+    public var timeouts = ToolTimeouts()
 
     public init(
         homeDirectory: URL,

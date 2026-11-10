@@ -62,16 +62,19 @@ enum CLIBinary {
         throw SetupError(description: "bonsai binary not found in \(folders.map(\.path))")
     }
 
-    /// Runs it with `environment` added to the inherited one (`inheritedEnvironment` when given). It may take as
-    /// long as the machine needs, and the test says so when it doesn't finish.
+    /// Runs it with `environment` added to the inherited one (`inheritedEnvironment` when given), in a slot of
+    /// `ProcessLimit.helpers`. It may take as long as the machine needs, and the test says so when it doesn't finish.
     static func run(
         _ arguments: [String], environment: [String: String], inheritedEnvironment: [String: String]? = nil,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws -> ProcessResult {
-        let result = try await ProcessRunner.run(
-            executable: try url(), arguments: arguments, environmentAdditions: environment,
-            inheritedEnvironment: inheritedEnvironment, timeout: TestWait.limit
-        )
+        let executable = try url()
+        let result = try await ProcessLimit.helpers.run {
+            try await ProcessRunner.run(
+                executable: executable, arguments: arguments, environmentAdditions: environment,
+                inheritedEnvironment: inheritedEnvironment, timeout: TestWait.limit
+            )
+        }
         #expect(!result.timedOut, "bonsai \(arguments.joined(separator: " ")) didn't finish within \(TestWait.limit)",
                 sourceLocation: sourceLocation)
         return result

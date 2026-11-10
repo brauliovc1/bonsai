@@ -172,7 +172,8 @@ struct LightCleanReviewTests {
             arguments: [],
             environmentAdditions: ["GIT_CONFIG_NOSYSTEM": "1"],
             removingInherited: ["GIT_"],
-            inheritedEnvironment: ["GIT_DIR": "/elsewhere", "GIT_INDEX_FILE": "/x", "KEEP": "yes"]
+            inheritedEnvironment: ["GIT_DIR": "/elsewhere", "GIT_INDEX_FILE": "/x", "KEEP": "yes"],
+            timeout: TestWait.limit
         )
         let lines = Set(result.stdoutString.split(separator: "\n").map(String.init))
         #expect(lines.contains("KEEP=yes"))

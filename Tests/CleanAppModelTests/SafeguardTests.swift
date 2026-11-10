@@ -97,16 +97,18 @@ struct SafeguardTests {
         #expect(install.stdoutString.contains("is running from"), "the running-app check comes before anything is replaced")
     }
 
-    /// `/usr/bin/make` with `tools` first on PATH. It may take as long as the machine needs (`make` and `git` are
-    /// xcrun shims, slow on a cold runner), and says so when it doesn't finish.
+    /// The real make (`TestTools.make`, not the `/usr/bin/make` shim) with `tools` first on PATH, in a slot of
+    /// `ProcessLimit.helpers`. It may take as long as the machine needs, and says so when it doesn't finish.
     private func make(
         _ arguments: [String], tools: URL, in directory: URL? = nil, sourceLocation: SourceLocation = #_sourceLocation
     ) async throws -> ProcessResult {
         let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
-        let result = try await ProcessRunner.run(
-            executable: URL(fileURLWithPath: "/usr/bin/make"), arguments: arguments, directory: directory,
-            environmentAdditions: ["PATH": "\(tools.path):\(path)"], timeout: TestWait.limit
-        )
+        let result = try await ProcessLimit.helpers.run {
+            try await ProcessRunner.run(
+                executable: TestTools.make, arguments: arguments, directory: directory,
+                environmentAdditions: ["PATH": "\(tools.path):\(path)"], timeout: TestWait.limit
+            )
+        }
         #expect(!result.timedOut, "make \(arguments.joined(separator: " ")) didn't finish within \(TestWait.limit)",
                 sourceLocation: sourceLocation)
         return result
@@ -116,7 +118,8 @@ struct SafeguardTests {
     /// swift fails.
     private func writeStandIns(in tools: URL) throws -> URL {
         let calls = tools.appending(path: "calls")
-        for (name, then) in [("git", "exec /usr/bin/git \"$@\""), ("swift", "exit 1")] {
+        let git = try #require(TestTools.paths.git)
+        for (name, then) in [("git", "exec '\(git.path)' \"$@\""), ("swift", "exit 1")] {
             let script = tools.appending(path: name)
             try Data("#!/bin/sh\necho \"\(name) $*\" >> '\(calls.path)'\n\(then)\n".utf8).write(to: script)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)

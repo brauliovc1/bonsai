@@ -48,7 +48,7 @@ struct LightCleanCommand: AsyncParsableCommand {
         guard !findings.candidates.isEmpty else { return }
 
         guard yes else {
-            let index = await ProcessCwdIndex.capture(lsof: context.environment.tools.lsof)
+            let index = await ProcessCwdIndex.capture(in: context.environment)
             if let reason = LightCleaner.inUseReason(index, worktree: worktree.url) {
                 print("warning: \(reason.sentence) --yes would delete nothing while that is so.")
             }

@@ -28,8 +28,7 @@ public struct LightCleaner: Sendable {
         self.nestedSearch = NestedCheckoutSearch()
         self.cursorWorktreesDirectory = environment.cursorWorktreesDirectory
         self.now = environment.now
-        let lsof = environment.tools.lsof
-        self.captureCwdIndex = { await ProcessCwdIndex.capture(lsof: lsof) }
+        self.captureCwdIndex = { await ProcessCwdIndex.capture(in: environment) }
     }
 
     /// Deletes the candidates that still pass. Throws, deleting nothing, when the worktree is gone or no

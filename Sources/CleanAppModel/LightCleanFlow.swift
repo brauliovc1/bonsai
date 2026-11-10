@@ -46,7 +46,7 @@ struct LightCleanFlow {
 
         let (records, listings, failures) = await freshRecords(of: chosen, git: git)
         let known = (app.scan?.worktrees ?? []) + listings.values.flatMap { $0 }
-        let index = await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof)
+        let index = await ProcessCwdIndex.capture(in: app.environment)
         let finder = LightCleanFinder(git: git, du: app.environment.tools.du)
         let safety = SafetyCheck(git: git)
 
@@ -123,7 +123,7 @@ struct LightCleanFlow {
         guard worktree.isMain else { return nil }
         let scanner = WorktreeScanner(git: git, cursorWorktreesDirectory: app.environment.cursorWorktreesDirectory)
         let listing = (try? await scanner.worktrees(in: worktree.repoURL)) ?? []
-        let index = await ProcessCwdIndex.capture(lsof: app.environment.tools.lsof)
+        let index = await ProcessCwdIndex.capture(in: app.environment)
         return Self.linkedUse(of: worktree, known: listing + (app.scan?.worktrees ?? []), index: index)
     }
 }

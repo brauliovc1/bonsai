@@ -158,10 +158,12 @@ struct ProcessListTests {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/cat"), to: url)
             // A copy of a system binary keeps Apple's signature and is killed at launch; an ad-hoc signature runs.
-            let signed = try await ProcessRunner.run(
-                executable: URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", url.path],
-                timeout: TestWait.limit
-            )
+            let signed = try await ProcessLimit.helpers.run {
+                try await ProcessRunner.run(
+                    executable: URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", url.path],
+                    timeout: TestWait.limit
+                )
+            }
             #expect(signed.succeeded, "codesign \(path): \(signed.timedOut ? "didn't finish within \(TestWait.limit)" : signed.stderr)")
             let process = SleepingProcess(executable: url)
             try process.start(in: folder.url)

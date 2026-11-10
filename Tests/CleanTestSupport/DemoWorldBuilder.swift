@@ -185,10 +185,7 @@ struct DemoWorldBuilder {
 
     /// The fixture's isolated git, with author and committer dates set to `days` ago.
     private func git(_ arguments: [String], in directory: URL, days: Int) async throws {
-        var git = fixture.git
         let stamp = "\(Int(date(daysAgo: days).timeIntervalSince1970)) +0000"
-        git.environmentAdditions["GIT_AUTHOR_DATE"] = stamp
-        git.environmentAdditions["GIT_COMMITTER_DATE"] = stamp
-        try await git.git(arguments, in: directory)
+        try await fixture.run(arguments, in: directory, adding: ["GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp])
     }
 }
