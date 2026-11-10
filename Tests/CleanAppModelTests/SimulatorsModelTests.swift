@@ -144,7 +144,7 @@ struct SimulatorsModelTests {
         await world.model.beginSimulatorsDelete()
         let confirmation = try #require(world.model.simulatorsConfirmation)
         let gate = CallGate()
-        world.toolchain.onCall = gate.hold { $0.arguments == ["simctl", "delete", "unavailable"] }
+        world.toolchain.hold = gate.hold { $0.arguments == ["simctl", "delete", "unavailable"] }
         defer { gate.release() }
 
         let first = Task { await world.model.confirmSimulatorsDelete(confirmation) }

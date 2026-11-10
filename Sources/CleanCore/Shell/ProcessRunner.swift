@@ -17,8 +17,9 @@ public enum ProcessRunner {
     /// is running when the lid closes must not be stopped on wake for the hours the Mac slept.
     public static let timeoutClock = SuspendingClock()
 
-    /// Runs `executable` and waits for it. stdout and stderr are read concurrently, so a child that fills
-    /// one pipe cannot deadlock. On timeout the child gets SIGTERM, then SIGKILL after 2 s, and the result
+    /// Runs `executable` and waits for it. stdout and stderr are read concurrently, each on a thread of its own
+    /// (`PipeReader`), so a child that fills one pipe cannot deadlock, however busy GCD's global queues and the
+    /// cooperative pool are. On timeout the child gets SIGTERM, then SIGKILL after 2 s, and the result
     /// has `timedOut == true`. Cancelling the calling task terminates the child.
     ///
     /// Throws only when the process cannot be started; a non-zero exit is a normal result.
@@ -78,11 +79,12 @@ public enum ProcessRunner {
 
         try process.run()
         let child = ChildProcess(process)
+        // Both pipes are drained from here on, before this task waits for anything.
+        let name = "ProcessRunner \(executable.lastPathComponent)"
+        let stdout = PipeReader(stdoutPipe.fileHandleForReading, name: "\(name) stdout")
+        let stderr = PipeReader(stderrPipe.fileHandleForReading, name: "\(name) stderr")
 
         return await withTaskCancellationHandler {
-            async let stdout = readToEnd(stdoutPipe.fileHandleForReading)
-            async let stderr = readToEnd(stderrPipe.fileHandleForReading)
-
             let watchdog = Task {
                 do {
                     try await clock.sleep(for: timeout)
@@ -105,23 +107,12 @@ public enum ProcessRunner {
 
             return ProcessResult(
                 exitCode: exitCode,
-                stdout: await stdout,
-                stderr: String(decoding: await stderr, as: UTF8.self),
+                stdout: await stdout.data(),
+                stderr: String(decoding: await stderr.data(), as: UTF8.self),
                 timedOut: timedOut
             )
         } onCancel: {
             child.terminate()
-        }
-    }
-
-    /// Reads a pipe to EOF on a GCD thread, so the blocking read never ties up the cooperative pool.
-    private static func readToEnd(_ handle: FileHandle) async -> Data {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let data = (try? handle.readToEnd()) ?? Data()
-                try? handle.close()
-                continuation.resume(returning: data)
-            }
         }
     }
 }

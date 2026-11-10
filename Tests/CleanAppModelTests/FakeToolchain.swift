@@ -56,7 +56,7 @@ final class FakeToolchain: @unchecked Sendable {
         var dfFailure: String?
         /// stderr of a failing `simctl list devices`; nil = it works.
         var devicesFailure: String?
-        /// Runs inside every call, before it is answered (a test can block the call here).
+        /// Runs inside every call, before it is answered (to hold a call there, use `hold`).
         var onCall: (@Sendable (ScriptedCommandRunner.Call) -> Void)?
     }
 
@@ -111,6 +111,12 @@ final class FakeToolchain: @unchecked Sendable {
     var onCall: (@Sendable (ScriptedCommandRunner.Call) -> Void)? {
         get { lock.withLock { state.onCall } }
         set { lock.withLock { state.onCall = newValue } }
+    }
+
+    /// Runs inside every call before it is answered; the call waits there, suspended, until it returns (`CallGate`).
+    var hold: (@Sendable (ScriptedCommandRunner.Call) async -> Void)? {
+        get { scripted!.hold }
+        set { scripted!.hold = newValue }
     }
 
     private func answer(_ call: ScriptedCommandRunner.Call) throws -> ProcessResult {
@@ -200,21 +206,29 @@ func goneWorkspace(_ name: String) -> String {
     "/Users/bonsai-no-such-user/\(name)/\(name).xcodeproj"
 }
 
-/// Holds one call of the fake toolchain until the test lets it go: `toolchain.onCall = gate.hold { … }`
-/// blocks the matching call on its own thread, `waitUntilReached` waits for it without blocking the main
-/// actor, and `release` lets it answer.
+/// Holds the matching calls of the fake toolchain until the test lets them go: `toolchain.hold = gate.hold { … }`
+/// suspends a matching call (no thread is blocked: a blocked one would be a cooperative pool thread, and the test
+/// needs that pool to get to `release`), `waitUntilReached` waits for it without blocking the main actor, and
+/// `release` lets every held call, and every later one, answer.
 final class CallGate: @unchecked Sendable {
     private let lock = NSLock()
     private var reachedFlag = false
-    private let released = DispatchSemaphore(value: 0)
+    private var released = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
 
     var isReached: Bool { lock.withLock { reachedFlag } }
 
-    func hold(when matches: @escaping @Sendable (ScriptedCommandRunner.Call) -> Bool) -> @Sendable (ScriptedCommandRunner.Call) -> Void {
+    func hold(when matches: @escaping @Sendable (ScriptedCommandRunner.Call) -> Bool) -> @Sendable (ScriptedCommandRunner.Call) async -> Void {
         { [self] call in
             guard matches(call) else { return }
-            lock.withLock { reachedFlag = true }
-            released.wait()
+            await withCheckedContinuation { continuation in
+                let goOn = lock.withLock {
+                    reachedFlag = true
+                    if !released { waiters.append(continuation) }
+                    return released
+                }
+                if goOn { continuation.resume() }
+            }
         }
     }
 
@@ -226,6 +240,11 @@ final class CallGate: @unchecked Sendable {
     }
 
     func release() {
-        released.signal()
+        let held = lock.withLock {
+            released = true
+            defer { waiters = [] }
+            return waiters
+        }
+        held.forEach { $0.resume() }
     }
 }

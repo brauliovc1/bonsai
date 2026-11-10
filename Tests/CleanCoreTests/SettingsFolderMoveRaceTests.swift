@@ -8,7 +8,7 @@ import Testing
 struct SettingsFolderMoveRaceTests {
     /// Launches that look while another one swaps (each tries without waiting, again and again): one moves, none
     /// ever says there are two folders or that something is in the way; the only other answer is "the lock is
-    /// busy" (they don't wait).
+    /// busy" (they don't wait). The launches are threads of their own, all looking before the swap starts.
     @Test func aLaunchLookingDuringAnotherOnesSwapNeverSaysTwoFolders() throws {
         for round in 0..<60 {
             let world = try SettingsFolderWorld()
@@ -16,20 +16,23 @@ struct SettingsFolderMoveRaceTests {
             try world.makeFolder(world.old, tag: "old")
             let library = world.library
             let stop = Shared(false), outcomes = Shared<[SettingsFolderMove.Outcome]>([])
-            let group = DispatchGroup()
+            let looking = DispatchSemaphore(value: 0)
+            let launches = TestThreads()
             for _ in 0..<3 {
-                DispatchQueue.global().async(group: group) {
+                launches.start {
+                    looking.signal()
                     while !stop.value {
                         let outcome = SettingsFolderMove.run(in: library, lockTimeout: .zero).outcome
                         outcomes.change { $0.append(outcome) }
                     }
                 }
             }
-            usleep(200)
+            let started = (0..<3).filter { _ in looking.wait(timeout: .now() + 30) == .success }.count
+            #expect(started == 3, "round \(round): \(started) of 3 launches started")
             let main = SettingsFolderMove.run(in: library, lockTimeout: .seconds(5)).outcome
             usleep(2_000)
             stop.change { $0 = true }
-            group.wait()
+            #expect(launches.join(timeout: .seconds(30)), "round \(round): a launch never stopped")
 
             let all = outcomes.value + [main]
             #expect(all.filter { $0 == .moved }.count == 1, "round \(round)")
@@ -51,16 +54,16 @@ struct SettingsFolderMoveRaceTests {
             let library = world.library
             let results = Shared<[SettingsFolderMove.Result]>([])
             let start = DispatchSemaphore(value: 0)
-            let group = DispatchGroup()
+            let launches = TestThreads()
             for _ in 0..<4 {
-                DispatchQueue.global().async(group: group) {
+                launches.start {
                     start.wait()
                     let result = SettingsFolderMove.run(in: library, lockTimeout: .seconds(20))
                     results.change { $0.append(result) }
                 }
             }
             for _ in 0..<4 { start.signal() }
-            group.wait()
+            #expect(launches.join(timeout: .seconds(60)), "round \(round): a launch never finished")
 
             let outcomes = results.value.map(\.outcome)
             #expect(outcomes.filter { $0 == .moved }.count == 1, "round \(round): \(outcomes)")

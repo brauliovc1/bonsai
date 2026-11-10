@@ -19,17 +19,29 @@ public final class ScriptedCommandRunner: @unchecked Sendable {
 
     private let lock = NSLock()
     private var recorded: [Call] = []
+    private var holdHook: (@Sendable (Call) async -> Void)?
     private let handler: Handler
 
     public init(_ handler: @escaping Handler) {
         self.handler = handler
     }
 
+    /// Runs inside every call, after it is recorded and before it is answered. A test can keep a call waiting
+    /// there; the call is suspended, so no thread of a shared pool is blocked meanwhile.
+    public var hold: (@Sendable (Call) async -> Void)? {
+        get { lock.withLock { holdHook } }
+        set { lock.withLock { holdHook = newValue } }
+    }
+
     /// The runner to hand to the code under test.
     public var runner: CommandRunner {
         CommandRunner { [self] executable, arguments, timeout in
             let call = Call(executable: executable, arguments: arguments, timeout: timeout)
-            lock.withLock { recorded.append(call) }
+            let hold = lock.withLock {
+                recorded.append(call)
+                return holdHook
+            }
+            await hold?(call)
             return try handler(call)
         }
     }
