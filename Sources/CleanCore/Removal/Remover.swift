@@ -26,8 +26,7 @@ public struct Remover: Sendable {
         self.log = RemovalLog(environment: environment)
         self.cursorWorktreesDirectory = environment.cursorWorktreesDirectory
         self.now = environment.now
-        let lsof = environment.tools.lsof
-        self.captureCwdIndex = { await ProcessCwdIndex.capture(lsof: lsof) }
+        self.captureCwdIndex = { await ProcessCwdIndex.capture(in: environment) }
     }
 
     /// `knownWorktrees`: every registered worktree of every scanned repo (the caller's scan). They are

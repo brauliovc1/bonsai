@@ -46,6 +46,11 @@ public struct ProcessCwdIndex: Sendable, Hashable {
 
     public static let arguments = ["-d", "cwd", "-Fpcn"]
 
+    /// Runs the environment's lsof once, with the environment's timeout.
+    public static func capture(in environment: CleanEnvironment) async -> ProcessCwdIndex {
+        await capture(lsof: environment.tools.lsof, timeout: environment.timeouts.lsof)
+    }
+
     /// Runs lsof once.
     public static func capture(lsof: URL?, timeout: Duration = .seconds(30)) async -> ProcessCwdIndex {
         guard let lsof else { return .unavailable("lsof not found") }

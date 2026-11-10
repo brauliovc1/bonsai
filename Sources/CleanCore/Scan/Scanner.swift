@@ -126,10 +126,10 @@ public struct Scanner: Sendable {
             ))
             return nil
         }
-        let git = Git(executable: executable)
+        let git = Git(executable: executable, timeout: environment.timeouts.git)
         let version: GitVersion?
         do {
-            version = try await git.version()
+            version = try await git.version(timeout: environment.timeouts.gitVersion)
         } catch {
             issues.append(ScanIssue(kind: .gitMissing, path: executable.path, message: "\(error)"))
             return nil

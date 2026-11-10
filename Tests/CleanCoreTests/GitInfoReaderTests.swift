@@ -8,10 +8,8 @@ struct GitInfoReaderTests {
     /// A commit by a named author with a multi-line message.
     private func commit(_ fixture: GitFixture, in folder: URL, file: String, message: String, author: String) async throws {
         try fixture.write("\(file)\n", to: file, in: folder)
-        var git = fixture.git
-        git.environmentAdditions["GIT_AUTHOR_NAME"] = author
-        try await git.git(["add", "-A"], in: folder)
-        try await git.git(["commit", "--quiet", "-m", message], in: folder)
+        try await fixture.run(["add", "-A"], in: folder, adding: ["GIT_AUTHOR_NAME": author])
+        try await fixture.run(["commit", "--quiet", "-m", message], in: folder, adding: ["GIT_AUTHOR_NAME": author])
     }
 
     @Test func theScanReadsLastCommitsAndRemotesFromRealRepos() async throws {

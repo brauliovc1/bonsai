@@ -8,6 +8,7 @@ public struct WorktreeAssessor: Sendable {
     public var idleClock: IdleClock
     public var safetyCheck: SafetyCheck
     public var lsof: URL?
+    public var lsofTimeout: Duration
     public var maxConcurrent: Int
 
     public init(
@@ -27,12 +28,13 @@ public struct WorktreeAssessor: Sendable {
         )
         self.safetyCheck = SafetyCheck(git: git)
         self.lsof = environment.tools.lsof
+        self.lsofTimeout = environment.timeouts.lsof
         self.maxConcurrent = maxConcurrent
     }
 
     /// The git the environment resolved, or nil when it is missing.
     public static func git(for environment: CleanEnvironment) -> Git? {
-        environment.tools.git.map { Git(executable: $0) }
+        environment.tools.git.map { Git(executable: $0, timeout: environment.timeouts.git) }
     }
 
     /// Assesses every worktree of a scan. `cwdIndex` defaults to a fresh lsof run.
@@ -47,7 +49,7 @@ public struct WorktreeAssessor: Sendable {
         sizes: [String: Int64] = [:],
         cwdIndex: ProcessCwdIndex? = nil
     ) async -> [WorktreeAssessment] {
-        let index = if let cwdIndex { cwdIndex } else { await ProcessCwdIndex.capture(lsof: lsof) }
+        let index = if let cwdIndex { cwdIndex } else { await ProcessCwdIndex.capture(lsof: lsof, timeout: lsofTimeout) }
         let known = knownWorktrees ?? worktrees
         return await BoundedConcurrency.map(worktrees, limit: maxConcurrent) { worktree in
             await assess(worktree, knownWorktrees: known, cwdIndex: index, estimatedBytes: sizes[worktree.path])

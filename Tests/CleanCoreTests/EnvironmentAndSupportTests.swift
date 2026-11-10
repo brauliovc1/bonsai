@@ -41,6 +41,17 @@ struct EnvironmentAndSupportTests {
         #expect(environment.scanRootsOverride == nil)
     }
 
+    /// The app and the CLI run git and lsof with these; only tests give them more time.
+    @Test func toolTimeoutsKeepTheShippedDefaults() {
+        let git = URL(fileURLWithPath: "/usr/bin/git")
+        let tools = ToolPaths(git: git, lsof: URL(fileURLWithPath: "/usr/sbin/lsof"))
+        let environment = CleanEnvironment.make(homeDirectory: home, variables: [:], tools: tools)
+        #expect(environment.timeouts == ToolTimeouts(git: .seconds(60), gitVersion: .seconds(10), lsof: .seconds(30)))
+        #expect(WorktreeAssessor.git(for: environment)?.timeout == .seconds(60))
+        let assessor = WorktreeAssessor(git: Git(executable: git), settings: Settings(), environment: environment)
+        #expect(assessor.lsofTimeout == .seconds(30))
+    }
+
     @Test func fixtureEnvironmentStaysInsideTheFixture() throws {
         let fixture = try GitFixture()
         defer { fixture.remove() }

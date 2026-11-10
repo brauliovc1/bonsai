@@ -52,7 +52,7 @@ struct WorktreeKindTests {
 
         let environment = fixture.environment()
         let scanner = WorktreeScanner(
-            git: Git(executable: try #require(environment.tools.git)),
+            git: try #require(WorktreeAssessor.git(for: environment)),
             cursorWorktreesDirectory: environment.cursorWorktreesDirectory
         )
         let worktrees = try await scanner.worktrees(in: repo)
@@ -79,7 +79,7 @@ struct WorktreeKindTests {
 
         let environment = fixture.environment()
         let scanner = WorktreeScanner(
-            git: Git(executable: try #require(environment.tools.git)),
+            git: try #require(WorktreeAssessor.git(for: environment)),
             cursorWorktreesDirectory: environment.cursorWorktreesDirectory
         )
         let listed = try #require(try await scanner.worktrees(in: repo).last)

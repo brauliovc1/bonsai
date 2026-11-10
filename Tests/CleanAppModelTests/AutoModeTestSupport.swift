@@ -132,16 +132,14 @@ struct AutoWorld {
     /// so the idle clock reads `days` for the next 23 hours.
     private static func agedSibling(of repo: URL, _ name: String, in fixture: GitFixture, days: Int, now: Date) async throws {
         let date = now.addingTimeInterval(-(TimeInterval(days) * 86_400 + 3_600))
-        var git = fixture.git
         let stamp = "\(Int(date.timeIntervalSince1970)) +0000"
-        git.environmentAdditions["GIT_AUTHOR_DATE"] = stamp
-        git.environmentAdditions["GIT_COMMITTER_DATE"] = stamp
+        let dates = ["GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp]
         let path = repo.deletingLastPathComponent().appending(path: "\(repo.lastPathComponent)-\(name)", directoryHint: .isDirectory)
-        try await git.git(["worktree", "add", "--quiet", "-b", name, path.path], in: repo)
+        try await fixture.run(["worktree", "add", "--quiet", "-b", name, path.path], in: repo, adding: dates)
         try fixture.write("\(name)\n", to: "notes/\(name).md", in: path)
-        try await git.git(["add", "-A"], in: path)
-        try await git.git(["commit", "--quiet", "-m", "Add \(name)"], in: path)
-        try await git.git(["push", "--quiet", "-u", "origin", name], in: path)
+        try await fixture.run(["add", "-A"], in: path, adding: dates)
+        try await fixture.run(["commit", "--quiet", "-m", "Add \(name)"], in: path, adding: dates)
+        try await fixture.run(["push", "--quiet", "-u", "origin", name], in: path, adding: dates)
         try fixture.setModificationDate(date, of: path, recursively: true)
         let gitDir = URL(fileURLWithPath: try await fixture.run(["rev-parse", "--absolute-git-dir"], in: path))
         for file in ["index", "HEAD"] {

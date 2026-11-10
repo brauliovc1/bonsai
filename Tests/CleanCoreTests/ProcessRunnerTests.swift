@@ -10,7 +10,8 @@ struct ProcessRunnerTests {
     @Test func largeStdoutDoesNotDeadlock() async throws {
         let result = try await ProcessRunner.run(
             executable: url("/usr/bin/head"),
-            arguments: ["-c", "5000000", "/dev/zero"]
+            arguments: ["-c", "5000000", "/dev/zero"],
+            timeout: TestWait.limit
         )
         #expect(result.exitCode == 0)
         #expect(result.stdout.count == 5_000_000)
@@ -18,43 +19,45 @@ struct ProcessRunnerTests {
     }
 
     /// The child is stopped by the timeout and the call returns: it ends by SIGTERM (not by exiting on its own), long
-    /// before the 120 s it would sleep. The bound is generous, so a loaded machine or a slow CI runner can't fail it.
+    /// before the `TestWait.limit` it would sleep. The bound is half of that, so a slow spawn on a crowded runner
+    /// (63 s on CI run 42770493700) can't fail it.
     @Test func timeoutTerminates() async throws {
         let clock = ContinuousClock()
         let start = clock.now
         let result = try await ProcessRunner.run(
             executable: url("/bin/sleep"),
-            arguments: ["120"],
+            arguments: ["\(Int(TestWait.seconds))"],
             timeout: .milliseconds(500)
         )
         #expect(result.timedOut)
         #expect(!result.succeeded)
         #expect(result.exitCode == SIGTERM, "ended by the timeout's SIGTERM: \(result.exitCode)")
-        #expect(start.duration(to: clock.now) < .seconds(60), "returned long before the child's own exit")
+        #expect(start.duration(to: clock.now) < TestWait.limit / 2, "returned long before the child's own exit")
     }
 
     /// A child that ignores SIGTERM gets SIGKILL after the grace period: it ends by SIGKILL, no sooner than the grace
-    /// period, and long before the 120 s it would sleep.
+    /// period, and long before the `TestWait.limit` it would sleep (the bound is half of that, as above).
     @Test func timeoutEscalatesToSIGKILL() async throws {
         // A process that ignores SIGTERM (test-only use of sh; ProcessRunner itself never runs a shell).
         let clock = ContinuousClock()
         let start = clock.now
         let result = try await ProcessRunner.run(
             executable: url("/bin/sh"),
-            arguments: ["-c", "trap '' TERM; exec /bin/sleep 120"],
+            arguments: ["-c", "trap '' TERM; exec /bin/sleep \(Int(TestWait.seconds))"],
             timeout: .milliseconds(300)
         )
         let elapsed = start.duration(to: clock.now)
         #expect(result.timedOut)
         #expect(result.exitCode == SIGKILL, "escalated to SIGKILL: \(result.exitCode)")
         #expect(elapsed >= .seconds(2), "SIGTERM had its grace period first")
-        #expect(elapsed < .seconds(60), "returned long before the child's own exit")
+        #expect(elapsed < TestWait.limit / 2, "returned long before the child's own exit")
     }
 
     @Test func stderrCaptured() async throws {
         let result = try await ProcessRunner.run(
             executable: url("/bin/ls"),
-            arguments: ["/nonexistent-bonsai-path"]
+            arguments: ["/nonexistent-bonsai-path"],
+            timeout: TestWait.limit
         )
         #expect(result.exitCode != 0)
         #expect(result.stderr.contains("No such file or directory"))
@@ -63,7 +66,7 @@ struct ProcessRunnerTests {
 
     @Test func pathsWithSpacesAndQuotesPassedVerbatim() async throws {
         let argument = #"a "quoted" path with spaces; $HOME `x`"#
-        let result = try await ProcessRunner.run(executable: url("/bin/echo"), arguments: [argument])
+        let result = try await ProcessRunner.run(executable: url("/bin/echo"), arguments: [argument], timeout: TestWait.limit)
         #expect(result.stdoutString == argument + "\n")
     }
 
@@ -74,7 +77,8 @@ struct ProcessRunnerTests {
             executable: url("/usr/bin/env"),
             arguments: [],
             directory: directory.url,
-            environmentAdditions: ["BONSAI_TEST_VAR": "yes"]
+            environmentAdditions: ["BONSAI_TEST_VAR": "yes"],
+            timeout: TestWait.limit
         )
         let lines = Set(result.stdoutString.split(separator: "\n").map(String.init))
         #expect(lines.contains("LC_ALL=C"))
@@ -83,7 +87,9 @@ struct ProcessRunnerTests {
         #expect(lines.contains("BONSAI_TEST_VAR=yes"))
         #expect(lines.contains { $0.hasPrefix("PATH=") }, "inherits the parent environment")
 
-        let pwd = try await ProcessRunner.run(executable: url("/bin/pwd"), arguments: ["-P"], directory: directory.url)
+        let pwd = try await ProcessRunner.run(
+            executable: url("/bin/pwd"), arguments: ["-P"], directory: directory.url, timeout: TestWait.limit
+        )
         #expect(pwd.stdoutString.trimmingCharacters(in: .newlines) == CanonicalPath.resolve(directory.url))
     }
 

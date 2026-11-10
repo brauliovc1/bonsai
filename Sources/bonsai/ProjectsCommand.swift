@@ -37,7 +37,7 @@ struct ProjectsCommand: AsyncParsableCommand {
         let git = try context.requireGit()
         let scan = try await context.scan(rootOptions, includeSizes: false)
         let threshold = idleDays ?? context.settings.effectiveIdleThresholdDays
-        let index = await ProcessCwdIndex.capture(lsof: context.environment.tools.lsof)
+        let index = await ProcessCwdIndex.capture(in: context.environment)
         // No size cache: this command writes nothing.
         let report = await ProjectFoldersScanner(git: git, environment: context.environment)
             .scan(scan.worktrees, knownWorktrees: scan.worktrees, cwdIndex: index)

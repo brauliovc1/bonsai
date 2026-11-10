@@ -31,6 +31,11 @@ jobs:
           swift --version
           xcodebuild -version
 
+      # On a cold runner the first call to git or make through /usr/bin waits seconds for xcodebuild. Warming
+      # them once here keeps that out of the tests, and the printed times show how cold the runner was.
+      - name: Warm up the developer tools
+        run: bash .github/scripts/warm-developer-tools.sh
+
       - name: Build
         run: swift build
 
