@@ -14,6 +14,27 @@ SIGN_IDENTITY = -
 CODESIGN_FLAGS =
 CODESIGN = codesign --force $(CODESIGN_FLAGS) --sign "$(SIGN_IDENTITY)"
 
+# Paths that rm -rf, rm -f, cp and ln write to: never empty, never relative, and the names never paths. Checked
+# before the first $(shell ...) below, so a bad destination is refused at once, before git or anything else runs.
+ifeq ($(strip $(APP_NAME)),)
+$(error APP_NAME must not be empty)
+endif
+ifneq ($(findstring /,$(APP_NAME)),)
+$(error APP_NAME must not contain "/" (is "$(APP_NAME)"))
+endif
+ifeq ($(strip $(OLD_CLI)),)
+$(error OLD_CLI must not be empty)
+endif
+ifneq ($(findstring /,$(OLD_CLI)),)
+$(error OLD_CLI must not contain "/" (is "$(OLD_CLI)"))
+endif
+ifeq ($(filter /%,$(firstword $(INSTALL_DIR))),)
+$(error INSTALL_DIR must be an absolute path (is "$(INSTALL_DIR)"))
+endif
+ifeq ($(filter /%,$(firstword $(BIN_DIR))),)
+$(error BIN_DIR must be an absolute path (is "$(BIN_DIR)"))
+endif
+
 # The folder this Makefile is in, so `make -f <repo>/Makefile` run elsewhere never touches that folder's
 # build/. Empty when it can't be worked out (a path with spaces given to -f); the `root` check then stops.
 ROOT := $(shell cd -- "$(dir $(lastword $(MAKEFILE_LIST)))" 2>/dev/null && pwd -P)
@@ -34,20 +55,6 @@ VERSION := $(VERSION)
 BUILD := $(BUILD)
 # The check reads them from the environment, so an odd value is never pasted into a shell command line.
 export VERSION BUILD
-
-# Paths that rm -rf and cp write to: never empty, never relative, and the app name never a path.
-ifeq ($(strip $(APP_NAME)),)
-$(error APP_NAME must not be empty)
-endif
-ifneq ($(findstring /,$(APP_NAME)),)
-$(error APP_NAME must not contain "/" (is "$(APP_NAME)"))
-endif
-ifeq ($(filter /%,$(firstword $(INSTALL_DIR))),)
-$(error INSTALL_DIR must be an absolute path (is "$(INSTALL_DIR)"))
-endif
-ifeq ($(filter /%,$(firstword $(BIN_DIR))),)
-$(error BIN_DIR must be an absolute path (is "$(BIN_DIR)"))
-endif
 
 UNIVERSAL_BUILD = swift build --package-path "$(ROOT)" -c release $(foreach arch,$(ARCHS),--arch $(arch))
 UNIVERSAL_CLI = $(ROOT)/build/cli/$(CLI)

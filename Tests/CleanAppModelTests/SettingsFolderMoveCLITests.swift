@@ -27,13 +27,13 @@ struct SettingsFolderMoveCLITests {
             !EnvironmentName.allCases.contains { [$0.name, $0.oldName].contains(key) }
         }
         func prune() async throws -> ProcessResult {
-            try await ProcessRunner.run(
-                executable: try CLIBinary.url(), arguments: ["prune", "--root", root.path, "--yes"],
-                environmentAdditions: [
+            try await CLIBinary.run(
+                ["prune", "--root", root.path, "--yes"],
+                environment: [
                     "CLEAN_CLAUDE_SETTINGS_DIR": old.path,
                     "CLAUDE_CONFIG_DIR": home.url.appending(path: "claude").path,
                 ],
-                inheritedEnvironment: inherited, timeout: .seconds(120)
+                inheritedEnvironment: inherited
             )
         }
 

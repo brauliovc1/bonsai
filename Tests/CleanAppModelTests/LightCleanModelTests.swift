@@ -220,7 +220,7 @@ struct LightCleanModelTests {
         let again = await model.prepareLightClean(model.ids([web]))
         #expect(again.cleanable.isEmpty)
         let item = try #require(again.items.first)
-        #expect(item.blocker?.contains("sleep") == true, "\(item.blocker ?? "")")
+        #expect(item.blocker?.contains(SleepingProcess.command) == true, "\(item.blocker ?? "")")
         #expect(item.candidates.isEmpty)
     }
 

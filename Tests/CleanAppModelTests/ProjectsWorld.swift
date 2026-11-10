@@ -36,6 +36,7 @@ struct ProjectsWorld {
         if let gate {
             try gate.install(in: fixture.url, realGit: git.executable)
             git.executable = gate.git
+            git.timeout = TestWait.limit
             environment.tools.lsof = gate.lsof
         }
         let app = AppModel(environment: environment, git: git)

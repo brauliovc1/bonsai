@@ -122,9 +122,15 @@ struct EnvironmentAndSupportTests {
             func leave() { lock.withLock { current -= 1 } }
         }
         let counter = Counter()
+        // The first stays until a second runs alongside it, however late that one starts; a map that runs one at a
+        // time holds them up only until `end`, once for all of them.
+        let clock = ContinuousClock()
+        let end = clock.now.advanced(by: TestWait.limit)
         let output = await BoundedConcurrency.map(Array(0..<20), limit: 4) { value in
             counter.enter()
-            try? await Task.sleep(for: .milliseconds(10))
+            while counter.peak < 2, clock.now < end {
+                try? await Task.sleep(for: .milliseconds(1))
+            }
             counter.leave()
             return value * 2
         }

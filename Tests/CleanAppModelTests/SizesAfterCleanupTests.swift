@@ -168,8 +168,7 @@ struct SizesAfterCleanupTests {
         func started() -> Int {
             ((try? FileManager.default.contentsOfDirectory(atPath: gate.path)) ?? []).filter { $0.hasPrefix("started.") }.count
         }
-        for _ in 0..<400 where started() < 2 { try await Task.sleep(for: .milliseconds(50)) }
-        #expect(started() >= 2, "both of the scan's du calls measured")
+        #expect(await eventually { started() >= 2 }, "both of the scan's du calls measured within \(TestWait.limit)")
         try FileManager.default.removeItem(at: gate.appending(path: "hold"))
 
         // ... the worktree's dependencies are cleaned meanwhile ...
@@ -179,8 +178,7 @@ struct SizesAfterCleanupTests {
 
         // ... and the scan ends with the old reading: the cleaned size stays, and one more scan checks it.
         FileManager.default.createFile(atPath: gate.appending(path: "release").path, contents: nil)
-        for _ in 0..<400 where app.isScanning { try await Task.sleep(for: .milliseconds(50)) }
-        #expect(!app.isScanning)
+        #expect(await eventually { !app.isScanning }, "the scans didn't end within \(TestWait.limit)")
         #expect(app.scanCount == scans + 2, "that scan, and the one it asked for; no more")
         #expect(app.cleanupFacts.sizes.isEmpty, "the later scan measured for itself and kept nothing")
         #expect((model.row(sibling)?.sizeBytes ?? .max) < 1024 * 1024, "\(model.row(sibling)?.sizeBytes ?? -1)")
@@ -226,8 +224,7 @@ struct SizesAfterCleanupTests {
         func started() -> Int {
             ((try? FileManager.default.contentsOfDirectory(atPath: gate.path)) ?? []).filter { $0.hasPrefix("started.") }.count
         }
-        for _ in 0..<400 where started() < 2 { try await Task.sleep(for: .milliseconds(50)) }
-        #expect(started() >= 2)
+        #expect(await eventually { started() >= 2 }, "both of the scan's du calls started within \(TestWait.limit)")
         try FileManager.default.removeItem(at: gate.appending(path: "hold"))
 
         let report = await model.confirmLightClean(await model.prepareLightClean(model.ids([sibling])))
@@ -235,8 +232,7 @@ struct SizesAfterCleanupTests {
         #expect((model.row(sibling)?.sizeBytes ?? .max) < 1024 * 1024)
         try aged.blob(in: sibling, "node_modules/react/index.bin", megabytes: 4)  // npm install again
         FileManager.default.createFile(atPath: gate.appending(path: "release").path, contents: nil)
-        for _ in 0..<400 where app.isScanning { try await Task.sleep(for: .milliseconds(50)) }
-        #expect(!app.isScanning)
+        #expect(await eventually { !app.isScanning }, "the scans didn't end within \(TestWait.limit)")
         #expect((model.row(sibling)?.sizeBytes ?? 0) >= 4 * 1024 * 1024, "the folder holds 4 MB again")
         #expect(app.scanCount == scans + 2, "the running scan and one more")
         #expect(app.cleanupFacts.sizes.isEmpty)

@@ -119,7 +119,8 @@ struct ProcessRunnerTests {
             == "Fixture <fixture@example.invalid>")
         #expect(try await fixture.git.gitString(["rev-parse", "origin/main"], in: repo)
             == fixture.git.gitString(["rev-parse", "HEAD"], in: repo))
-        let version = try await fixture.git.version()
+        // The scan gives `git --version` 10 s; here it may take as long as the machine needs.
+        let version = try await fixture.git.version(timeout: TestWait.limit)
         #expect(version?.isSupported == true)
     }
 }

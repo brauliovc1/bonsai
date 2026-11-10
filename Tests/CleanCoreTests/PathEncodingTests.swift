@@ -19,8 +19,8 @@ struct PathEncodingTests {
         defer { sleeper.stop() }
         try sleeper.start(in: wt)
 
-        let index = await ProcessCwdIndex.capture(lsof: world.fixture.environment().tools.lsof)
-        try #require(index.isAvailable)
+        let index = await ProcessCwdIndex.capture(lsof: world.fixture.environment().tools.lsof, timeout: TestWait.limit)
+        try #require(index.isAvailable, "lsof: \(index.failure ?? "")")
         #expect(index.processes(inside: wt).map(\.pid) == [try #require(sleeper.pid)])
         let report = try await world.check(wt, cwdIndex: index)
         #expect(report.status == .inUse)

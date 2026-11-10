@@ -27,12 +27,12 @@ struct SettingsFolderMoveRaceTests {
                     }
                 }
             }
-            let started = (0..<3).filter { _ in looking.wait(timeout: .now() + 30) == .success }.count
-            #expect(started == 3, "round \(round): \(started) of 3 launches started")
-            let main = SettingsFolderMove.run(in: library, lockTimeout: .seconds(5)).outcome
+            let started = (0..<3).filter { _ in looking.wait(timeout: TestWait.deadline) == .success }.count
+            #expect(started == 3, "round \(round): \(started) of 3 launches started within \(TestWait.limit)")
+            let main = SettingsFolderMove.run(in: library, lockTimeout: TestWait.limit).outcome
             usleep(2_000)
             stop.change { $0 = true }
-            #expect(launches.join(timeout: .seconds(30)), "round \(round): a launch never stopped")
+            #expect(launches.join(timeout: TestWait.limit), "round \(round): a launch didn't stop within \(TestWait.limit)")
 
             let all = outcomes.value + [main]
             #expect(all.filter { $0 == .moved }.count == 1, "round \(round)")
@@ -58,12 +58,12 @@ struct SettingsFolderMoveRaceTests {
             for _ in 0..<4 {
                 launches.start {
                     start.wait()
-                    let result = SettingsFolderMove.run(in: library, lockTimeout: .seconds(20))
+                    let result = SettingsFolderMove.run(in: library, lockTimeout: TestWait.limit)
                     results.change { $0.append(result) }
                 }
             }
             for _ in 0..<4 { start.signal() }
-            #expect(launches.join(timeout: .seconds(60)), "round \(round): a launch never finished")
+            #expect(launches.join(timeout: TestWait.limit), "round \(round): a launch didn't finish within \(TestWait.limit)")
 
             let outcomes = results.value.map(\.outcome)
             #expect(outcomes.filter { $0 == .moved }.count == 1, "round \(round): \(outcomes)")
@@ -72,30 +72,50 @@ struct SettingsFolderMoveRaceTests {
         }
     }
 
-    /// The wait is for both locks together: with cleanup.lock busy for a while and settings.lock busy longer,
-    /// the move gives up when the whole wait is over, not after a second full wait. The app's wait is short.
+    /// The wait is for both locks together: with cleanup.lock let go halfway through the wait and settings.lock
+    /// held throughout, the move gives up when the whole wait is over, not after a second full wait. The app's wait
+    /// is short.
     @Test func theWaitCoversBothLocksTogether() throws {
         #expect(SettingsFolderMove.appLockTimeout <= .seconds(2), "the app waits on its main thread at launch")
         let world = try SettingsFolderWorld()
         defer { world.remove() }
         try world.makeFolder(world.old, tag: "old")
         let before = try world.snapshot(world.old)
-        let cleanup = try LockHolder(world.old.appending(path: "cleanup.lock"), seconds: 2)
-        let settings = try LockHolder(world.old.appending(path: "settings.lock"), seconds: 15)
-        defer { settings.process.terminate() }
+        let cleanup = try LockHolder(world.old.appending(path: "cleanup.lock"))
+        let settings = try LockHolder(world.old.appending(path: "settings.lock"))
+        defer {
+            cleanup.release()
+            settings.release()
+        }
 
-        let started = Date()
-        let result = world.move(timeout: .seconds(3))
-        let waited = Date().timeIntervalSince(started)
+        // One wait per lock would give up after about 15 s; the move's own work gets the other 5 s.
+        let wait = 10.0, cleanupFreeAfter = 5.0
+        let library = world.library
+        let result = Shared<SettingsFolderMove.Result?>(nil), waited = Shared<Double?>(nil)
+        let starting = DispatchSemaphore(value: 0)
+        let mover = TestThreads()
+        mover.start {
+            starting.signal()
+            let started = Date()
+            let outcome = SettingsFolderMove.run(in: library, lockTimeout: .seconds(wait))
+            waited.change { $0 = Date().timeIntervalSince(started) }
+            result.change { $0 = outcome }
+        }
+        #expect(starting.wait(timeout: TestWait.deadline) == .success, "the move didn't start within \(TestWait.limit)")
+        Thread.sleep(forTimeInterval: cleanupFreeAfter)
+        #expect(cleanup.release(), "the other process let go of cleanup.lock")
+        #expect(mover.join(timeout: TestWait.limit), "the move didn't give up within \(TestWait.limit)")
 
-        guard case .notMoved = result.outcome else {
-            Issue.record("\(result.outcome)")
+        let outcome = try #require(result.value)
+        guard case .notMoved = outcome.outcome else {
+            Issue.record("\(outcome.outcome)")
             return
         }
-        #expect(waited >= 2.5 && waited < 4.5, "waited \(waited) s for a 3 s wait (one wait per lock would be about 5 s)")
-        #expect(result.folder == world.old)
+        let seconds = try #require(waited.value)
+        #expect(seconds >= wait - 0.5 && seconds < wait + cleanupFreeAfter,
+                "waited \(seconds) s for a \(wait) s wait (one wait per lock would be over \(wait + cleanupFreeAfter) s)")
+        #expect(outcome.folder == world.old)
         #expect(try world.snapshot(world.old) == before)
-        cleanup.wait()
     }
 }
 

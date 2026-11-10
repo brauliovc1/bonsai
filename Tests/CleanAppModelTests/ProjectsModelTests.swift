@@ -176,7 +176,7 @@ struct ProjectsModelTests {
         // Looked at, then a process starts inside: the cleaner's own check refuses it.
         let confirmation = await model.prepareClean(world.ids(["foxtrot"]))
         #expect(confirmation.cleanable.count == 1)
-        let shell = SleepingProcess(seconds: 600)
+        let shell = SleepingProcess()
         defer { shell.stop() }
         try shell.start(in: world.url("foxtrot"))
         let report = await model.cleanSelected(confirmation)
@@ -188,14 +188,15 @@ struct ProjectsModelTests {
         // A fresh scan shows it in use, and Select all idle leaves it out.
         await model.refresh()
         let row = try #require(world.row("foxtrot"))
-        #expect(row.statusText.hasPrefix("In use (sleep"), "\(row.statusText)")
+        #expect(row.statusText.hasPrefix("In use (\(SleepingProcess.command)"), "\(row.statusText)")
         #expect(!row.isReady)
         model.selectAllIdle()
         #expect(Set(model.selectedRows.map(\.name)) == ["delta", "echo"])
         // Picked by hand, the sheet lists nothing to delete there, with the process.
         let again = await model.prepareClean([row.id])
         #expect(again.cleanable.isEmpty)
-        #expect(again.others.first?.lightClean.blocker?.contains("sleep") == true)
+        #expect(again.others.first?.lightClean.blocker?.contains(SleepingProcess.command) == true,
+                "\(again.others.first?.lightClean.blocker ?? "")")
     }
 
     @Test func aProjectBelowTheThresholdCanBeCleanedByHandWithANote() async throws {

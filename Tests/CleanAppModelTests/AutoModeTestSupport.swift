@@ -88,6 +88,7 @@ struct AutoWorld {
         if let gate {
             try gate.install(in: demo.fixture.url, realGit: git.executable)
             git.executable = gate.git
+            git.timeout = TestWait.limit
             environment.tools.lsof = gate.lsof
         }
         let notifier = RecordingNotifier()
@@ -152,6 +153,11 @@ struct AutoWorld {
 /// Stand-ins for git and lsof that stop at a gate while it is armed, so a test can act at an exact moment:
 /// `stage` "lsof" stops the process-index capture (after `Remover`'s git and disk re-check), "remove" stops
 /// `git worktree remove` itself. Arming is one-shot; `open()` lets the stopped call go on.
+///
+/// No timeout can end the wait: the gated git runs under the world's git timeout (`TestWait.limit`), and the gated
+/// lsof waits in a background job after the stand-in itself has exited, so lsof's 30 s don't count while
+/// `ProcessRunner` reads the pipes the job still holds. A gate nobody opens gives up once the fixture is gone or
+/// after at least `TestWait.limit`.
 @MainActor
 final class ProcessGate {
     let stage: String
@@ -170,13 +176,16 @@ final class ProcessGate {
     func install(in fixture: URL, realGit: URL) throws {
         folder = fixture.appending(path: "gate", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let take = "rm -f \"$G/armed\"; touch \"$G/waiting\""
         let wait = """
-            if [ -e "$G/armed" ]; then rm -f "$G/armed"; touch "$G/waiting"; while [ ! -e "$G/go" ]; do sleep 0.02; done; fi
+            n=0; while [ -d "$G" ] && [ ! -e "$G/go" ] && [ $n -lt \(Int(TestWait.seconds / 0.02)) ]; do sleep 0.02; n=$((n + 1)); done
+            [ -e "$G/go" ] || { echo "the gate in $G was not opened" >&2; exit 1; }
             """
-        let lsofScript = "#!/bin/sh\nG=\"$(dirname \"$0\")\"\n" + (stage == "lsof" ? wait + "\n" : "")
+        let lsofScript = "#!/bin/sh\nG=\"$(dirname \"$0\")\"\n"
+            + (stage == "lsof" ? "if [ -e \"$G/armed\" ]; then \(take); (\n\(wait)\nexec /usr/sbin/lsof \"$@\"\n) & exit 0; fi\n" : "")
             + "exec /usr/sbin/lsof \"$@\"\n"
         let gitScript = "#!/bin/sh\nG=\"$(dirname \"$0\")\"\n"
-            + (stage == "remove" ? "case \" $* \" in *\" worktree remove \"*) \(wait) ;; esac\n" : "")
+            + (stage == "remove" ? "case \" $* \" in *\" worktree remove \"*) if [ -e \"$G/armed\" ]; then \(take)\n\(wait)\nfi ;; esac\n" : "")
             + "exec \"\(realGit.path)\" \"$@\"\n"
         for (url, text) in [(lsof, lsofScript), (git, gitScript)] {
             try Data(text.utf8).write(to: url)
@@ -196,10 +205,12 @@ final class ProcessGate {
     }
 }
 
-/// Waits (yielding) until `condition` holds or about fifteen seconds pass.
+/// Waits (yielding) until `condition` holds, for at most `TestWait.limit`.
 @MainActor
 func eventually(_ condition: () -> Bool) async -> Bool {
-    for _ in 0..<1_500 {
+    let clock = ContinuousClock()
+    let end = clock.now.advanced(by: TestWait.limit)
+    while clock.now < end {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(10))
     }
