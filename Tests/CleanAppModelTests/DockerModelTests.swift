@@ -200,7 +200,7 @@ struct DockerModelTests {
         await world.model.beginDockerPrune()
         let confirmation = try #require(world.model.dockerConfirmation)
         let gate = CallGate()
-        world.toolchain.onCall = gate.hold { $0.arguments == ["system", "prune", "-f"] }
+        world.toolchain.hold = gate.hold { $0.arguments == ["system", "prune", "-f"] }
         defer { gate.release() }
 
         let first = Task { await world.model.confirmDockerPrune(confirmation) }

@@ -184,7 +184,8 @@ struct SettingsAndLogTests {
         #expect(!safety.autoEligible, "one day idle is not idle enough, whatever the setting says")
     }
 
-    // Item 10: an append from another writer while markRestored rewrites the file must not be lost.
+    // Item 10: an append from another writer while markRestored rewrites the file must not be lost. The other
+    // writer is a thread of its own (a busy GCD pool once kept it from ever running) and every wait is checked.
     @Test func appendDuringARewriteIsKept() throws {
         let folder = try TemporaryDirectory()
         defer { folder.remove() }
@@ -193,22 +194,31 @@ struct SettingsAndLogTests {
         let second = entry("/b")
         try log.append(first)
 
-        let appended = DispatchSemaphore(value: 0)
+        let writer = TestThreads()
+        let appending = DispatchSemaphore(value: 0), appended = DispatchSemaphore(value: 0)
+        let failure = Shared<String?>(nil), heldBack = Shared<Bool?>(nil)
         var rewriting = log
         rewriting.duringRewrite = {
-            DispatchQueue.global().async {
-                try? log.append(second)
+            writer.start {
+                appending.signal()
+                do { try log.append(second) } catch { failure.change { $0 = "\(error)" } }
                 appended.signal()
             }
             // Without the lock the append lands here and the rewrite then drops it.
-            _ = appended.wait(timeout: .now() + 0.5)
+            let started = appending.wait(timeout: .now() + 30) == .success
+            let landed = appended.wait(timeout: .now() + 0.5) == .success
+            if landed { appended.signal() }
+            heldBack.change { $0 = started && !landed }
         }
         try rewriting.markRestored(id: first.id, at: Date(timeIntervalSince1970: 1_800_100_000))
-        _ = appended.wait(timeout: .now() + 5)
 
+        #expect(appended.wait(timeout: .now() + 30) == .success, "the append finished once the rewrite let go")
+        #expect(heldBack.value == true, "the append started during the rewrite and waited for its lock")
+        #expect(failure.value == nil)
         let entries = try log.entries()
         #expect(entries.map(\.id) == [first.id, second.id])
         #expect(entries.first?.restoredAt != nil)
         #expect(FileManager.default.fileExists(atPath: log.lockURL.path))
+        #expect(writer.join(timeout: .seconds(30)))
     }
 }
