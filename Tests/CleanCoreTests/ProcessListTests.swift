@@ -141,7 +141,8 @@ struct ProcessListTests {
     }
 
     /// Review item 2 with the real `/bin/ps` and `proc_pidpath` (probe `probeRealPsOwnerDetection`): copies of
-    /// `/bin/sleep` started from folders with spaces and accents, named like the tools, are seen as their owners.
+    /// `/bin/cat` started from folders with spaces and accents, named like the tools, are seen as their owners. They
+    /// run until the test stops them, and ps may take as long as the machine needs (a scan gives it 20 s).
     @Test func realProcessesUnderAwkwardPathsAreSeen() async throws {
         let folder = try TemporaryDirectory(prefix: "bonsai-procs")
         defer { folder.remove() }
@@ -150,30 +151,29 @@ struct ProcessListTests {
             ("My Flutter SDK/bin/cache/dart-sdk/bin/dart", "pub", "dart"),
             ("Dévelöppé Tools/bin/pod", "cocoapods", "pod"),
         ]
-        var started: [Foundation.Process] = []
-        defer {
-            for process in started where process.isRunning { kill(process.processIdentifier, SIGKILL) }
-        }
+        var started: [SleepingProcess] = []
+        defer { started.forEach { $0.stop() } }
         for (path, _, _) in launches {
             let url = folder.url.appending(path: path)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: url)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/cat"), to: url)
             // A copy of a system binary keeps Apple's signature and is killed at launch; an ad-hoc signature runs.
             let signed = try await ProcessRunner.run(
-                executable: URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", url.path]
+                executable: URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", url.path],
+                timeout: TestWait.limit
             )
-            #expect(signed.succeeded, "\(signed.stderr)")
-            let process = Foundation.Process()
-            process.executableURL = url
-            process.arguments = ["30"]
-            try process.run()
+            #expect(signed.succeeded, "codesign \(path): \(signed.timedOut ? "didn't finish within \(TestWait.limit)" : signed.stderr)")
+            let process = SleepingProcess(executable: url)
+            try process.start(in: folder.url)
             started.append(process)
         }
-        try await Task.sleep(for: .milliseconds(300))
-        let live = await ProcessList.capture()
+        let live = await ProcessList.capture(runner: CommandRunner { executable, arguments, _ in
+            try await ProcessRunner.run(executable: executable, arguments: arguments, timeout: TestWait.limit)
+        })
         #expect(live.failure == nil)
         for ((path, id, owner), process) in zip(launches, started) {
-            let line = try #require(live.processes.first { $0.pid == process.processIdentifier }, "\(path) is in ps")
+            let pid = try #require(process.pid)
+            let line = try #require(live.processes.first { $0.pid == pid }, "\(path) is in ps")
             #expect(line.executable.map(CanonicalPath.resolve) == CanonicalPath.resolve(folder.url.appending(path: path)),
                     "pid \(line.pid) comm [\(line.command)] args [\(line.arguments)] executable \(line.executable ?? "nil")")
             let single = ProcessList(processes: [line])
@@ -187,6 +187,7 @@ struct ProcessListTests {
         let list = await ProcessList.capture(runner: scripted.runner)
         #expect(scripted.calls.map(\.executable) == [URL(fileURLWithPath: "/bin/ps")])
         #expect(scripted.calls.first?.arguments == ["-axo", "pid=,comm=,args="])
+        #expect(scripted.calls.first?.timeout == .seconds(20))
         #expect(list.processes.count == 12 && list.failure == nil)
 
         let empty = await ProcessList.capture(runner: ScriptedCommandRunner { _ in ScriptedCommandRunner.result() }.runner)

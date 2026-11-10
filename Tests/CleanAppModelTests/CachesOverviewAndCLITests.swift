@@ -105,11 +105,6 @@ struct CachesOverviewAndCLITests {
     }
 
     private func run(_ arguments: [String], world: ToolCacheWorld) async throws -> ProcessResult {
-        try await ProcessRunner.run(
-            executable: try CLIBinary.url(),
-            arguments: arguments,
-            environmentAdditions: ["BONSAI_SETTINGS_DIR": world.environment.settingsDirectory.path],
-            timeout: .seconds(120)
-        )
+        try await CLIBinary.run(arguments, environment: ["BONSAI_SETTINGS_DIR": world.environment.settingsDirectory.path])
     }
 }

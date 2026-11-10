@@ -6,10 +6,10 @@ import Foundation
 public struct SettingsStore: Sendable {
     public static let fileName = "settings.json"
     public static let lockFileName = "settings.lock"
-    /// How long `update` and `loadLocked` wait for another process's lock.
-    public static let lockTimeout: Duration = .seconds(5)
 
     public var directory: URL
+    /// How long `update` and `loadLocked` wait for another process's lock.
+    public var lockTimeout: Duration = .seconds(5)
 
     public init(directory: URL) {
         self.directory = directory
@@ -56,7 +56,7 @@ public struct SettingsStore: Sendable {
     /// is never overwritten (the load throws first). Returns what was saved.
     @discardableResult
     public func update(_ change: (inout Settings) throws -> Void) throws -> Settings {
-        let lock = try FileLock.lock(lockURL, timeout: Self.lockTimeout)
+        let lock = try FileLock.lock(lockURL, timeout: lockTimeout)
         defer { lock.release() }
         var settings = try load()
         try change(&settings)
@@ -68,7 +68,7 @@ public struct SettingsStore: Sendable {
     /// settings folder there is nothing to wait for (and nothing is created).
     public func loadLocked() throws -> Settings {
         guard FileManager.default.fileExists(atPath: directory.path) else { return try load() }
-        let lock = try FileLock.lock(lockURL, timeout: Self.lockTimeout)
+        let lock = try FileLock.lock(lockURL, timeout: lockTimeout)
         defer { lock.release() }
         return try load()
     }

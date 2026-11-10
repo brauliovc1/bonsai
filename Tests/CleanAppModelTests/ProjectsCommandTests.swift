@@ -44,14 +44,12 @@ struct ProjectsCommandTests {
 
     private func run(_ arguments: [String], fixture: GitFixture) async throws -> (Output, ProcessResult) {
         let environment = fixture.environment()
-        let result = try await ProcessRunner.run(
-            executable: try CLIBinary.url(),
-            arguments: ["projects", "--json", "--root", fixture.scanRoot.path] + arguments,
-            environmentAdditions: [
+        let result = try await CLIBinary.run(
+            ["projects", "--json", "--root", fixture.scanRoot.path] + arguments,
+            environment: [
                 "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
-            ],
-            timeout: .seconds(120)
+            ]
         )
         #expect(result.succeeded, "\(result.stderr)")
         return (try JSONDecoder().decode(Output.self, from: result.stdout), result)

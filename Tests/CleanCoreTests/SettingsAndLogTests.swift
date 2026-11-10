@@ -185,11 +185,14 @@ struct SettingsAndLogTests {
     }
 
     // Item 10: an append from another writer while markRestored rewrites the file must not be lost. The other
-    // writer is a thread of its own (a busy GCD pool once kept it from ever running) and every wait is checked.
+    // writer is a thread of its own (a busy GCD pool once kept it from ever running), it waits for the lock as long
+    // as the rewrite holds it, and every wait is checked.
     @Test func appendDuringARewriteIsKept() throws {
         let folder = try TemporaryDirectory()
         defer { folder.remove() }
-        let log = RemovalLog(directory: folder.url)
+        var patient = RemovalLog(directory: folder.url)
+        patient.lockTimeout = TestWait.limit
+        let log = patient
         let first = entry("/a")
         let second = entry("/b")
         try log.append(first)
@@ -205,20 +208,21 @@ struct SettingsAndLogTests {
                 appended.signal()
             }
             // Without the lock the append lands here and the rewrite then drops it.
-            let started = appending.wait(timeout: .now() + 30) == .success
+            let started = appending.wait(timeout: TestWait.deadline) == .success
             let landed = appended.wait(timeout: .now() + 0.5) == .success
             if landed { appended.signal() }
             heldBack.change { $0 = started && !landed }
         }
         try rewriting.markRestored(id: first.id, at: Date(timeIntervalSince1970: 1_800_100_000))
 
-        #expect(appended.wait(timeout: .now() + 30) == .success, "the append finished once the rewrite let go")
+        #expect(appended.wait(timeout: TestWait.deadline) == .success,
+                "the append didn't finish within \(TestWait.limit) of the rewrite letting go")
         #expect(heldBack.value == true, "the append started during the rewrite and waited for its lock")
         #expect(failure.value == nil)
         let entries = try log.entries()
         #expect(entries.map(\.id) == [first.id, second.id])
         #expect(entries.first?.restoredAt != nil)
         #expect(FileManager.default.fileExists(atPath: log.lockURL.path))
-        #expect(writer.join(timeout: .seconds(30)))
+        #expect(writer.join(timeout: TestWait.limit), "the writer didn't stop within \(TestWait.limit)")
     }
 }

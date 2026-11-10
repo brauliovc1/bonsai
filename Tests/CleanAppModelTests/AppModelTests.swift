@@ -18,14 +18,12 @@ struct AppModelTests {
         #expect(rows.count == world.items.count + world.repos.count)
 
         let environment = world.fixture.environment()
-        let result = try await ProcessRunner.run(
-            executable: try CLIBinary.url(),
-            arguments: ["scan", "--json", "--root", world.folder.path],
-            environmentAdditions: [
+        let result = try await CLIBinary.run(
+            ["scan", "--json", "--root", world.folder.path],
+            environment: [
                 "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
-            ],
-            timeout: .seconds(120)
+            ]
         )
         #expect(result.succeeded, "\(result.stderr)")
         struct Output: Decodable {
@@ -57,7 +55,7 @@ struct AppModelTests {
         app.requestRefresh()
         #expect(app.isScanning)
         // Wait until the first scan is really under way, then ask again and again.
-        let deadline = ContinuousClock.now + .seconds(30)
+        let deadline = ContinuousClock.now + TestWait.limit
         while app.progress == nil, app.isScanning, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(2))
         }

@@ -84,9 +84,9 @@ public struct Git: Sendable {
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The installed git's version (`git --version`).
-    public func version() async throws -> GitVersion? {
-        let result = try await run(arguments: ["--version"], timeout: .seconds(10))
+    /// The installed git's version (`git --version`), given at most `timeout`.
+    public func version(timeout: Duration = .seconds(10)) async throws -> GitVersion? {
+        let result = try await run(arguments: ["--version"], timeout: timeout)
         guard result.succeeded else {
             throw GitError(
                 exitCode: result.exitCode,

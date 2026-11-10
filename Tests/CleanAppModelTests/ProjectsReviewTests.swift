@@ -49,12 +49,12 @@ struct ProjectsReviewTests {
         #expect(quiet.isReady, "nothing runs anywhere yet: \(quiet.statusText)")
 
         // A process works in the Cursor worktree: in use at scan time, never picked, left alone by the sheet.
-        let shell = SleepingProcess(seconds: 600)
+        let shell = SleepingProcess()
         defer { shell.stop() }
         try shell.start(in: world.cursor)
         await model.refresh()
         let row = try #require(world.row)
-        #expect(row.statusText.hasPrefix("In use (sleep"), "\(row.statusText)")
+        #expect(row.statusText.hasPrefix("In use (\(SleepingProcess.command)"), "\(row.statusText)")
         #expect(!row.isReady)
         model.selectAllIdle()
         #expect(model.selection.isEmpty)
@@ -62,12 +62,12 @@ struct ProjectsReviewTests {
         #expect(sheet.cleanable.isEmpty)
         #expect(sheet.others.first?.lightClean.blocker?.contains("another worktree of this repo") == true,
                 "\(sheet.others.first?.lightClean.blocker ?? "")")
-        shell.stop()
+        #expect(shell.stop(), "the process in the Cursor worktree didn't end within \(TestWait.limit)")
 
         // Looked at while nothing ran, then a process starts in the sibling: refused right before its turn.
         let confirmation = await model.prepareClean([row.id])
         #expect(confirmation.cleanable.count == 1)
-        let other = SleepingProcess(seconds: 600)
+        let other = SleepingProcess()
         defer { other.stop() }
         try other.start(in: world.sibling)
         let report = await model.cleanSelected(confirmation)
@@ -183,14 +183,12 @@ struct ProjectsReviewTests {
 
         // The CLI cleans foxtrot (in this fixture); the app sees it on its next scan.
         let environment = world.environment
-        let result = try await ProcessRunner.run(
-            executable: try CLIBinary.url(),
-            arguments: ["light-clean", world.url("foxtrot").path, "--root", world.fixture.scanRoot.path, "--yes"],
-            environmentAdditions: [
+        let result = try await CLIBinary.run(
+            ["light-clean", world.url("foxtrot").path, "--root", world.fixture.scanRoot.path, "--yes"],
+            environment: [
                 "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
-            ],
-            timeout: .seconds(120)
+            ]
         )
         #expect(result.succeeded, "\(result.stderr)")
         #expect(!world.exists(".venv", in: "foxtrot"))

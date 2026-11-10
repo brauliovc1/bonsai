@@ -31,7 +31,7 @@ struct SettingsFolderWorld {
         }
     }
 
-    func move(timeout: Duration = .seconds(20)) -> SettingsFolderMove.Result {
+    func move(timeout: Duration = TestWait.limit) -> SettingsFolderMove.Result {
         SettingsFolderMove.run(in: library, lockTimeout: timeout)
     }
 
@@ -66,28 +66,39 @@ struct SettingsFolderWorld {
     }
 }
 
-/// Another process holding a lock file the way an older Bonsai does (`flock`, through `/usr/bin/lockf -k`), for
-/// `seconds`. `command` (a shell line; `arguments` are its $1, $2…) runs at the end, while it still holds the
-/// lock. Returns once the child holds it.
+/// Another process holding a lock file the way an older Bonsai does (`flock`, through `/usr/bin/lockf -k`) until the
+/// test lets it go: it waits on a pipe only this process writes to, never on a timer, so it also lets go when the
+/// test process ends. `command` (a shell line; `arguments` are its $1, $2…) runs once it is let go, while it still
+/// holds the lock. Returns once the child holds it.
 final class LockHolder {
-    let process = Process()
+    private let process = Process()
+    private let input = Pipe()
+    private let ended = DispatchSemaphore(value: 0)
 
-    init(_ file: URL, seconds: Double, thenRun command: String = ":", arguments: [String] = []) throws {
+    init(_ file: URL, thenRun command: String = ":", arguments: [String] = []) throws {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/lockf")
-        process.arguments = ["-k", file.path, "/bin/sh", "-c", "sleep \(seconds); \(command)", "sh"] + arguments
+        process.arguments = ["-k", file.path, "/bin/sh", "-c", "read line; \(command)", "sh"] + arguments
+        process.standardInput = input
+        process.terminationHandler = { [ended] _ in ended.signal() }
         try process.run()
-        let deadline = Date().addingTimeInterval(30)
+        let deadline = Date(timeIntervalSinceNow: TestWait.seconds)
         while Date() < deadline {
             guard let probe = try FileLock.tryLock(file, createsFolder: false) else { return }
             probe.release()
             usleep(10_000)
         }
-        process.terminate()
-        throw LockHolderError(description: "lockf never took \(file.path)")
+        release()
+        throw LockHolderError(description: "lockf didn't take \(file.path) within \(TestWait.limit)")
     }
 
-    func wait() {
-        process.waitUntilExit()
+    /// Lets it go (its command runs, then the lock is free) and waits until it has ended: false when it is still
+    /// running after `TestWait.limit`. Later calls return at once.
+    @discardableResult
+    func release() -> Bool {
+        try? input.fileHandleForWriting.close()
+        guard ended.wait(timeout: TestWait.deadline) == .success else { return false }
+        ended.signal()
+        return true
     }
 }
 

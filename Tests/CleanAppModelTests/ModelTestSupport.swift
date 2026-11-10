@@ -2,6 +2,7 @@ import CleanAppModel
 import CleanCore
 import CleanTestSupport
 import Foundation
+import Testing
 
 /// An `AppModel` that scans `root` (default: the whole fixture) with settings and log inside the
 /// fixture's home. `isolatedGit`: the fixture's git, which ignores the user's git config; false uses the
@@ -59,6 +60,21 @@ enum CLIBinary {
             if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
         }
         throw SetupError(description: "bonsai binary not found in \(folders.map(\.path))")
+    }
+
+    /// Runs it with `environment` added to the inherited one (`inheritedEnvironment` when given). It may take as
+    /// long as the machine needs, and the test says so when it doesn't finish.
+    static func run(
+        _ arguments: [String], environment: [String: String], inheritedEnvironment: [String: String]? = nil,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws -> ProcessResult {
+        let result = try await ProcessRunner.run(
+            executable: try url(), arguments: arguments, environmentAdditions: environment,
+            inheritedEnvironment: inheritedEnvironment, timeout: TestWait.limit
+        )
+        #expect(!result.timedOut, "bonsai \(arguments.joined(separator: " ")) didn't finish within \(TestWait.limit)",
+                sourceLocation: sourceLocation)
+        return result
     }
 }
 

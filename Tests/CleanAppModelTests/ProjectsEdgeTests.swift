@@ -53,13 +53,13 @@ struct ProjectsEdgeTests {
     @Test func aProcessInTheClaudeWorktreeInsideStopsTheMainCheckout() async throws {
         let world = try await ProjectsWorld.make(scanProjects: false)
         defer { world.remove() }
-        let shell = SleepingProcess(seconds: 600)
+        let shell = SleepingProcess()
         defer { shell.stop() }
         try shell.start(in: world.url("quiet-heron"))
         await world.projects.refresh()
         let delta = try #require(world.row("delta"))
         #expect(!delta.isReady)
-        #expect(delta.statusText.hasPrefix("In use (sleep"), "\(delta.statusText)")
+        #expect(delta.statusText.hasPrefix("In use (\(SleepingProcess.command)"), "\(delta.statusText)")
         let confirmation = await world.projects.prepareClean([delta.id])
         #expect(confirmation.cleanable.isEmpty)
         // Even handed every item, nothing goes while the process is there.

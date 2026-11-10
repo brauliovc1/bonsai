@@ -100,14 +100,12 @@ struct WorktreeDetailsModelTests {
         #expect(model.groups.first?.main != nil)
 
         let environment = fixture.environment()
-        let result = try await ProcessRunner.run(
-            executable: try CLIBinary.url(),
-            arguments: ["scan", "--json", "--no-sizes", "--root", fixture.scanRoot.path],
-            environmentAdditions: [
+        let result = try await CLIBinary.run(
+            ["scan", "--json", "--no-sizes", "--root", fixture.scanRoot.path],
+            environment: [
                 "BONSAI_SETTINGS_DIR": environment.settingsDirectory.path,
                 "CLAUDE_CONFIG_DIR": environment.claudeConfigDirectory.path,
-            ],
-            timeout: .seconds(120)
+            ]
         )
         #expect(result.succeeded, "\(result.stderr)")
         let json = result.stdoutString

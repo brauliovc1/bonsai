@@ -233,10 +233,12 @@ final class CallGate: @unchecked Sendable {
     }
 
     func waitUntilReached() async throws {
-        for _ in 0..<2_000 where !isReached {
+        let clock = ContinuousClock()
+        let end = clock.now.advanced(by: TestWait.limit)
+        while !isReached, clock.now < end {
             try await Task.sleep(for: .milliseconds(5))
         }
-        try #require(isReached, "the held call was never made")
+        try #require(isReached, "the held call wasn't made within \(TestWait.limit)")
     }
 
     func release() {

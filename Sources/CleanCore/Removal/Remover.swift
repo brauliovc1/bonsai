@@ -17,6 +17,8 @@ public struct Remover: Sendable {
     var afterInspection: @Sendable () async -> Void = {}
     /// Test seam: runs after the re-check, right before `git worktree remove`.
     var beforeGitRemove: @Sendable () async -> Void = {}
+    /// Test seam: the timeout of `git worktree remove` alone (nil: `git.timeout`, as for every other git call).
+    var removeTimeout: Duration?
 
     public init(git: Git, settings: Settings, environment: CleanEnvironment) {
         self.git = git
@@ -93,8 +95,10 @@ public struct Remover: Sendable {
         if let stillAllowed, let stop = await stillAllowed() { throw RemovalError.stopped(stop) }
         await beforeGitRemove()
         let (arguments, directory) = Self.removeCommand(for: fresh, force: action == .worktreeRemoveAnyway)
+        var removing = git
+        if let removeTimeout { removing.timeout = removeTimeout }
         do {
-            try await git.git(arguments, in: directory)
+            try await removing.git(arguments, in: directory)
         } catch let error as GitError {
             // A stopped git may have deleted part of the folder already; there is no complete removal to log.
             if error.timedOut { throw RemovalError.interrupted(path: fresh.path) }

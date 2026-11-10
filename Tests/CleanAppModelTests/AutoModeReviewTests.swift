@@ -71,10 +71,7 @@ struct AutoModeReviewTests {
         let results = await world.app.cleaningUp { () -> [ProcessResult] in
             var results: [ProcessResult] = []
             for arguments in commands {
-                if let result = try? await ProcessRunner.run(
-                    executable: try CLIBinary.url(), arguments: arguments, environmentAdditions: environment,
-                    timeout: .seconds(120)
-                ) { results.append(result) }
+                if let result = try? await CLIBinary.run(arguments, environment: environment) { results.append(result) }
             }
             return results
         }
@@ -95,12 +92,13 @@ struct AutoModeReviewTests {
         let gate = ProcessGate(stage: "lsof")
         let world = try await AutoWorld.make(enabledDaysAgo: 8, gate: gate)
         defer { world.remove() }
-        let store = SettingsStore(environment: world.environment)
-        world.autoMode.afterPlanning = {
+        var store = SettingsStore(environment: world.environment)
+        store.lockTimeout = TestWait.limit
+        world.autoMode.afterPlanning = { [store] in
             gate.arm()
             Task { @MainActor in
-                _ = await eventually { gate.isWaiting }
-                _ = try? store.update { $0.autoEnabled = false }
+                #expect(await eventually { gate.isWaiting }, "the last check didn't reach lsof within \(TestWait.limit)")
+                #expect(throws: Never.self, "auto mode turned off on disk") { _ = try store.update { $0.autoEnabled = false } }
                 gate.open()
             }
         }
@@ -122,8 +120,8 @@ struct AutoModeReviewTests {
         world.autoMode.afterPlanning = {
             gate.arm()
             Task { @MainActor in
-                _ = await eventually { gate.isWaiting }
-                _ = world.autoMode.save("test") { $0.includeClaudeInAuto = false }
+                #expect(await eventually { gate.isWaiting }, "the last check didn't reach lsof within \(TestWait.limit)")
+                #expect(world.autoMode.save("test") { $0.includeClaudeInAuto = false }, "the setting was saved")
                 gate.open()
             }
         }
@@ -148,11 +146,13 @@ struct AutoModeReviewTests {
         world.autoMode.afterPlanning = {
             gate.arm()
             Task { @MainActor in
-                _ = await eventually { gate.isWaiting }
+                #expect(await eventually { gate.isWaiting }, "git worktree remove didn't start within \(TestWait.limit)")
                 Task { @MainActor in
                     await world.app.prepareToQuit()
                     quit.value = true
                 }
+                #expect(await eventually { world.app.isQuitting }, "quitting didn't start within \(TestWait.limit)")
+                // Time for a quit that doesn't wait to finish; one that waits can't, the removal is at the gate.
                 try? await Task.sleep(for: .milliseconds(300))
                 waitedForTheRemoval.value = !quit.value
                 gate.open()
@@ -180,9 +180,9 @@ struct AutoModeReviewTests {
         #expect(confirmation.allowed.count == 2)
         gate.arm()
         Task { @MainActor in
-            _ = await eventually { gate.isWaiting }
+            #expect(await eventually { gate.isWaiting }, "git worktree remove didn't start within \(TestWait.limit)")
             Task { @MainActor in await world.app.prepareToQuit() }
-            try? await Task.sleep(for: .milliseconds(100))
+            #expect(await eventually { world.app.isQuitting }, "quitting didn't start within \(TestWait.limit)")
             gate.open()
         }
 

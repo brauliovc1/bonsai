@@ -156,7 +156,7 @@ struct LightCleanerTests {
             _ = try await world.cleaner(cwdIndex: nil).clean(worktree, candidates: findings.candidates)
         } throws: { error in
             guard case LightCleanError.inUse(let processes) = error else { return false }
-            return processes.map(\.command).contains("sleep")
+            return processes.map(\.command).contains(SleepingProcess.command)
         }
         #expect(world.exists("node_modules/a.js", in: wt))
         #expect(try world.log.entries().isEmpty)

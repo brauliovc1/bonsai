@@ -19,8 +19,9 @@ struct CommandSupportTests {
         let result = try await CommandRunner.live.run(
             URL(fileURLWithPath: "/bin/echo"),
             ["a b", "$HOME"],
-            timeout: .seconds(10)
+            timeout: TestWait.limit
         )
+        #expect(!result.timedOut, "echo didn't finish within \(TestWait.limit)")
         #expect(result.succeeded)
         #expect(result.stdoutString == "a b $HOME\n")
     }

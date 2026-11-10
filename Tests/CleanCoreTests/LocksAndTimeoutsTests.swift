@@ -7,7 +7,7 @@ import Testing
 /// `git worktree remove` that times out.
 @Suite("Locks and timeouts")
 struct LocksAndTimeoutsTests {
-    @Test func fileLocksExcludeEachOtherAndChildrenDontInheritThem() async throws {
+    @Test func fileLocksExcludeEachOtherAndChildrenDontInheritThem() throws {
         let directory = try TemporaryDirectory()
         defer { directory.remove() }
         let url = directory.url.appending(path: "settings/cleanup.lock")
@@ -16,12 +16,13 @@ struct LocksAndTimeoutsTests {
         #expect(try FileLock.tryLock(url) == nil, "a second handle, even in this process, is refused")
 
         // A child started while the lock is held doesn't keep it after this process lets go.
-        async let child = ProcessRunner.run(executable: URL(fileURLWithPath: "/bin/sleep"), arguments: ["1"])
-        try await Task.sleep(for: .milliseconds(200))
+        let child = SleepingProcess()
+        defer { child.stop() }
+        try child.start(in: directory.url)
         first.release()
         let again = try #require(try FileLock.tryLock(url), "free again while the child still runs")
         again.release()
-        _ = try await child
+        #expect(child.stop(), "the child didn't end within \(TestWait.limit)")
     }
 
     @Test func theCleanupLockLivesInTheSettingsFolder() throws {
@@ -37,25 +38,36 @@ struct LocksAndTimeoutsTests {
     }
 
     /// A settings read-modify-write waits for `settings.lock`, so it can't put back a value another process
-    /// changed in between.
-    @Test func settingsUpdatesWaitForTheSettingsLock() async throws {
+    /// changed in between. The update is a thread of its own, and it waits as long as the test holds the lock
+    /// (the app and the CLI give up after 5 s), so a slow machine can't make it give up first.
+    @Test func settingsUpdatesWaitForTheSettingsLock() throws {
         let directory = try TemporaryDirectory()
         defer { directory.remove() }
-        let store = SettingsStore(directory: directory.url)
+        var store = SettingsStore(directory: directory.url)
+        #expect(store.lockTimeout == .seconds(5))
+        store.lockTimeout = TestWait.limit
         try store.save(Settings(autoEnabled: true))
 
         let held = try #require(try FileLock.tryLock(store.lockURL))
-        let done = Flag()
-        let update = Task.detached {
-            try store.update { $0.lastAutoRun = AutoRunSummary(date: Date(), reportOnly: false) }
-            done.set()
+        let updating = DispatchSemaphore(value: 0), updated = DispatchSemaphore(value: 0)
+        let failure = Shared<String?>(nil)
+        let update = TestThreads()
+        update.start { [store] in
+            updating.signal()
+            do {
+                try store.update { $0.lastAutoRun = AutoRunSummary(date: Date(), reportOnly: false) }
+            } catch {
+                failure.change { $0 = "\(error)" }
+            }
+            updated.signal()
         }
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(!done.isSet, "waiting for the lock")
+        #expect(updating.wait(timeout: TestWait.deadline) == .success, "the update didn't start within \(TestWait.limit)")
+        #expect(updated.wait(timeout: .now() + 0.5) == .timedOut, "the update waits for the lock")
         // What the other process changes while it holds the lock is kept by the waiting update.
         try store.save(Settings(autoEnabled: false))
         held.release()
-        try await update.value
+        #expect(update.join(timeout: TestWait.limit), "the update didn't finish within \(TestWait.limit) once the lock was free")
+        #expect(failure.value == nil)
         let saved = try store.load()
         #expect(saved.autoEnabled == false && saved.lastAutoRun != nil)
     }
@@ -67,8 +79,9 @@ struct LocksAndTimeoutsTests {
             executable: sleep, arguments: ["0.5"], timeout: .milliseconds(50), clock: StoppedClock()
         )
         #expect(!stopped.timedOut && stopped.succeeded)
+        // A child that outlives any delay in the watchdog waking up: only the timeout can end it.
         let running = try await ProcessRunner.run(
-            executable: sleep, arguments: ["5"], timeout: .milliseconds(50), clock: ContinuousClock()
+            executable: sleep, arguments: ["\(Int(TestWait.seconds))"], timeout: .milliseconds(50), clock: ContinuousClock()
         )
         #expect(running.timedOut)
         // Every timeout (git, du, lsof, docker, xcrun) uses this one: it doesn't count time asleep.
@@ -82,20 +95,21 @@ struct LocksAndTimeoutsTests {
         defer { world.remove() }
         let path = try await world.sibling("slow")
         let script = world.fixture.url.appending(path: "hanging-git")
-        let text = "#!/bin/sh\ncase \" $* \" in *\" worktree remove \"*) exec /bin/sleep 120 ;; esac\n"
+        let text = "#!/bin/sh\ncase \" $* \" in *\" worktree remove \"*) exec /bin/sleep \(Int(TestWait.seconds)) ;; esac\n"
             + "exec \"\(world.fixture.git.executable.path)\" \"$@\"\n"
         try Data(text.utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         var git = world.fixture.git
         git.executable = script
-        // Long enough that the re-check's own git calls never hit it on a loaded machine; only the hanging remove does.
-        git.timeout = .seconds(15)
+        // The re-check's own git calls may take as long as a slow machine needs; only the hanging remove times out.
+        git.timeout = TestWait.limit
         let environment = world.fixture.environment(clockOffset: 40 * 86_400)
         let worktree = try await world.worktree(path)
+        var remover = Remover(git: git, settings: Settings(), environment: environment)
+        remover.removeTimeout = .seconds(2)
 
         await #expect {
-            _ = try await Remover(git: git, settings: Settings(), environment: environment)
-                .remove(worktree, mode: .manual, estimatedBytes: nil)
+            _ = try await remover.remove(worktree, mode: .manual, estimatedBytes: nil)
         } throws: { error in
             guard case RemovalError.interrupted = error else { return false }
             return "\(error)" == "interrupted; the folder may be partly removed"
@@ -128,16 +142,5 @@ private struct StoppedClock: Clock {
 
     func sleep(until deadline: Instant, tolerance: Duration?) async throws {
         try await Task.sleep(for: .seconds(3_600))
-    }
-}
-
-private final class Flag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = false
-
-    var isSet: Bool { lock.withLock { value } }
-
-    func set() {
-        lock.withLock { value = true }
     }
 }

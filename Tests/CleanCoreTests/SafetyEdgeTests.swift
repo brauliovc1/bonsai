@@ -86,7 +86,7 @@ struct SafetyEdgeTests {
         defer { sleeper.stop() }
         try sleeper.start(in: inside)
 
-        let index = await ProcessCwdIndex.capture(lsof: world.fixture.environment().tools.lsof)
+        let index = await ProcessCwdIndex.capture(lsof: world.fixture.environment().tools.lsof, timeout: TestWait.limit)
         try #require(index.isAvailable, "lsof: \(index.failure ?? "")")
         #expect(index.processes(inside: wt).map(\.pid) == [try #require(sleeper.pid)])
 
@@ -96,7 +96,7 @@ struct SafetyEdgeTests {
             Issue.record("expected in use, got \(report)")
             return
         }
-        #expect(processes.map(\.command) == ["sleep"])
+        #expect(processes.map(\.command) == [SleepingProcess.command])
         #expect(!report.manualAllowed && !report.autoEligible)
         #expect(report.status == .inUse)
         #expect(report.status.label == "IN USE")

@@ -12,8 +12,9 @@ struct ProcessRunnerStarvationTests {
     /// Four times what a pipe holds (64 KB), on both pipes.
     private static let bytes = 256 * 1024
     private static let calls = 32
-    /// Generous: on a loaded machine these finish in seconds. The blocking reads never finished.
-    private static let bound: Duration = .seconds(60)
+    /// Generous: on a loaded machine these finish in seconds (34 s under `taskpolicy -c background`). The blocking
+    /// reads never finished.
+    private static let bound = TestWait.limit
 
     @Test func manyCallsWithLargeOutputFinishWhileTheGlobalQueuesAreFull() async throws {
         let blockers = GlobalQueueBlockers()
@@ -34,7 +35,7 @@ struct ProcessRunnerStarvationTests {
                         let result = try? await ProcessRunner.run(
                             executable: URL(fileURLWithPath: "/bin/sh"),
                             arguments: ["-c", script, "sh", "\(Self.bytes)"],
-                            timeout: .seconds(300)
+                            timeout: Self.bound
                         )
                         finished.change { $0 += 1 }
                         return result
@@ -89,19 +90,25 @@ private final class GlobalQueueBlockers: Sendable {
     var running: Int { started.value }
 
     /// Waits until GCD stops adding workers, then gives a new job on the utility queue (the one ProcessRunner's
-    /// reads used) a second: true when it didn't run, so the pool is full.
+    /// reads used) a second: true when it didn't run, so the pool is full. A job that ran found a worker GCD was
+    /// still adding (a slow machine adds them slowly), so it looks again, for at most `TestWait.limit`.
     func fill() async throws -> Bool {
-        var last = -1, steady = 0
-        for _ in 0..<300 where steady < 5 {
-            try await Task.sleep(for: .milliseconds(100))
-            let now = running
-            steady = now == last ? steady + 1 : 0
-            last = now
-        }
-        let probe = Shared(false)
-        DispatchQueue.global(qos: .utility).async { probe.change { $0 = true } }
-        try await Task.sleep(for: .seconds(1))
-        return !probe.value
+        let clock = ContinuousClock()
+        let end = clock.now.advanced(by: TestWait.limit)
+        repeat {
+            var last = -1, steady = 0
+            while steady < 5, clock.now < end {
+                try await Task.sleep(for: .milliseconds(100))
+                let now = running
+                steady = now == last ? steady + 1 : 0
+                last = now
+            }
+            let probe = Shared(false)
+            DispatchQueue.global(qos: .utility).async { probe.change { $0 = true } }
+            try await Task.sleep(for: .seconds(1))
+            if !probe.value { return true }
+        } while clock.now < end
+        return false
     }
 
     /// Lets every held worker go; later calls do nothing.
