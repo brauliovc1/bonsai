@@ -61,6 +61,8 @@ struct CompareView: View {
     }
 
     private func reviewKey(_ action: () -> Void) -> KeyPress.Result {
+        if let event = NSApp.currentEvent,
+           !event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty { return .ignored }
         let window = NSApp.currentEvent?.window ?? NSApp.keyWindow
         if let editor = window?.firstResponder as? NSTextView, editor.isFieldEditor { return .ignored }
         action()
