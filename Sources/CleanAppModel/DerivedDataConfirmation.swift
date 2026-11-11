@@ -42,10 +42,11 @@ public struct DerivedDataConfirmation: Identifiable, Sendable {
     public var allowed: [Item] { items.filter(\.isAllowed) }
     public var blocked: [Item] { items.filter { !$0.isAllowed } }
     public var estimatedTotalBytes: Int64 { allowed.compactMap(\.bytes).reduce(0, +) }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(allowed.map(\.bytes)) }
     public var hasUnknownSizes: Bool { allowed.contains { $0.bytes == nil } }
 
     /// "Delete 2 folders".
     public var deleteButtonTitle: String { CleanupPresentation.button("Delete", count: allowed.count) }
-    public var title: String { CleanupPresentation.title("Delete", count: allowed.count, noun: "folder", bytes: estimatedTotalBytes) }
+    public var title: String { CleanupPresentation.title("Delete", count: allowed.count, noun: "folder", sizes: allowed.map(\.bytes)) }
 
 }

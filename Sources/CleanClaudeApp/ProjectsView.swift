@@ -54,7 +54,7 @@ struct ProjectsView: View {
                                     Text(group.name).fontWeight(.semibold)
                                     Text(group.countText).foregroundStyle(.secondary)
                                     Spacer()
-                                    SizeText(bytes: group.rows.reduce(Int64(0)) { $0 + $1.sizeBytes }, hasUnknownParts: group.rows.contains { $0.project.hasUnknownSizes })
+                                    Text(CleanupPresentation.estimate(group.rows.flatMap { $0.project.folders }.map(\.bytes))).monospacedDigit()
                                 }
                             }.buttonStyle(.plain).help(group.folderText)
                             if model.isExpanded(group.repoPath) {
@@ -69,7 +69,7 @@ struct ProjectsView: View {
             }
             ProjectsFooter(model: model) { navigation.show(.worktrees) }
             if !model.selectedRows.isEmpty {
-                SelectionBar(text: "\(model.selectedRows.count) selected · \(DisplayText.bytes(model.selectedRows.reduce(Int64(0)) { $0 + $1.sizeBytes }))") {
+                SelectionBar(text: "\(model.selectedRows.count) selected · \(CleanupPresentation.estimate(model.selectedRows.flatMap { $0.project.folders }.map(\.bytes)))") {
                     Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
                 }
             }

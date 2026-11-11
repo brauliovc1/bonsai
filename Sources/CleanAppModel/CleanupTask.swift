@@ -27,6 +27,8 @@ public final class CleanupTask: Identifiable {
     public var hasProblems: Bool {
         problemCount > 0 || items.contains { $0.result?.warnings.isEmpty == false }
     }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(items.flatMap(\.sizeEstimates)) }
+    public var hasCompleteEstimate: Bool { items.flatMap(\.sizeEstimates).allSatisfy { $0 != nil } }
     public var estimatedBytes: Int64 { items.compactMap(\.estimatedBytes).reduce(0, +) }
     public var measuredFreedBytes: Int64? {
         let measured = items.compactMap { $0.result?.freedBytes }

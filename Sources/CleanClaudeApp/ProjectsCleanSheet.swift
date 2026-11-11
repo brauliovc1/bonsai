@@ -100,7 +100,7 @@ private struct ProjectCleanItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            SheetItemHeader(title: item.name, detail: item.repoName == item.name ? nil : item.repoName, path: item.worktree.path, bytes: item.estimatedBytes)
+            SheetItemHeader(title: item.name, detail: item.repoName == item.name ? nil : item.repoName, path: item.worktree.path, sizeText: item.estimatedSizeText)
             if let note = item.idleNote {
                 Label(note, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(Palette.orange)

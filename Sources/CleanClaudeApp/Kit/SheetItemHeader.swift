@@ -7,13 +7,15 @@ struct SheetItemHeader: View {
     var detail: String?
     let path: String
     var bytes: Int64?
+    var sizeText: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title).fontWeight(.semibold)
                 if let detail { Text(detail).foregroundStyle(.secondary) }
                 Spacer(minLength: 8)
-                if let bytes { SizeText(bytes: bytes) }
+                if let sizeText { Text(sizeText).monospacedDigit() }
+                else if let bytes { SizeText(bytes: bytes) }
             }
             Text(path).font(.caption).foregroundStyle(.secondary)
                 .lineLimit(1).truncationMode(.middle).help(path).textSelection(.enabled)

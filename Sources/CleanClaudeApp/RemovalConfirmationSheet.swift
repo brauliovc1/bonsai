@@ -50,8 +50,7 @@ struct RemovalConfirmationSheet: View {
                 HStack {
                     Text("Estimated total")
                     Spacer()
-                    Text(DisplayText.bytes(confirmation.estimatedTotalBytes)
-                        + (confirmation.hasUnknownSizes ? " (some sizes unknown)" : ""))
+                    Text(confirmation.estimatedSizeText)
                         .monospacedDigit()
                         .fontWeight(.semibold)
                 }

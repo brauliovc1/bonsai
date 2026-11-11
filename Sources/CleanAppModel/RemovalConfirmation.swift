@@ -61,10 +61,11 @@ public struct RemovalConfirmation: Identifiable, Sendable {
 
     /// The `du` estimate of the allowed items. Freed space is measured afterwards and can be lower.
     public var estimatedTotalBytes: Int64 { allowed.compactMap(\.estimatedBytes).reduce(0, +) }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(allowed.map(\.estimatedBytes)) }
     public var hasUnknownSizes: Bool { allowed.contains { $0.estimatedBytes == nil } }
 
     /// "Remove 3 worktrees".
     public var removeButtonTitle: String { CleanupPresentation.button("Remove", count: allowed.count) }
-    public var title: String { CleanupPresentation.title("Remove", count: allowed.count, noun: "worktree", bytes: estimatedTotalBytes) }
+    public var title: String { CleanupPresentation.title("Remove", count: allowed.count, noun: "worktree", sizes: allowed.map(\.estimatedBytes)) }
 
 }

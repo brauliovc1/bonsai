@@ -9,6 +9,7 @@ extension WorktreesModel {
         var mains: [String: WorktreeRow] = [:]
         var totals: [String: Int] = [:]
         var sizes: [String: Int64] = [:]
+        var unknownSizes = Set<String>()
         var byRepo: [String: [WorktreeRow]] = [:]
         for row in allRows {
             let repo = row.worktree.repoPath
@@ -18,6 +19,7 @@ extension WorktreesModel {
             }
             totals[repo, default: 0] += 1
             if let bytes = row.sizeBytes { sizes[repo, default: 0] += bytes }
+            else { unknownSizes.insert(repo) }
             guard matches(row) else { continue }
             if byRepo[repo] == nil { order.append(repo) }
             byRepo[repo, default: []].append(row)
@@ -30,6 +32,7 @@ extension WorktreesModel {
                 rows: (byRepo[repo] ?? []).sorted { rowPrecedes($0, $1, flat: false) },
                 totalCount: totals[repo] ?? 0,
                 worktreeBytes: sizes[repo],
+                hasUnknownWorktreeSizes: unknownSizes.contains(repo),
                 remotes: app.scan?.remotes?[repo] ?? [],
                 home: home
             )

@@ -37,6 +37,7 @@ public struct LightCleanConfirmation: Identifiable, Sendable {
         public var unreadable: [String] { findings?.unreadable ?? [] }
         public var isCleanable: Bool { !candidates.isEmpty }
         public var estimatedBytes: Int64 { candidates.compactMap(\.estimatedBytes).reduce(0, +) }
+        public var estimatedSizeText: String { CleanupPresentation.estimate(candidates.map(\.estimatedBytes)) }
         public var hasUnknownSizes: Bool { candidates.contains { $0.estimatedBytes == nil } }
 
         /// Why this worktree has nothing to delete: the blocker, the finder's problem, or just no folders.
@@ -63,10 +64,11 @@ public struct LightCleanConfirmation: Identifiable, Sendable {
     public var folderCount: Int { cleanable.reduce(0) { $0 + $1.candidates.count } }
     /// The `du` estimate of every listed folder. Freed space is measured afterwards and can be lower.
     public var estimatedTotalBytes: Int64 { cleanable.reduce(0) { $0 + $1.estimatedBytes } }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(cleanable.flatMap(\.candidates).map(\.estimatedBytes)) }
     public var hasUnknownSizes: Bool { cleanable.contains(where: \.hasUnknownSizes) }
 
     /// "Delete 3 folders".
     public var deleteButtonTitle: String { CleanupPresentation.button("Clean", count: folderCount) }
-    public var title: String { CleanupPresentation.title("Clean", count: folderCount, noun: "dependency folder", bytes: estimatedTotalBytes) }
+    public var title: String { CleanupPresentation.title("Clean", count: folderCount, noun: "dependency folder", sizes: cleanable.flatMap(\.candidates).map(\.estimatedBytes)) }
 
 }

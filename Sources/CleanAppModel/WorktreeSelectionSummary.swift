@@ -7,6 +7,7 @@ public struct WorktreeSelectionSummary: Equatable, Sendable {
     public let count: Int
     public let repoCount: Int
     public let totalBytes: Int64?
+    public let estimatedSizeText: String
     /// Rows a manual removal would accept (never a repo folder).
     public let removableCount: Int
     /// What those removable rows hold.
@@ -17,6 +18,7 @@ public struct WorktreeSelectionSummary: Equatable, Sendable {
         repoCount = Set(rows.map(\.worktree.repoPath)).count
         let sizes = rows.compactMap(\.sizeBytes)
         totalBytes = sizes.isEmpty ? nil : sizes.reduce(0, +)
+        estimatedSizeText = CleanupPresentation.estimate(rows.map(\.sizeBytes))
         let removable = rows.filter(\.canRemove)
         removableCount = removable.count
         removableBytes = removable.compactMap(\.sizeBytes).reduce(0, +)
@@ -29,7 +31,7 @@ public struct WorktreeSelectionSummary: Equatable, Sendable {
     }
 
     /// "1.2 GB in total".
-    public var sizeText: String { "\(DisplayText.bytes(totalBytes)) in total" }
+    public var sizeText: String { "\(estimatedSizeText) in total" }
 
     /// "2 can be removed; 1 can't."
     public var removableText: String {

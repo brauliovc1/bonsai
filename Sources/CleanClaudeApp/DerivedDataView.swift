@@ -33,7 +33,7 @@ struct DerivedDataView: View {
                 }.padding(20)
             }
             if !model.selectedOrphans.isEmpty {
-                SelectionBar(text: "\(model.selectedOrphans.count) selected · \(DisplayText.bytes(model.selectedOrphans.compactMap(\.bytes).reduce(0, +)))") {
+                SelectionBar(text: "\(model.selectedOrphans.count) selected · \(CleanupPresentation.estimate(model.selectedOrphans.map(\.bytes)))") {
                     Button("Delete selected…") { Task { await model.beginDelete() } }.disabled(!model.canDelete)
                 }
             }

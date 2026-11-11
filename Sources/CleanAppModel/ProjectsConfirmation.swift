@@ -46,6 +46,7 @@ public struct ProjectsConfirmation: Identifiable, Sendable {
             wasAutoPicked && hasFolders && (idle.idleDays.map { $0 < threshold } ?? true)
         }
         public var estimatedBytes: Int64 { lightClean.estimatedBytes }
+        public var estimatedSizeText: String { lightClean.estimatedSizeText }
 
         /// Below the threshold: "You worked here N days ago; it will need a reinstall."; idle unknown: why it
         /// isn't one of the idle ones. nil when idle long enough.
@@ -77,18 +78,18 @@ public struct ProjectsConfirmation: Identifiable, Sendable {
 
     public var folderCount: Int { cleanable.reduce(0) { $0 + $1.candidates.count } }
     public var estimatedTotalBytes: Int64 { cleanable.reduce(0) { $0 + $1.estimatedBytes } }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(cleanable.flatMap(\.candidates).map(\.estimatedBytes)) }
     public var hasUnknownSizes: Bool { cleanable.contains { $0.lightClean.hasUnknownSizes } }
 
     /// "Clean 2 projects?" or "Nothing to delete".
     public var title: String {
-        CleanupPresentation.title("Clean", count: cleanable.count, noun: "project", bytes: estimatedTotalBytes)
+        CleanupPresentation.title("Clean", count: cleanable.count, noun: "project", sizes: cleanable.flatMap(\.candidates).map(\.estimatedBytes))
     }
 
     public var deleteButtonTitle: String { CleanupPresentation.button("Clean", count: folderCount) }
 
-    /// "2 projects, 5 folders, about 1.2 GB (estimate)".
+    /// "2 projects, 5 folders, at least 1.2 GB (estimate)" when some measurements are missing.
     public var summary: String {
-        "\(DisplayText.projects(cleanable.count)), \(DisplayText.folders(folderCount)), about "
-            + DisplayText.bytes(estimatedTotalBytes) + (hasUnknownSizes ? " (some sizes unknown)" : "") + " (estimate)"
+        "\(DisplayText.projects(cleanable.count)), \(DisplayText.folders(folderCount)), \(estimatedSizeText) (estimate)"
     }
 }

@@ -48,10 +48,11 @@ public struct CachesConfirmation: Identifiable, Sendable {
     public var allowed: [Item] { items.filter(\.isAllowed) }
     public var blocked: [Item] { items.filter { !$0.isAllowed } }
     public var estimatedTotalBytes: Int64 { allowed.compactMap(\.bytes).reduce(0, +) }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(allowed.map(\.bytes)) }
     public var hasUnknownSizes: Bool { allowed.contains { $0.bytes == nil } }
 
     /// "Clean npm", "Clean 3 items".
     public var cleanButtonTitle: String { CleanupPresentation.button("Clean", count: allowed.count) }
-    public var title: String { CleanupPresentation.title("Clean", count: allowed.count, noun: "cache", plural: "caches", bytes: estimatedTotalBytes) }
+    public var title: String { CleanupPresentation.title("Clean", count: allowed.count, noun: "cache", plural: "caches", sizes: allowed.map(\.bytes)) }
 
 }

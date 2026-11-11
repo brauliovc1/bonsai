@@ -57,7 +57,7 @@ struct DockerSimulatorsView: View {
                     EmptyState(systemImage: "hammer", headline: "Xcode tools missing", line: "Install Xcode and select its command line tools to read simulators.")
                 }
             } else {
-                CategoryCard(systemImage: "iphone", title: "Simulators", sizeText: DisplayText.bytes(model.unavailableBytes),
+                CategoryCard(systemImage: "iphone", title: "Simulators", sizeText: model.unavailableBytes == nil ? "size unknown" : CleanupPresentation.estimate(model.unavailableDevices.map(\.sizeBytes)),
                              detail: "\(model.unavailableDevices.count) unavailable devices. Installed runtimes and devices that can boot are kept.",
                              buttonTitle: "Delete unavailable simulators…") { Task { await model.beginSimulatorsDelete() } }
                     .disabled(!model.canDeleteUnavailable).help(model.deviceListFailure ?? "Review devices before deleting")

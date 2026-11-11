@@ -55,9 +55,9 @@ struct RepoGroupHeader: View {
     }
 
     private func removeAllHelp(_ rows: [WorktreeRow]) -> String {
-        let bytes = rows.compactMap(\.sizeBytes).reduce(0, +)
+        let amount = CleanupPresentation.estimate(rows.map(\.sizeBytes))
         let what = rows.count == 1 ? "the worktree" : "the \(rows.count) worktrees"
-        return "Remove \(what) shown here that can be removed (\(DisplayText.bytes(bytes))); you confirm first. "
+        return "Remove \(what) shown here that can be removed (\(amount)); you confirm first. "
             + "The repo folder stays."
     }
 }
