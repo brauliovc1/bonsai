@@ -54,7 +54,7 @@ struct ProjectsReviewTests {
         try shell.start(in: world.cursor)
         await model.refresh()
         let row = try #require(world.row)
-        #expect(row.statusText.hasPrefix("In use (\(SleepingProcess.command)"), "\(row.statusText)")
+        #expect(row.statusText.hasPrefix("Open in \(SleepingProcess.command)"), "\(row.statusText)")
         #expect(!row.isReady)
         model.selectAllIdle()
         #expect(model.selection.isEmpty)
@@ -141,7 +141,7 @@ struct ProjectsReviewTests {
         #expect(Set(confirmation.changed.map(\.name)) == ["echo", "foxtrot"])
         #expect(Set(confirmation.cleanable.map(\.name)) == ["delta", "golf"], "golf was picked by hand")
         #expect(confirmation.cleanable.first { $0.name == "golf" }?.idleNote == "You worked here 3 days ago; it will need a reinstall.")
-        #expect(confirmation.title == "Clean 2 projects?")
+        #expect(confirmation.title == "Clean 2 projects (\(DisplayText.bytes(confirmation.estimatedTotalBytes)))?")
 
         // foxtrot ticked by hand; echo left unticked.
         let foxtrot = try #require(confirmation.changed.first { $0.name == "foxtrot" })

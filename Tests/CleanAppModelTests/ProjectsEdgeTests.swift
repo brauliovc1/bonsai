@@ -59,7 +59,7 @@ struct ProjectsEdgeTests {
         await world.projects.refresh()
         let delta = try #require(world.row("delta"))
         #expect(!delta.isReady)
-        #expect(delta.statusText.hasPrefix("In use (\(SleepingProcess.command)"), "\(delta.statusText)")
+        #expect(delta.statusText.hasPrefix("Open in \(SleepingProcess.command)"), "\(delta.statusText)")
         let confirmation = await world.projects.prepareClean([delta.id])
         #expect(confirmation.cleanable.isEmpty)
         // Even handed every item, nothing goes while the process is there.
