@@ -39,10 +39,13 @@ struct DockerPruneSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     list("It removes", items: DockerPruneConfirmation.removes, icon: "minus.circle", color: Palette.grey)
                     list("It keeps", items: DockerPruneConfirmation.keeps, icon: "checkmark.circle", color: Palette.blue)
-                    if confirmation.isAllowed {
+                    if confirmation.isAllowed && confirmation.hasSizeEstimate {
                         Text("Docker says up to \(DisplayText.bytes(confirmation.estimatedBytes)) could be freed. "
                             + "That is an upper bound: unused tagged images stay.")
                             .foregroundStyle(.secondary)
+                    }
+                    if confirmation.isAllowed && !confirmation.hasSizeEstimate {
+                        Text("Docker’s space estimate is unavailable.").foregroundStyle(.secondary)
                     }
                     Text(DockerPruneConfirmation.slowLine).foregroundStyle(.secondary)
                 }

@@ -18,13 +18,13 @@ struct SizeText: View {
                 }
                 .foregroundStyle(.secondary)
             } else {
-                Text(DisplayText.bytes(bytes) + (hasUnknownParts ? "+" : ""))
+                Text(DisplayText.bytes(bytes) + (hasUnknownParts && bytes != nil ? "+" : ""))
                     .monospacedDigit()
                     .foregroundStyle(bytes == nil ? .secondary : .primary)
             }
         }
         .lineLimit(1)
-        .help(isMeasuring ? "Measuring the folder again after a cleanup" : (isEstimate ? Self.estimateHelp : "Space freed, measured from the disk after cleanup."))
+        .help(isMeasuring ? "Measuring the folder again after a cleanup" : (isEstimate ? (hasUnknownParts && bytes != nil ? "At least this much; some sizes are unknown. " : "") + Self.estimateHelp : "Space freed, measured from the disk after cleanup."))
     }
 
     static let estimateHelp = "An estimate. What a cleanup really frees is measured from the disk afterwards."

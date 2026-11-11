@@ -46,7 +46,8 @@ public struct ProjectRow: Identifiable, Hashable, Sendable {
     }
 
     public var sizeBytes: Int64 { project.totalBytes }
-    public var sizeText: String { DisplayText.bytes(sizeBytes) + (project.hasUnknownSizes ? "+" : "") }
+    public var measuredSizeBytes: Int64? { project.folders.contains { $0.bytes != nil } ? sizeBytes : nil }
+    public var sizeText: String { CleanupPresentation.estimate(project.folders.map(\.bytes)) }
 
     public var statusText: String { statusWords.text }
 

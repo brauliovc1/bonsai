@@ -42,7 +42,7 @@ struct CachesView: View {
                 }.padding(20)
             }
             if !model.selectedRows.isEmpty {
-                SelectionBar(text: "\(model.selectedRows.count) selected · \(DisplayText.bytes(model.selectedBytes))") {
+                SelectionBar(text: "\(model.selectedRows.count) selected · \(CleanupPresentation.estimate(model.selectedRows.map(\.bytes)))") {
                     Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
                 }
             }

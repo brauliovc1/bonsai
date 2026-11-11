@@ -22,6 +22,7 @@ public struct WorktreeGroup: Identifiable, Hashable, Sendable {
     public let totalCount: Int
     /// Their estimated sizes added up (unknown sizes left out); nil when none is known.
     public let worktreeBytes: Int64?
+    public let hasUnknownWorktreeSizes: Bool
 
     public init(
         repoPath: String,
@@ -29,6 +30,7 @@ public struct WorktreeGroup: Identifiable, Hashable, Sendable {
         rows: [WorktreeRow],
         totalCount: Int,
         worktreeBytes: Int64? = nil,
+        hasUnknownWorktreeSizes: Bool = false,
         remotes: [GitRemote],
         home: URL?
     ) {
@@ -41,6 +43,7 @@ public struct WorktreeGroup: Identifiable, Hashable, Sendable {
         self.rows = rows
         self.totalCount = totalCount
         self.worktreeBytes = worktreeBytes
+        self.hasUnknownWorktreeSizes = hasUnknownWorktreeSizes
     }
 
     public var id: String { repoPath }
@@ -52,7 +55,8 @@ public struct WorktreeGroup: Identifiable, Hashable, Sendable {
     public var headerDetail: String {
         let folder = main.map { $0.isMeasuringSize ? "repo folder measuring…" : "repo folder \(DisplayText.bytes($0.sizeBytes))" }
         var parts = [folder ?? "repo folder"]
-        parts.append(worktreeBytes.map { "\(countText), \(DisplayText.bytes($0))" } ?? countText)
+        let estimates = hasUnknownWorktreeSizes ? [worktreeBytes, nil] : [worktreeBytes]
+        parts.append("\(countText), \(CleanupPresentation.estimate(estimates))")
         if let main, let commit = main.lastCommit {
             parts.append("last commit \(DisplayText.timeAgo(commit.date, now: main.now))")
         }
@@ -75,7 +79,7 @@ public struct WorktreeGroup: Identifiable, Hashable, Sendable {
         return sizes.isEmpty ? nil : sizes.reduce(0, +)
     }
 
-    public var sizeText: String { DisplayText.bytes(totalBytes) }
+    public var sizeText: String { CleanupPresentation.estimate(([main].compactMap { $0 } + rows).map(\.sizeBytes)) }
 
     /// The remotes in full, one per line, for the header's tooltip.
     public var remotesHelp: String {

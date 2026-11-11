@@ -31,7 +31,7 @@ struct RemoveAnywaySheet: View {
 
     private func confirmPage(_ confirmation: RemoveAnywayConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SheetHeading(title: "Remove 1 worktree (\(DisplayText.bytes(confirmation.assessment.estimatedBytes))) anyway?", subtitle: confirmation.title)
+            SheetHeading(title: "Remove 1 worktree (\(CleanupPresentation.estimate([confirmation.assessment.estimatedBytes]))) anyway?", subtitle: confirmation.title)
             Text(confirmation.line)
                 .fontWeight(.medium)
                 .foregroundStyle(Palette.orange)

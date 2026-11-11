@@ -48,8 +48,7 @@ struct LightCleanSheet: View {
                 HStack {
                     Text("Estimated total")
                     Spacer()
-                    Text(DisplayText.bytes(confirmation.estimatedTotalBytes)
-                        + (confirmation.hasUnknownSizes ? " (some sizes unknown)" : ""))
+                    Text(confirmation.estimatedSizeText)
                         .monospacedDigit()
                         .fontWeight(.semibold)
                 }
@@ -92,7 +91,7 @@ private struct CleanableItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            SheetItemHeader(title: item.repoName, detail: item.branchText, path: item.worktree.path, bytes: item.estimatedBytes)
+            SheetItemHeader(title: item.repoName, detail: item.branchText, path: item.worktree.path, sizeText: item.estimatedSizeText)
             ForEach(item.candidates, id: \.relativePath) { candidate in
                 HStack(alignment: .firstTextBaseline) {
                     Label(candidate.relativePath, systemImage: "folder")

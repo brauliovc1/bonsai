@@ -20,6 +20,7 @@ public struct SimulatorsConfirmation: Identifiable, Sendable {
     }
 
     public var devices: [SimulatorDevice] { report.unavailableDevices }
+    public var estimatedSizeText: String { CleanupPresentation.estimate(devices.map(\.sizeBytes)) }
     public var estimatedBytes: Int64 { report.unavailableDevicesBytes }
 
     /// Why the command can't run (no Xcode), or that there is nothing to delete; nil when it can run.
@@ -34,7 +35,7 @@ public struct SimulatorsConfirmation: Identifiable, Sendable {
     }
 
     public var isAllowed: Bool { blocker == nil }
-    public var title: String { CleanupPresentation.title("Delete", count: devices.count, noun: "simulator", bytes: estimatedBytes) }
+    public var title: String { CleanupPresentation.title("Delete", count: devices.count, noun: "simulator", sizes: devices.map(\.sizeBytes)) }
     public var buttonTitle: String { CleanupPresentation.button("Delete", count: devices.count) }
 
 }

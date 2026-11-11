@@ -49,7 +49,7 @@ struct SimulatorsDeleteSheet: View {
                         }
                     }
                     if !confirmation.devices.isEmpty {
-                        Text("About \(DisplayText.bytes(confirmation.estimatedBytes)) in total.")
+                        Text("Estimated total: \(confirmation.estimatedSizeText).")
                             .foregroundStyle(.secondary)
                     }
                     Text(SimulatorsConfirmation.keepsLine).foregroundStyle(.secondary)

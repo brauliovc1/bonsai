@@ -23,16 +23,19 @@ public struct CleanupItem: Identifiable, Sendable {
     public let name: String
     public let resources: [String]
     public let estimatedBytes: Int64?
+    /// Raw measurements for presentation when one queue item represents several folders or devices.
+    public let sizeEstimates: [Int64?]
     public internal(set) var state: State = .waiting
     public internal(set) var result: CleanupItemResult?
 
-    public init(name: String, resources: [String], estimatedBytes: Int64? = nil) {
+    public init(name: String, resources: [String], estimatedBytes: Int64? = nil, sizeEstimates: [Int64?]? = nil) {
         id = UUID()
         self.name = name
         // Keep the spelling as well as its destination: a symlink changed while waiting must not unlock
         // the originally confirmed path or permit another submission of that same item.
         self.resources = resources.flatMap { [$0, CleanupQueue.canonicalResource($0)] }
         self.estimatedBytes = estimatedBytes
+        self.sizeEstimates = sizeEstimates ?? [estimatedBytes]
     }
 }
 

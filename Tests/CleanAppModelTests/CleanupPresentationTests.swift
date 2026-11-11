@@ -37,7 +37,7 @@ struct CleanupPresentationTests {
         #expect(plan.buttonTitle == "Clear \(count) \(count == 1 ? "record" : "records")")
         let bytes: Int64 = Int64(count) * 1_000_000
         let docker = DockerPruneConfirmation(report: DockerReport(state: .running, daemonOperatingSystem: "Docker Desktop", usage: [DockerUsageRow(type: "Images", total: count, active: 0, sizeBytes: bytes, reclaimableBytes: bytes)]), commandLine: nil)
-        #expect(docker.title == "Clean up Docker (\(DisplayText.bytes(bytes)))?")
+        #expect(docker.title == "Clean up Docker (up to \(DisplayText.bytes(bytes)))?")
         #expect(docker.buttonTitle == "Clean up Docker")
     }
 

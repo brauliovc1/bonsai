@@ -21,7 +21,7 @@ struct ProjectFolderRow: View {
             }.frame(maxWidth: .infinity, alignment: .leading)
             if queued { QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path) }
             else { StatusChip(words: row.statusWords).help(row.statusHelp) }
-            SizeText(bytes: row.sizeBytes, hasUnknownParts: row.project.hasUnknownSizes).frame(width: 85, alignment: .trailing)
+            SizeText(bytes: row.measuredSizeBytes, hasUnknownParts: row.project.hasUnknownSizes).frame(width: 85, alignment: .trailing)
         }
         .contextMenu {
             Button("Show in Finder") { FolderActions.reveal([row.url]) }

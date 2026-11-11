@@ -17,13 +17,15 @@ struct CleanupTaskSheet: View {
                     HStack {
                         Text("\(task.completedCount) of \(task.items.count) \(task.unit) finished")
                         Spacer()
-                        Text("\(DisplayText.bytes(task.measuredFreedBytes)) freed of about \(DisplayText.bytes(task.estimatedBytes))")
+                        Text("\(DisplayText.bytes(task.measuredFreedBytes)) freed · estimate: \(task.estimatedSizeText)")
                     }
                     .font(.callout).foregroundStyle(.secondary).monospacedDigit()
-                    ProgressView(value: Double(min(task.measuredFreedBytes ?? 0, task.estimatedBytes)),
+                    if task.hasCompleteEstimate {
+                        ProgressView(value: Double(min(task.measuredFreedBytes ?? 0, task.estimatedBytes)),
                                  total: Double(max(1, task.estimatedBytes)))
                         .tint(Palette.green)
                         .accessibilityLabel("Measured space freed compared with the estimate")
+                    }
                 }
             }
             if let reason = task.waitingReason, task.isPending {
@@ -63,7 +65,7 @@ struct CleanupTaskSheet: View {
     private var subtitle: String {
         switch task.state {
         case .queued, .waiting:
-            return "Place \(queue.place(of: task) ?? 1) in the queue · \(task.countText) · about \(DisplayText.bytes(task.estimatedBytes))"
+            return "Place \(queue.place(of: task) ?? 1) in the queue · \(task.countText) · estimate: \(task.estimatedSizeText)"
         case .running: return task.stopRequested ? "Finishing the current item; the rest will be left alone." : "You can hide this and keep working."
         default: return task.summary
         }

@@ -36,8 +36,10 @@ public struct DockerPruneConfirmation: Identifiable, Sendable {
     public var isAllowed: Bool { blocker == nil }
     /// The most the prune can free (`docker system df` reclaimable, without volumes): an upper bound.
     public var estimatedBytes: Int64 { report.pruneCeilingBytes }
+    public var hasSizeEstimate: Bool { report.state == .running && report.usageFailure == nil }
+    public var estimatedSizeText: String { hasSizeEstimate ? "up to \(DisplayText.bytes(estimatedBytes))" : "size unknown" }
     public var usage: [DockerUsageLine] { report.usage.map(DockerUsageLine.init) }
-    public var title: String { "Clean up Docker (\(DisplayText.bytes(estimatedBytes)))?" }
+    public var title: String { "Clean up Docker (\(estimatedSizeText))?" }
     public var buttonTitle: String { "Clean up Docker" }
 
 }
