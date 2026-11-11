@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 extension CompareReader {
-    struct WorktreeInfo { let bytes: Int; let lines: Int; let binary: Bool }
+    struct WorktreeInfo { let bytes: Int; let lines: Int; let binary: Bool; let mode: String }
 
     /// Read regular files in bounded chunks. A named pipe or device can never block the review screen.
     func worktreeInfo(_ path: String) throws -> WorktreeInfo {
@@ -10,7 +10,7 @@ extension CompareReader {
         let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         if values.isSymbolicLink == true {
             let data = Data(try FileManager.default.destinationOfSymbolicLink(atPath: file.path).utf8)
-            return WorktreeInfo(bytes: data.count, lines: Self.lineCount(data), binary: false)
+            return WorktreeInfo(bytes: data.count, lines: Self.lineCount(data), binary: false, mode: "120000")
         }
         guard values.isRegularFile == true else { throw CompareError("This file type can't be compared: \(path)") }
         let descriptor = open(file.path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW)
@@ -28,7 +28,8 @@ extension CompareReader {
             count += chunk.count; lines += chunk.filter { $0 == 10 }.count
             binary = binary || chunk.contains(0); last = chunk.last
         }
-        return WorktreeInfo(bytes: count, lines: lines + (last != nil && last != 10 ? 1 : 0), binary: binary)
+        return WorktreeInfo(bytes: count, lines: lines + (last != nil && last != 10 ? 1 : 0), binary: binary,
+            mode: metadata.st_mode & S_IXUSR == 0 ? "100644" : "100755")
     }
 
     func worktreeFile(_ path: String) throws -> URL {

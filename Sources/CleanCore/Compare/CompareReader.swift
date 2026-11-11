@@ -28,7 +28,7 @@ public struct CompareReader: Sendable {
                 let binary = info.binary
                 files.append(CompareFile(path: path, status: .added,
                     additions: binary ? 0 : info.lines, deletions: 0, isBinary: binary,
-                    oldMode: "000000", newMode: "100644", notCommitted: true, oldBytes: 0, newBytes: info.bytes))
+                    oldMode: "000000", newMode: info.mode, notCommitted: true, oldBytes: 0, newBytes: info.bytes))
             }
         }
         let merge = await MergeCheck.check(base: baseSHA, compare: tip, using: git)
