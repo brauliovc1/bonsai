@@ -159,6 +159,24 @@ struct DownloadsTrashModelTests {
         #expect(task.items.first?.result?.detail.contains("changed since you confirmed") == true)
         #expect(try String(contentsOf: file, encoding: .utf8) == "after!")
     }
+
+    @Test func downloadOrderingSupportsSizeAddedDateAndName() async throws {
+        let world = try DownloadsModelWorld()
+        defer { world.fixture.remove() }
+        for (name, size) in [("a.zip", 1), ("m.zip", 50), ("z.zip", 100)] {
+            try Data(repeating: 42, count: size).write(to: world.file(name))
+        }
+        let model = world.model()
+        let old = world.app.environment.now().addingTimeInterval(-60 * 86400)
+        model.dateAdded = { $0.lastPathComponent == "m.zip" ? old : old.addingTimeInterval(86400) }
+        await model.refresh()
+        #expect(model.files.map(\.name) == ["z.zip", "m.zip", "a.zip"])
+        model.sort = .added
+        #expect(model.files.map(\.name) == ["m.zip", "a.zip", "z.zip"])
+        model.sort = .name
+        #expect(model.files.map(\.name) == ["a.zip", "m.zip", "z.zip"])
+        #expect(model.readyBytes == 151)
+    }
 }
 
 @MainActor

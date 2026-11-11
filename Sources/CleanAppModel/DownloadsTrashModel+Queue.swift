@@ -38,6 +38,9 @@ extension DownloadsTrashModel {
                 return CleanupItemResult(.cleaned, freedBytes: result?.entry.freedBytes,
                                          detail: "Finder emptied the Trash", warnings: result?.warnings ?? [])
             } catch {
+                if case TrashEmptyError.contentsChanged = error {
+                    return CleanupItemResult(.refused, detail: error.localizedDescription)
+                }
                 if case TrashEmptyError.automationDenied = error { self.automationDenied = true }
                 return CleanupItemResult(.failed, detail: error.localizedDescription)
             }

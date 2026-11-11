@@ -12,12 +12,13 @@ enum ContentSort: String, CaseIterable, Identifiable {
 struct ContentSortBar: View {
     @Binding var selection: ContentSort
     var showsActivity = false
+    var activityTitle = "Last activity"
     var body: some View {
         HStack(spacing: 8) {
             Text("Sort:").foregroundStyle(.secondary)
             Picker("Sort", selection: $selection) {
                 Text("Size").tag(ContentSort.size)
-                if showsActivity { Text("Last activity").tag(ContentSort.activity) }
+                if showsActivity { Text(activityTitle).tag(ContentSort.activity) }
                 Text("Name").tag(ContentSort.name)
             }
             .labelsHidden().pickerStyle(.menu).fixedSize()

@@ -59,19 +59,25 @@ struct DownloadsTrashView: View {
     }
 
     private var installers: some View {
-        GroupedSection(title: "Old installers and archives") {
+        let files = model.files
+        return GroupedSection(title: "Old installers and archives") {
             HStack {
                 Text("Added at least 30 days ago · top level of Downloads only").font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button("Select all") { model.selectAllReady() }.disabled(model.eligible.isEmpty)
             }
-            if model.files.isEmpty {
+            ContentSortBar(selection: Binding(get: {
+                switch model.sort { case .size: .size; case .added: .activity; case .name: .name }
+            }, set: {
+                switch $0 { case .size: model.sort = .size; case .activity: model.sort = .added; case .name: model.sort = .name }
+            }), showsActivity: true, activityTitle: "Date added")
+            if files.isEmpty {
                 EmptyState(systemImage: "arrow.down.doc", headline: "No old installers or archives",
                            line: "Recent downloads, folders, apps and other files stay where they are.")
                     .frame(maxWidth: .infinity)
             } else {
-                ForEach(model.files) { file in
-                    if file.id != model.files.first?.id { Divider() }
+                ForEach(files) { file in
+                    if file.id != files.first?.id { Divider() }
                     row(file)
                 }
             }

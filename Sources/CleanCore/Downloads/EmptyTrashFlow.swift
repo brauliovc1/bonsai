@@ -7,11 +7,13 @@ public protocol TrashEmptier: Sendable {
 
 public enum TrashEmptyError: Error, LocalizedError, Sendable {
     case automationDenied
+    case contentsChanged
     case failed(String)
     public static let automationMessage = "Allow Bonsai to control Finder in System Settings › Privacy & Security › Automation"
     public var errorDescription: String? {
         switch self {
         case .automationDenied: Self.automationMessage
+        case .contentsChanged: "The Trash changed since you confirmed. Review its contents and try again."
         case .failed(let message): message
         }
     }
@@ -43,7 +45,7 @@ public struct EmptyTrashFlow: Sendable {
         if let expected { confirmedContents = expected }
         else { confirmedContents = await TrashFingerprint.capture(home: home) }
         guard await TrashFingerprint.capture(home: home) == confirmedContents else {
-            throw DownloadsError("The Trash changed since you confirmed. Review its contents and try again.")
+            throw TrashEmptyError.contentsChanged
         }
         let before = freeSpace.availableBytes()
         try await emptier.empty()

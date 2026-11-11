@@ -5,6 +5,7 @@ import Observation
 @MainActor
 @Observable
 public final class DownloadsTrashModel {
+    public enum Sort: Sendable { case size, added, name }
     public let app: AppModel
     @ObservationIgnored let runner: CommandRunner
     @ObservationIgnored let trashOperation: TrashOperation
@@ -14,6 +15,7 @@ public final class DownloadsTrashModel {
     public internal(set) var listing: DownloadsListing?
     public private(set) var isScanning = false
     public var selection: Set<String> = []
+    public var sort: Sort = .size
     public var moveConfirmation: DownloadsConfirmation?
     public var isShowingEmptySheet = false
     public private(set) var isPreparingEmptyTrash = false
@@ -28,7 +30,14 @@ public final class DownloadsTrashModel {
         self.dateAdded = dateAdded
     }
 
-    public var files: [DownloadFile] { listing?.downloads.files ?? [] }
+    public var files: [DownloadFile] {
+        (listing?.downloads.files ?? []).sorted { a, b in
+            if sort == .size, a.bytes != b.bytes { return a.bytes > b.bytes }
+            if sort == .added, a.addedAt != b.addedAt { return a.addedAt < b.addedAt }
+            let order = a.name.localizedStandardCompare(b.name)
+            return order == .orderedSame ? a.path < b.path : order == .orderedAscending
+        }
+    }
     public var eligible: [DownloadFile] { listing?.downloads.eligible ?? [] }
     public var readyBytes: Int64 { listing?.downloads.bytes ?? 0 }
     public var selected: [DownloadFile] {
