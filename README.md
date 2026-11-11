@@ -109,6 +109,7 @@ bonsai caches               # package-manager caches
 
 | Command | What it does |
 |---|---|
+| `bonsai compare main HEAD` | Review changes since the merge base, ahead/behind counts and merge conflicts |
 | `bonsai scan` | List every worktree with its repo, branch, size, idle days and status |
 | `bonsai remove` | Remove worktrees the safe way (branches are kept) |
 | `bonsai restore` | Put a removed worktree back from its kept branch |
@@ -155,10 +156,17 @@ make install
 - Bonsai was called clean-claude until November 2026: `make install` keeps a `clean-claude` command that runs `bonsai`, and Bonsai moves its old settings folder for you.
 </details>
 
+## Review branches
+
+Open **Compare** in the Review sidebar group to inspect a branch before opening a pull request. Pick a base and branch, or a worktree to include unsaved and new files. Files show word and syntax highlights, generated files stay collapsed, and the Commits tab reviews one commit at a time. Compare never fetches or changes your repo.
+
+```sh
+bonsai compare --repo /path/to/repo main feature --json
+```
+
 ## What's next
 
 - Cleanups that run in the background while you keep working
-- Compare any branch with main before you open a pull request
 - A map of your branches: where each was cut from, and when it was merged
 
 ## License

@@ -10,11 +10,13 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     case derivedData
     case recentlyRemoved
     case claudeUsage
+    case compare
 
     /// The sidebar's two groups.
     public enum Group: String, CaseIterable, Identifiable, Sendable {
         case cleanUp
         case historyAndInfo
+        case review
 
         public var id: String { rawValue }
 
@@ -22,6 +24,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
             switch self {
             case .cleanUp: "Clean up"
             case .historyAndInfo: "History and info"
+            case .review: "Review"
             }
         }
 
@@ -35,6 +38,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .overview, .worktrees, .projects, .caches, .dockerSimulators, .derivedData: .cleanUp
         case .recentlyRemoved, .claudeUsage: .historyAndInfo
+        case .compare: .review
         }
     }
 
@@ -48,6 +52,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .derivedData: "Xcode DerivedData"
         case .recentlyRemoved: "Recently removed"
         case .claudeUsage: "Claude usage"
+        case .compare: "Compare"
         }
     }
 
@@ -62,6 +67,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .derivedData: "hammer"
         case .recentlyRemoved: "clock.arrow.circlepath"
         case .claudeUsage: "sparkles"
+        case .compare: "arrow.left.arrow.right"
         }
     }
 
@@ -74,7 +80,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .caches: [.toolCaches]
         case .dockerSimulators: [.docker, .simulators]
         case .derivedData: [.derivedData]
-        case .overview, .recentlyRemoved, .claudeUsage: []
+        case .overview, .recentlyRemoved, .claudeUsage, .compare: []
         }
     }
 

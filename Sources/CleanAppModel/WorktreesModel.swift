@@ -13,6 +13,7 @@ import Observation
 @Observable
 public final class WorktreesModel {
     public let app: AppModel
+    public var onCompare: (@MainActor (String, CompareSelection) -> Void)?
 
     /// "Sort by" (`WorktreesModel+Sort`): largest first when the screen first opens; kept while the app runs.
     public var sortKey: SortKey = .size

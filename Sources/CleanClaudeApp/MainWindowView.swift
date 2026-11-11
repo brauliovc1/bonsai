@@ -27,6 +27,7 @@ struct MainWindowView: View {
     @ViewBuilder
     private var detail: some View {
         switch navigation.section ?? .overview {
+        case .compare: CompareView(model: models.compare, navigation: models.navigation)
         case .overview: OverviewView(model: models.overview, settings: models.settings)
         case .worktrees: WorktreesView(model: models.worktrees)
         case .projects: ProjectsView(model: models.projects, navigation: models.navigation)

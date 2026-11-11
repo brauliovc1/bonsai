@@ -8,6 +8,7 @@ public final class ScreenModels {
     public let app: AppModel
     public let navigation: NavigationModel
     public let worktrees: WorktreesModel
+    public let compare: CompareModel
     public let projects: ProjectsModel
     public let removals: RemovalsModel
     public let derivedData: DerivedDataModel
@@ -37,6 +38,8 @@ public final class ScreenModels {
         self.app = app
         self.navigation = navigation
         worktrees = WorktreesModel(app: app)
+        compare = CompareModel(app: app)
+        worktrees.onCompare = { repo, selection in navigation.openCompare(repo: repo, compare: selection) }
         projects = ProjectsModel(app: app)
         removals = RemovalsModel(app: app)
         derivedData = DerivedDataModel(app: app, runner: runner)

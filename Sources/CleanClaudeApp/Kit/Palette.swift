@@ -1,5 +1,6 @@
 import AppKit
 import CleanAppModel
+import CleanCore
 import SwiftUI
 
 /// The app's colors (PLAN §8.1), each with a light and a dark value, so text stays readable on both. Color only
@@ -37,6 +38,21 @@ enum Palette {
         case .low: orange
         case .veryLow: red
         case .normal, .unknown: .accentColor
+        }
+    }
+
+    static func diffTint(added: Bool, strong: Bool = false) -> NSColor {
+        nsColor(added ? .green : .red, alpha: strong ? 0.28 : 0.09, darkAlpha: strong ? 0.35 : 0.12)
+    }
+
+    static func syntax(_ kind: SyntaxHighlighter.Kind) -> NSColor {
+        switch kind {
+        case .comment: nsColor(.grey, alpha: 1, darkAlpha: 1)
+        case .string: nsColor(.green, alpha: 1, darkAlpha: 1)
+        case .number: nsColor(.orange, alpha: 1, darkAlpha: 1)
+        case .keyword: nsColor(.blue, alpha: 1, darkAlpha: 1)
+        case .type: .systemPurple
+        case .plain: .labelColor
         }
     }
 
