@@ -32,6 +32,7 @@ struct DownloadsTrashModelTests {
         let row = try #require(history.rows.first)
         #expect(history.putBackUnavailableReason(row) == nil)
         let restore = try #require(history.queuePutBack(row.id))
+        #expect(!model.canEmptyTrash, "Put back reserves a file inside the Trash until its task finishes.")
         #expect(await eventually { !world.app.cleanupQueue.hasPending })
         #expect(restore.cleanedCount == 1)
         #expect(FileManager.default.fileExists(atPath: file.path))

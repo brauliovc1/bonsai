@@ -53,7 +53,11 @@ public final class DownloadsTrashModel {
         }
         return "Permanently delete \(count) \(count == 1 ? "item" : "items") (\(DisplayText.bytes(bytes)))? This can't be undone."
     }
-    public var canEmptyTrash: Bool { listing != nil && trash?.count != 0 && !isPreparingEmptyTrash && !app.isQuitting && app.cleanupQueue.task(for: "trash") == nil }
+    public var canEmptyTrash: Bool {
+        listing != nil && trash?.count != 0 && !isPreparingEmptyTrash && !app.isQuitting
+            && app.cleanupQueue.task(for: "trash") == nil
+            && app.cleanupQueue.task(for: app.environment.homeDirectory.appending(path: ".Trash").path) == nil
+    }
 
     public func setSelected(_ file: DownloadFile, _ value: Bool) {
         if value, eligible.contains(file), app.cleanupQueue.task(for: file.path) == nil { selection.insert(file.id) }
