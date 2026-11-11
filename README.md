@@ -116,6 +116,8 @@ bonsai caches               # package-manager caches
 | Command | What it does |
 |---|---|
 | `bonsai compare main HEAD` | Review changes since the merge base, ahead/behind counts and merge conflicts |
+| `bonsai branches` | Map branch distances and origins; add `--remotes` to include remote branches |
+| `bonsai branches show <branch>` | Read a branch's fork point, integration history, family and upstream |
 | `bonsai scan` | List every worktree with its repo, branch, size, idle days and status |
 | `bonsai remove` | Remove worktrees the safe way (branches are kept) |
 | `bonsai restore` | Put a removed worktree back from its kept branch |
@@ -168,14 +170,13 @@ make install
 
 Open **Compare** in the Review sidebar group to inspect a branch before opening a pull request. Pick a base and branch, or a worktree to include unsaved and new files. Files show word and syntax highlights, generated files stay collapsed, and the Commits tab reviews one commit at a time. Compare never fetches or changes your repo. Branch reviews include committed submodule version changes. Worktree reviews leave out submodule changes; pick the branch to review its committed versions. Files inside submodules are not compared.
 
+Open the branch map for a shared-scale distance list or a timeline of forks and stacked branches. Pick a branch to see where it came from, when a merge brought it into the base, its children, upstream status and worktree. Creation records from this Mac are labeled as facts; an inferred parent says “probably” and explains the evidence. Expired reflogs, unrelated history and cycles are shown explicitly. Tracking information can be unavailable in repos with included config files.
+
 ```sh
 bonsai compare --repo /path/to/repo main feature --json
+bonsai branches --repo /path/to/repo --base main --json
+bonsai branches show feature --repo /path/to/repo --base main --json
 ```
-
-## What's next
-
-
-- A map of your branches: where each was cut from, and when it was merged
 
 ## License
 
