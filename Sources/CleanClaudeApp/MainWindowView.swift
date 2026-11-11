@@ -56,7 +56,7 @@ struct MainWindowView: View {
         case .compare: CompareView(model: models.compare, navigation: models.navigation, worktrees: models.worktrees)
         case .overview:
             OverviewView(model: models.overview, settings: models.settings, quickClean: models.quickClean) {
-                models.navigation.show(.compare)
+                models.navigation.openBranchMap()
                 Task { await models.compare.openBranchMap() }
             }
         case .worktrees: WorktreesView(model: models.worktrees)

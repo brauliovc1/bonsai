@@ -44,6 +44,7 @@ struct QuickCleanModelTests {
         #expect(world.app.cleanupQueue.tasks.count == 1 && task.unit == "steps")
         await world.app.cleanupQueue.waitUntilEmpty()
         #expect(!world.exists(world.old))
+        #expect(world.quick.confirm() == nil && world.app.cleanupQueue.tasks.count == 1)
         #expect(world.exists(world.main) && world.exists(world.main.appending(path: "source.txt")))
         #expect(!world.exists(world.main.appending(path: "node_modules")))
         #expect(world.exists(world.recent.appending(path: "node_modules")))
@@ -64,7 +65,7 @@ struct QuickCleanModelTests {
     @Test func finalWorktreeAdmissionCatchesActivityAfterSlowInspection() async throws {
         let world = try await QuickCleanTestWorld.make()
         defer { world.remove() }
-        let source = world.old.appending(path: "source.txt"), now = world.now
+        let source = world.old.appending(path: "source.txt"), now = world.now.addingTimeInterval(-7 * 86400 - 3600)
         world.quick.configureRemover = { remover in
             remover.afterInspection = { try? FileManager.default.setAttributes([.modificationDate: now], ofItemAtPath: source.path) }
         }
@@ -78,7 +79,7 @@ struct QuickCleanModelTests {
     @Test func finalProjectAdmissionCatchesActivityAfterCandidateRecheck() async throws {
         let world = try await QuickCleanTestWorld.make()
         defer { world.remove() }
-        let source = world.main.appending(path: "source.txt"), now = world.now
+        let source = world.main.appending(path: "source.txt"), now = world.now.addingTimeInterval(-7 * 86400 - 3600)
         world.quick.configureLightCleaner = { cleaner in
             cleaner.afterRecheck = { _ in try? FileManager.default.setAttributes([.modificationDate: now], ofItemAtPath: source.path) }
         }
@@ -190,6 +191,25 @@ struct QuickCleanModelTests {
         preparing.cancel(); gate.open(); await preparing.value
         #expect(world.quick.preview == nil && !world.quick.isPreparing && !world.quick.canConfirm)
         #expect(world.app.cleanupQueue.tasks.isEmpty)
+    }
+
+
+    @Test(arguments: [false, true])
+    func runtimePolicyRequiresSevenDaysEvenWhenClockMovesBackAndActivityIsUnchanged(_ project: Bool) async throws {
+        let world = try await QuickCleanTestWorld.make()
+        defer { world.remove() }
+        await world.app.refresh()
+        let worktree = try #require(world.app.scan?.worktrees.first { CanonicalPath.same($0.url, world.old) })
+        let environment = world.app.environment
+        let idle = await IdleClock(git: world.fixture.git, claudeConfigDirectory: environment.claudeConfigDirectory,
+                                   now: environment.now).report(for: worktree)
+        #expect(idle.idleDays == 8)
+        var rolledBack = environment
+        let earlier = world.now.addingTimeInterval(-3 * 86400)
+        rolledBack.now = { earlier }
+        let policy = QuickCleanRepositoryPolicy(git: world.fixture.git, environment: rolledBack, worktree: worktree,
+                                               idle: idle, known: world.app.scan?.worktrees ?? [])
+        #expect(await policy.reason(project: project) != nil)
     }
 
 }

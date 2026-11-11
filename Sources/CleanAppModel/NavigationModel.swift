@@ -28,4 +28,10 @@ public final class NavigationModel {
     public func show(_ section: SidebarSection) {
         self.section = section
     }
+
+    /// Direct branch viewing keeps the current Compare selection instead of replaying an old worktree request.
+    public func openBranchMap() {
+        compareRequest = nil
+        section = .compare
+    }
 }

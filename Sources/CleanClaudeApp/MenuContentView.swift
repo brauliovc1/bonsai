@@ -64,7 +64,7 @@ struct MenuContentView: View {
                     .keyboardShortcut("o")
                 if let compare {
                     MenuButton(title: "View branches", systemImage: "point.3.connected.trianglepath.dotted") {
-                        navigation.show(.compare)
+                        navigation.openBranchMap()
                         openMainWindow()
                         Task { await compare.openBranchMap() }
                     }

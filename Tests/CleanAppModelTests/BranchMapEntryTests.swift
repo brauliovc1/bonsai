@@ -7,6 +7,17 @@ import Testing
 @Suite("Direct branch map entry", .serialized)
 @MainActor
 struct BranchMapEntryTests {
+    @Test func directEntryDoesNotReplayAnEarlierWorktreeCompareRequest() {
+        let navigation = NavigationModel()
+        navigation.openCompare(repo: "/earlier-repo", base: "main", compare: .worktree("/earlier-worktree"))
+        navigation.show(.overview)
+
+        navigation.openBranchMap()
+
+        #expect(navigation.section == .compare)
+        #expect(navigation.compareRequest == nil)
+    }
+
     @Test(arguments: [false, true])
     func opensTheVisualTimelineOnFirstAndLaterVisits(alreadyConfigured: Bool) async throws {
         let world = try await BranchHistoryFixture.make()

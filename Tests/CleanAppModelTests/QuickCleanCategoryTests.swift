@@ -100,4 +100,22 @@ struct QuickCleanCategoryTests {
         #expect(task.items.first { $0.resources.contains("cache:npm") }?.result?.state == .refused)
     }
 
+
+    @Test func onePhysicalTargetAndItsDescendantsAppearOnlyOnceAcrossGroups() async throws {
+        let world = try await QuickCleanTestWorld.make()
+        defer { world.remove() }
+        let alias = world.app.environment.homeDirectory.appending(path: "worktree-alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: world.old)
+        let parent = QuickCleanOperation(kind: .worktrees,
+            items: [QuickCleanItem(id: "parent", title: "Worktree", detail: "", path: world.old.path)], work: queueWork(world.old.path))
+        let child = QuickCleanOperation(kind: .projects,
+            items: [QuickCleanItem(id: "child", title: "Dependencies", detail: "", path: alias.appending(path: "node_modules").path)],
+            work: queueWork(alias.appending(path: "node_modules").path))
+        let plan = world.quick.assemble([parent, child], warnings: [])
+        #expect(plan.operations.count == 1 && plan.preview.itemCount == 1)
+        #expect(plan.preview.groups.first { $0.id == .projects }?.items.isEmpty == true)
+        #expect(plan.preview.warnings.contains { $0.contains("overlaps") })
+        #expect(world.app.cleanupQueue.tasks.isEmpty)
+    }
+
 }
