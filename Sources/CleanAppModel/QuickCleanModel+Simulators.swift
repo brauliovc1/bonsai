@@ -4,9 +4,12 @@ import Foundation
 extension QuickCleanModel {
     func protectedSimulatorDelete(_ devices: [SimulatorDevice], estimatedBytes: Int64, paths: [String],
                                   fence: QuickCleanSourceFence) async -> CleanupItemResult {
+        let validated = await fence.validate(paths: paths)
+        if let reason = validated.problem { return CleanupItemResult(.refused, detail: reason) }
+        guard let ticket = validated.ticket else { return CleanupItemResult(.refused, detail: "Source locations could not be verified.") }
         let original = dockerSimulators.runner
         let runner = CommandRunner { executable, arguments, timeout in
-            if arguments == ["simctl", "delete", "unavailable"], let reason = await fence.freshReason(paths: paths) {
+            if arguments == ["simctl", "delete", "unavailable"], let reason = ticket.problemNow() {
                 throw SourceRefusal(reason: reason)
             }
             return try await original.run(executable, arguments, timeout: timeout)

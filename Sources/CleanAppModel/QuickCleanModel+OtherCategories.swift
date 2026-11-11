@@ -24,8 +24,9 @@ extension QuickCleanModel {
             let work = CleanupWork(CleanupItem(name: preview.title, resources: ["cache:" + finding.id] + paths,
                                               estimatedBytes: finding.bytes)) {
                 let protectedProcesses = ProcessSource {
+                    let validated = await fence.validate(paths: paths)
                     var list = await originalProcesses.capture()
-                    if let reason = await fence.freshReason(paths: paths) {
+                    if let reason = validated.problemNow() {
                         list.failure = [list.failure, reason].compactMap { $0 }.joined(separator: " ")
                     }
                     return list
@@ -40,7 +41,8 @@ extension QuickCleanModel {
                 let preview = QuickCleanItem(id: "derived:" + orphan.folder, title: orphan.name,
                     detail: "Orphaned build data for " + orphan.workspacePath, path: orphan.folder, estimatedBytes: orphan.bytes)
                 let work = CleanupWork(CleanupItem(name: orphan.name, resources: [orphan.folder], estimatedBytes: orphan.bytes)) {
-                    if let reason = await fence.freshReason(paths: [orphan.folder]) { return CleanupItemResult(.refused, detail: reason) }
+                    let validated = await fence.validate(paths: [orphan.folder])
+                    if let reason = validated.problemNow() { return CleanupItemResult(.refused, detail: reason) }
                     let cleaned = await DerivedDataCleaner(environment: environment).delete([orphan])
                     if cleaned.deleted.contains(orphan) {
                         return CleanupItemResult(.cleaned, freedBytes: cleaned.freedBytes, warnings: cleaned.warnings)

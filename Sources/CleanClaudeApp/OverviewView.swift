@@ -29,8 +29,11 @@ struct OverviewView: View {
                     Button(action: openBranches) {
                         Label("View branches", systemImage: "point.3.connected.trianglepath.dotted")
                     }
+                    .labelStyle(.titleAndIcon)
                     .disabled(model.app.scan?.worktrees.isEmpty != false)
-                    .help("Open the branch timeline, distances and history")
+                    .help(model.app.scan?.worktrees.isEmpty != false
+                        ? "Scan a repository first to view its branches."
+                        : "Open the branch timeline, distances and history")
                 }
                 Button { Task { await model.refresh() } } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")

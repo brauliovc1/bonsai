@@ -49,6 +49,8 @@ struct QuickCleanModelTests {
         #expect(!world.exists(world.main.appending(path: "node_modules")))
         #expect(world.exists(world.recent.appending(path: "node_modules")))
         #expect(try await world.fixture.run(["rev-parse", "refs/heads/old-branch"], in: world.main).isEmpty == false)
+        let removals = try RemovalLog(environment: world.app.environment).entries().filter { $0.action == .worktreeRemove }
+        #expect(removals.count == 1 && removals.allSatisfy { $0.mode == .manual })
     }
 
     @Test func activityAfterPreviewRefusesWorktreeEvenWithUnchangedContents() async throws {

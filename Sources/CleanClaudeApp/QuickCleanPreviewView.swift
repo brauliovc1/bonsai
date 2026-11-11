@@ -44,15 +44,18 @@ struct QuickCleanPreviewView: View {
                                 get: { expanded.contains(group.id) },
                                 set: { if $0 { expanded.insert(group.id) } else { expanded.remove(group.id) } }
                             ))
-                            if group.id != preview.groups.last?.id { Divider() }
                         }
                     }
-                    Text("Freed space is measured after cleaning and can be lower than these estimates. Existing Trash and Time Machine snapshots are left alone.")
+                    Text(hasCleanupItems ? "Freed space is measured after cleaning and can be lower than these estimates. Existing Trash and Time Machine snapshots are left alone." : "Existing Trash and Time Machine snapshots are left alone.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
+            if !cleanupNotice.isEmpty {
+                Text(cleanupNotice).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !canConfirm, preview.itemCount > 0, let disabledReason {
                 Label(disabledReason, systemImage: "info.circle")
                     .font(.callout).foregroundStyle(.secondary)
@@ -73,6 +76,18 @@ struct QuickCleanPreviewView: View {
                 }
             }
         }.padding(24)
+    }
+
+    private var hasCleanupItems: Bool { preview.groups.contains { $0.id != .downloads && !$0.items.isEmpty } }
+
+    private var cleanupNotice: String {
+        let hasCleanup = hasCleanupItems
+        let hasDownloads = preview.groups.contains { $0.id == .downloads && !$0.items.isEmpty }
+        if !hasCleanup {
+            return hasDownloads ? "Only the listed downloads move to Trash. They can be put back while they remain there; existing Trash is not emptied." : ""
+        }
+        let permanent = "Listed cache, dependency, build, Docker and simulator data is deleted permanently. Worktree branches are kept; cleaning project folders keeps source files."
+        return permanent + (hasDownloads ? " Listed downloads move to Trash." : "")
     }
 
     private var summary: some View {

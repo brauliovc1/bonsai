@@ -13,16 +13,16 @@ struct QuickCleanGroupView: View {
             } else {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(alignment: .leading, spacing: 12) {
+                        if !group.detail.isEmpty {
+                            Text(group.detail).font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         ForEach(group.items) { item in
                             itemRow(item)
                             if item.id != group.items.last?.id { Divider() }
                         }
                     }.padding(.top, 8).padding(.leading, 4)
                 } label: { header }
-            }
-            if !group.detail.isEmpty {
-                Text(group.detail).font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.leading, 18)
             }
             if group.id == .docker && !group.items.isEmpty {
                 dockerScope.padding(.leading, 18)
@@ -54,14 +54,21 @@ struct QuickCleanGroupView: View {
 
     private var countText: String {
         if group.items.isEmpty { return "0 eligible" }
-        if group.id == .docker { return "1 command" }
-        return "\(group.items.count) \(group.items.count == 1 ? "item" : "items")"
+        let count = group.items.count
+        switch group.id {
+        case .worktrees: return "Remove \(count)"
+        case .projects, .derivedData: return "Delete \(count) \(count == 1 ? "folder" : "folders")"
+        case .toolCaches: return "Clean \(count)"
+        case .docker: return "Run 1 command"
+        case .simulators: return "Delete \(count) \(count == 1 ? "device" : "devices")"
+        case .downloads: return "Move \(count) to Trash"
+        }
     }
 
     private var dockerScope: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("docker system prune -f").font(.system(.callout, design: .monospaced))
-            Text("One cleanup command: Docker chooses unused data when it runs. Volumes, tagged images and running containers are kept.")
+            Text("docker system prune -f").font(.system(.caption, design: .monospaced))
+            Text("Docker chooses unused data when it runs. Volumes, tagged images and running containers stay; space may return later.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

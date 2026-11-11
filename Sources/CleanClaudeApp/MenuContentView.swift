@@ -69,6 +69,9 @@ struct MenuContentView: View {
                         Task { await compare.openBranchMap() }
                     }
                     .disabled(app.scan?.worktrees.isEmpty != false)
+                    .help(app.scan?.worktrees.isEmpty != false
+                        ? "Scan a repository first to view its branches."
+                        : "Open the branch timeline, distances and history")
                 }
                 MenuSettingsRow()
                 MenuButton(title: "Quit \(AppInfo.name)", systemImage: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }

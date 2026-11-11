@@ -10,7 +10,7 @@ struct QuickCleanStatusView: View {
         VStack(alignment: .leading, spacing: 18) {
             SheetHeading(title: "Quick clean", subtitle: "Review eligible items before anything is cleaned.")
             if isPreparing {
-                ProgressView("Checking worktrees, dependencies, caches and old downloads…")
+                ProgressView("Checking all cleanup categories…")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Worktrees and project dependencies must be idle for at least 7 days. Each category keeps its usual safety checks.")
                     .font(.callout).foregroundStyle(.secondary)

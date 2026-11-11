@@ -38,12 +38,14 @@ public struct Remover: Sendable {
     /// `stillAllowed`: asked last, after the re-check and the process index, immediately before git runs
     /// (auto mode re-reads its rules from disk here). A stop throws `RemovalError.stopped` and nothing is
     /// touched or logged.
+    /// `logMode` changes only audit origin; admission still uses `mode` and the same removal command.
     public func remove(
         _ worktree: Worktree,
         mode: RemovalMode,
         estimatedBytes: Int64?,
         knownWorktrees: [Worktree] = [],
         expectation: RemovalExpectation? = nil,
+        logMode: RemovalMode? = nil,
         stillAllowed: (@Sendable () async -> RemovalStop?)? = nil
     ) async throws -> RemovalResult {
         let (fresh, siblings) = try await reread(worktree, mode: mode)
@@ -73,6 +75,7 @@ public struct Remover: Sendable {
             safety: safety,
             notes: Self.logNotes(safety),
             estimatedBytes: estimatedBytes,
+            logMode: logMode,
             stillAllowed: stillAllowed
         )
     }
@@ -86,6 +89,7 @@ public struct Remover: Sendable {
         safety: SafetyReport,
         notes: [String],
         estimatedBytes: Int64?,
+        logMode: RemovalMode? = nil,
         stillAllowed: (@Sendable () async -> RemovalStop?)?
     ) async throws -> RemovalResult {
         let volumeFolder = fresh.url.deletingLastPathComponent()
@@ -120,7 +124,7 @@ public struct Remover: Sendable {
 
         var entry = RemovalLogEntry(
             date: now(),
-            mode: mode,
+            mode: logMode ?? mode,
             action: action,
             repoPath: fresh.repoPath,
             path: fresh.path,

@@ -14,7 +14,7 @@ extension QuickCleanModel {
             configure(&remover)
             do {
                 let result = try await remover.remove(worktree, mode: .auto, estimatedBytes: assessment.estimatedBytes,
-                    knownWorktrees: known, expectation: RemovalExpectation(assessment: assessment), stillAllowed: {
+                    knownWorktrees: known, expectation: RemovalExpectation(assessment: assessment), logMode: .manual, stillAllowed: {
                         guard await policy.reason(project: false) == nil else { return .rulesChanged }
                         guard let latest = try? SettingsStore(environment: environment).load(),
                               worktree.kind != .claude || latest.includeClaudeInAuto else { return .rulesChanged }
