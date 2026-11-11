@@ -82,11 +82,11 @@ struct RemoveAnywaySheet: View {
                         .disabled(model.isRemovingAnyway)
                 }
             Button(RemoveAnywayText.buttonTitle, role: .destructive) {
-                Task { await model.confirmRemoveAnyway(confirmation, understood: model.removeAnywayUnderstood) }
+                model.queueRemoveAnyway(confirmation, understood: model.removeAnywayUnderstood)
             }
             .buttonStyle(.borderedProminent)
             .tint(Palette.red)
-            .disabled(!model.removeAnywayUnderstood || model.isRemovingAnyway || model.app.isCleaningUp)
+            .disabled(!model.removeAnywayUnderstood || model.isRemovingAnyway)
             .help(model.removeAnywayUnderstood ? "Delete it and everything listed, for good" : "Tick the box first")
         }
     }

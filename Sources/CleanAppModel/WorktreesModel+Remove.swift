@@ -7,7 +7,7 @@ extension WorktreesModel {
     /// path now) and a fresh assessment. Allowed items carry what they were confirmed with; blocked items are
     /// listed, never removed.
     public func prepareRemoval(_ ids: Set<WorktreeRow.ID>) async -> RemovalConfirmation {
-        let chosen = rows.filter { ids.contains($0.id) }
+        let chosen = rows.filter { ids.contains($0.id) && app.cleanupQueue.task(for: $0.path) == nil }
         guard !chosen.isEmpty else { return RemovalConfirmation(items: []) }
         guard let git = app.git else {
             return RemovalConfirmation(items: chosen.map { Self.blocked($0, because: "git not found") })
@@ -83,7 +83,7 @@ extension WorktreesModel {
         return report.outcomes
     }
 
-    private func remove(_ items: [RemovalConfirmation.Item]) async -> RemovalReport {
+    func remove(_ items: [RemovalConfirmation.Item]) async -> RemovalReport {
         guard let git = app.git else {
             let outcomes = items.map { RemovalOutcome(item: $0, result: nil, error: "git not found") }
             return RemovalReport(outcomes: outcomes, measuredFreedBytes: nil)

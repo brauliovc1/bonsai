@@ -23,6 +23,8 @@ struct MenuContentView: View {
                 openMainWindow()
             }
             .padding(.top, 14)
+            CleanupActivityView(queue: app.cleanupQueue, compact: true)
+                .padding(.top, app.cleanupQueue.hasPending ? 10 : 0)
             statusLine
                 .padding(.top, 8)
                 .padding(.horizontal, 2)
@@ -53,6 +55,9 @@ struct MenuContentView: View {
         .padding(12)
         .frame(width: 290)
         .task { await overview.loadIfNeeded() }
+        .onChange(of: app.cleanupQueue.selectedTask?.id) { _, id in
+            if id != nil { openMainWindow() }
+        }
     }
 
     /// "Scanned 51 minutes ago · Auto mode: off", or what the running scan or auto run is doing.

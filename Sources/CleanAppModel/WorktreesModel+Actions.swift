@@ -7,17 +7,17 @@ import Foundation
 extension WorktreesModel {
     /// The shown, selected worktrees a removal by hand accepts.
     public var removableSelection: [WorktreeRow] {
-        selectedRows.filter(\.canRemove)
+        selectedRows.filter { $0.canRemove && app.cleanupQueue.task(for: $0.path) == nil }
     }
 
     public var canRemoveSelection: Bool {
-        !removableSelection.isEmpty && !app.isCleaningUp && !isRemoving
+        !removableSelection.isEmpty && !app.isQuitting
     }
 
     /// Remove…'s tooltip when it is disabled; nil when it is enabled.
     public var removeDisabledReason: String? {
         if canRemoveSelection { return nil }
-        if app.isCleaningUp || isRemoving { return app.busySentence }
+        if selectedRows.contains(where: { app.cleanupQueue.task(for: $0.path) != nil }) { return CleanupQueue.lockedHelp }
         if selectedRows.isEmpty {
             return selectedRepos.isEmpty ? "Select the worktrees to remove." : WorktreeStatusText.repoFolderSentence
         }
@@ -36,20 +36,20 @@ extension WorktreesModel {
 
     /// "Remove all N" on a group header: the confirmation for the group's shown worktrees that can be removed.
     public func removeAll(in group: WorktreeGroup) async {
-        let ids = Set(group.removableRows.map(\.id))
-        guard !ids.isEmpty, !app.isCleaningUp else { return }
+        let ids = Set(group.removableRows.filter { app.cleanupQueue.task(for: $0.path) == nil }.map(\.id))
+        guard !ids.isEmpty, !app.isQuitting else { return }
         await beginRemoval(ids)
     }
 
     /// "Clean dependencies…" on a group header: the existing clean sheet for the repo folder.
     public func cleanDependencies(of group: WorktreeGroup) async {
-        guard let main = group.main, !app.isCleaningUp else { return }
+        guard let main = group.main, app.cleanupQueue.task(for: main.path) == nil else { return }
         await beginLightClean([main.id])
     }
 
     /// "Clean dependencies of this worktree…" in the More menu: the selected worktrees and repo folders.
     public var canCleanDependencies: Bool {
-        !(selectedRows.isEmpty && selectedRepos.isEmpty) && !app.isCleaningUp
+        (selectedRows + selectedRepos).contains { app.cleanupQueue.task(for: $0.path) == nil } && !app.isQuitting
     }
 
     /// The selection bar: "3 selected · 1.2 GB can be freed"; nil with nothing selected.

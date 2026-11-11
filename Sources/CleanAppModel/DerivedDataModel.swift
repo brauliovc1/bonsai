@@ -47,12 +47,12 @@ public final class DerivedDataModel {
     }
 
     public var selectableIDs: Set<DerivedDataRow.ID> {
-        Set(allRows.filter(\.isSelectable).map(\.id))
+        Set(allRows.filter { $0.isSelectable && app.cleanupQueue.task(for: $0.id) == nil }.map(\.id))
     }
 
     public var selectedRows: [DerivedDataRow] { rows.filter { selection.contains($0.id) } }
     /// The selected rows "Delete orphaned…" is about: the orphaned ones.
-    public var selectedOrphans: [DerivedDataRow] { selectedRows.filter(\.isSelectable) }
+    public var selectedOrphans: [DerivedDataRow] { selectedRows.filter { $0.isSelectable && app.cleanupQueue.task(for: $0.id) == nil } }
 
     public var orphanRows: [DerivedDataRow] { allRows.filter(\.isSelectable) }
     public var orphanBytes: Int64 { orphanRows.compactMap(\.bytes).reduce(0, +) }
@@ -66,7 +66,7 @@ public final class DerivedDataModel {
     /// Xcode has no DerivedData folder yet (or it is gone).
     public var rootMissing: Bool { report.map { !$0.rootExists && $0.refusal == nil } ?? false }
     /// "Delete orphaned…" is offered when the root is accepted and an orphaned row is selected.
-    public var canDelete: Bool { refusal == nil && !selectedOrphans.isEmpty && !app.isCleaningUp }
+    public var canDelete: Bool { refusal == nil && !selectedOrphans.isEmpty && !app.isQuitting }
 
     // MARK: - Scanning
 

@@ -7,7 +7,7 @@ extension WorktreesModel {
     /// now. The sheet lists every entry before anything is pruned.
     public func preparePrune() async -> PrunePlan {
         var repos: [String] = []
-        for row in missingFolderRows where !repos.contains(row.worktree.repoPath) {
+        for row in missingFolderRows where !repos.contains(row.worktree.repoPath) && app.cleanupQueue.task(for: "prune:" + row.worktree.repoPath) == nil {
             repos.append(row.worktree.repoPath)
         }
         guard let git = app.git else {
@@ -76,7 +76,7 @@ extension WorktreesModel {
         return outcomes
     }
 
-    private static func prune(_ repo: PrunePlan.Repo, with pruner: Pruner) async -> PruneOutcome {
+    static func prune(_ repo: PrunePlan.Repo, with pruner: Pruner) async -> PruneOutcome {
         do {
             let result = try await pruner.prune(
                 repo: URL(fileURLWithPath: repo.repoPath, isDirectory: true),

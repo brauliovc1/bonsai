@@ -50,10 +50,10 @@ struct PruneSheet: View {
                     .keyboardShortcut(.cancelAction)
                     .disabled(model.isPruning)
                 if plan.entryCount > 0 {
-                    Button(plan.buttonTitle, role: .destructive) { Task { await model.prune(plan) } }
+                    Button(plan.buttonTitle, role: .destructive) { model.queuePrune(plan) }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
-                        .disabled(model.isPruning || model.app.isCleaningUp)
+                        .disabled(model.isPruning)
                 }
             }
         }

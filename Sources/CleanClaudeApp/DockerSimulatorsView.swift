@@ -67,6 +67,7 @@ private struct DockerSection: View {
             ForEach(model.dockerWarnings, id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
             }
+            QueuedItemStatus(queue: model.app.cleanupQueue, resource: DockerSimulatorsModel.dockerResource)
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Button("Prune…") { Task { await model.beginDockerPrune() } }
                     .disabled(!model.canPrune)
@@ -162,6 +163,7 @@ private struct SimulatorsSection: View {
                     }
                 }
             }
+            QueuedItemStatus(queue: model.app.cleanupQueue, resource: DockerSimulatorsModel.simulatorsResource)
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Button("Delete unavailable…") { Task { await model.beginSimulatorsDelete() } }
                     .disabled(!model.canDeleteUnavailable)

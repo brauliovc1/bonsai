@@ -98,7 +98,7 @@ public final class DockerSimulatorsModel {
         return docker.pruneBlocker
     }
 
-    public var canPrune: Bool { pruneDisabledReason == nil && !app.isCleaningUp }
+    public var canPrune: Bool { pruneDisabledReason == nil && app.cleanupQueue.task(for: Self.dockerResource) == nil && !app.isQuitting }
 
     // MARK: - Simulators
 
@@ -114,7 +114,7 @@ public final class DockerSimulatorsModel {
     public var simulatorWarnings: [String] { simulators?.warnings ?? [] }
 
     public var canDeleteUnavailable: Bool {
-        simulatorsAvailable && !unavailableDevices.isEmpty && !app.isCleaningUp
+        simulatorsAvailable && !unavailableDevices.isEmpty && app.cleanupQueue.task(for: Self.simulatorsResource) == nil && !app.isQuitting
     }
 
     // MARK: - Scanning

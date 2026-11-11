@@ -155,7 +155,8 @@ private struct CacheRowView: View {
                     ))
                     .toggleStyle(.checkbox)
                     .labelsHidden()
-                    .disabled(!row.isSelectable)
+                    .disabled(!row.isSelectable || model.app.cleanupQueue.task(for: model.queueResource(row.id)) != nil)
+                    .help(model.app.cleanupQueue.task(for: model.queueResource(row.id)) != nil ? CleanupQueue.lockedHelp : row.statusText)
                 }
             }
             .frame(width: CacheColumns.check)
@@ -175,8 +176,12 @@ private struct CacheRowView: View {
             Text(row.sizeText)
                 .monospacedDigit()
                 .frame(width: CacheColumns.size, alignment: .trailing)
-            CacheStatusCell(row: row)
-                .frame(width: CacheColumns.status, alignment: .leading)
+            Group {
+                if model.app.cleanupQueue.task(for: model.queueResource(row.id)) != nil {
+                    QueuedItemStatus(queue: model.app.cleanupQueue, resource: model.queueResource(row.id))
+                } else { CacheStatusCell(row: row) }
+            }
+            .frame(width: CacheColumns.status, alignment: .leading)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)

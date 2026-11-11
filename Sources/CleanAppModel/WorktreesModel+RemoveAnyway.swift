@@ -9,18 +9,19 @@ extension WorktreesModel {
     /// The one selected row Remove anyway is offered for (by the last scan); nil with none or several selected,
     /// a repo folder selected, or a row it isn't offered for.
     public var removeAnywayRow: WorktreeRow? {
-        guard selection.count == 1, let row = selectedRows.first, row.offersRemoveAnyway else { return nil }
+        guard selection.count == 1, let row = selectedRows.first, row.offersRemoveAnyway, app.cleanupQueue.task(for: row.path) == nil else { return nil }
         return row
     }
 
     public var canRemoveAnyway: Bool {
-        removeAnywayRow != nil && !app.isCleaningUp && !isRemoving && !isRemovingAnyway
+        removeAnywayRow != nil && !app.isQuitting
     }
 
     /// The More menu item's tooltip.
     public var removeAnywayHelp: String {
+        if selectedRows.contains(where: { app.cleanupQueue.task(for: $0.path) != nil }) { return CleanupQueue.lockedHelp }
         if let row = removeAnywayRow, let list = row.assessment.removeAnyway.lossList {
-            return app.isCleaningUp ? app.busySentence : RemoveAnywayText.help(list)
+            return RemoveAnywayText.help(list)
         }
         if selection.count != 1 || selectedRows.count != 1 {
             return "Select one blocked worktree: Remove anyway handles one at a time."
@@ -33,7 +34,7 @@ extension WorktreesModel {
     /// inspection, from which the list is built. Nothing opens unless exactly that one row is selected and the
     /// last scan offered Remove anyway for it.
     public func beginRemoveAnyway() async {
-        guard let row = removeAnywayRow, !app.isCleaningUp, !isRemoving, !isRemovingAnyway else { return }
+        guard let row = removeAnywayRow, !app.isQuitting else { return }
         removeAnywaySheetToken += 1
         let token = removeAnywaySheetToken
         removeAnywayConfirmation = nil
@@ -108,7 +109,7 @@ extension WorktreesModel {
         return outcome
     }
 
-    private func removeAnyway(_ confirmation: RemoveAnywayConfirmation) async -> RemoveAnywayOutcome {
+    func removeAnyway(_ confirmation: RemoveAnywayConfirmation) async -> RemoveAnywayOutcome {
         guard let git = app.git else { return .failed("git not found") }
         if app.isQuitting { return .failed("the app is quitting") }
         let remover = Remover(git: git, settings: app.settings, environment: app.environment)

@@ -77,11 +77,11 @@ struct RemovalConfirmationSheet: View {
             if !confirmation.allowed.isEmpty {
                 // Deliberately not the default button: Return never removes anything.
                 Button(confirmation.removeButtonTitle, role: .destructive) {
-                    Task { await model.confirmRemoval(confirmation) }
+                    model.queueRemoval(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .disabled(model.isRemoving || model.app.isCleaningUp)
+                .disabled(model.isRemoving)
             }
         }
     }

@@ -46,7 +46,7 @@ public final class RemovalsModel {
         return message
     }
 
-    private static func restore(_ id: UUID, with restorer: Restorer) async -> Message {
+    static func restore(_ id: UUID, with restorer: Restorer) async -> Message {
         do {
             let result = try await restorer.restore(entryID: id)
             let ref = result.entry.branch.map { "branch \($0)" } ?? "commit \(result.ref.prefix(12))"

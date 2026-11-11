@@ -89,11 +89,11 @@ struct ProjectsCleanSheet: View {
             if !confirmation.cleanable.isEmpty {
                 // Deliberately not the default button: Return never deletes anything.
                 Button(confirmation.deleteButtonTitle, role: .destructive) {
-                    Task { await model.cleanSelected(confirmation) }
+                    model.queueClean(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .disabled(model.isCleaning || model.app.isCleaningUp)
+                .disabled(model.isCleaning)
             }
         }
     }

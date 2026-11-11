@@ -6,7 +6,7 @@ extension CachesModel {
     /// tool started meanwhile is listed as left alone, and the findings passed to the cleaner are the fresh
     /// scan's own. The screen shows the fresh scan too.
     public func prepareClean(_ ids: Set<CacheRow.ID>) async -> CachesConfirmation {
-        let chosen = allRows.filter { ids.contains($0.id) }
+        let chosen = allRows.filter { ids.contains($0.id) && app.cleanupQueue.task(for: queueResource($0.id)) == nil }
         let fresh = await scanner.scan()
         show(fresh)
         let home = app.environment.homeDirectory

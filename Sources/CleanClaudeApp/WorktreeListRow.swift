@@ -9,6 +9,7 @@ struct WorktreeListRow: View {
     let row: WorktreeRow
     let showsActivity: Bool
     var showsRepo = false
+    var queue: CleanupQueue?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -35,7 +36,9 @@ struct WorktreeListRow: View {
             SizeText(bytes: row.sizeBytes, isMeasuring: row.isMeasuringSize)
                 .frame(width: WorktreeColumns.size, alignment: .trailing)
             VStack(alignment: .leading, spacing: 2) {
-                StatusChip(words: row.chip)
+                if let queue, queue.task(for: row.path) != nil {
+                    QueuedItemStatus(queue: queue, resource: row.path)
+                } else { StatusChip(words: row.chip) }
                 if let notes = row.notesText {
                     Text(notes)
                         .font(.caption)

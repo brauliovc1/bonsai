@@ -117,7 +117,8 @@ struct WorktreeDetailsContent: View {
             Button("Copy path") { FolderActions.copy([row.path]) }
             if row.fix != .cleanDependencies, openable, !row.isStaleRecord {
                 Button("Clean dependencies…") { Task { await model.beginLightClean([row.id]) } }
-                    .disabled(model.app.isCleaningUp)
+                    .disabled(model.app.cleanupQueue.task(for: row.path) != nil)
+                    .help(model.app.cleanupQueue.task(for: row.path) != nil ? CleanupQueue.lockedHelp : "Clean dependency folders after confirmation.")
             }
         }
         .buttonStyle(.link)

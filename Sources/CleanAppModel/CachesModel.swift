@@ -52,9 +52,9 @@ public final class CachesModel {
     public var totalBytes: Int64 { allRows.compactMap(\.bytes).reduce(0, +) }
 
     /// The selected rows that can be cleaned.
-    public var selectedRows: [CacheRow] { readyRows.filter { selection.contains($0.id) } }
+    public var selectedRows: [CacheRow] { readyRows.filter { selection.contains($0.id) && app.cleanupQueue.task(for: queueResource($0.id)) == nil } }
     public var selectedBytes: Int64 { selectedRows.compactMap(\.bytes).reduce(0, +) }
-    public var canClean: Bool { !selectedRows.isEmpty && !app.isCleaningUp && !isCleaning }
+    public var canClean: Bool { !selectedRows.isEmpty && !app.isQuitting }
 
     /// "Quit Cursor to clean its data." while Cursor runs; nil otherwise.
     public var cursorRunningLine: String? { report?.cursorRunning == true ? Self.cursorRunningLine : nil }
@@ -66,7 +66,7 @@ public final class CachesModel {
 
     /// Selects or deselects one row; a row that can't be cleaned is never selected.
     public func setSelected(_ id: CacheRow.ID, _ selected: Bool) {
-        if selected, readyRows.contains(where: { $0.id == id }) {
+        if selected, app.cleanupQueue.task(for: queueResource(id)) == nil, readyRows.contains(where: { $0.id == id }) {
             selection.insert(id)
         } else {
             selection.remove(id)
@@ -74,7 +74,7 @@ public final class CachesModel {
     }
 
     public func selectAllReady() {
-        selection = Set(readyRows.map(\.id))
+        selection = Set(readyRows.filter { app.cleanupQueue.task(for: queueResource($0.id)) == nil }.map(\.id))
     }
 
     // MARK: - Scanning

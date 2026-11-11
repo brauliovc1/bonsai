@@ -58,7 +58,7 @@ extension DockerSimulatorsModel {
         return report
     }
 
-    private func runPrune() async -> CleanupCommandReport {
+    func runPrune() async -> CleanupCommandReport {
         let current = await DockerScanner(environment: app.environment, runner: runner).scan()
         docker = current
         guard let cleaner = DockerCleaner(environment: app.environment, runner: runner) else {

@@ -74,11 +74,11 @@ struct DerivedDataDeleteSheet: View {
             if !confirmation.allowed.isEmpty {
                 // Deliberately not the default button: Return never deletes anything.
                 Button(confirmation.deleteButtonTitle, role: .destructive) {
-                    Task { await model.confirmDelete(confirmation) }
+                    model.queueDelete(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .disabled(model.isDeleting || model.app.isCleaningUp)
+                .disabled(model.isDeleting)
             }
         }
     }

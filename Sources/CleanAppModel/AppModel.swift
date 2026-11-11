@@ -17,6 +17,9 @@ public final class AppModel {
     /// git for assessing and cleaning up; nil when none was found.
     public let git: Git?
     public let disk = DiskSpaceModel()
+    @ObservationIgnored public lazy var cleanupQueue = CleanupQueue(app: self)
+    /// A lock I/O error is terminal; ordinary contention is retried by the queue.
+    var cleanupLockError: String?
 
     public private(set) var settings = Settings()
     /// The roots of the last scan.
@@ -214,7 +217,9 @@ public final class AppModel {
     /// without running it when another cleanup holds either, or the app is quitting. `byAutoMode`: the body
     /// is an auto-mode run, so refusals say "Auto mode is running".
     func cleaningUp<T>(byAutoMode: Bool = false, _ body: () async -> T) async -> T? {
+        cleanupLockError = nil
         guard !isCleaningUp else { return nil }
+        guard !byAutoMode || !cleanupQueue.hasPending else { return nil }
         guard !isQuitting else {
             lastRefusal = "the app is quitting"
             return nil
@@ -228,6 +233,7 @@ public final class AppModel {
             lock = taken
         } catch {
             lastRefusal = "the cleanup lock can't be taken: \(error)"
+            cleanupLockError = lastRefusal
             return nil
         }
         lastRefusal = nil
@@ -245,6 +251,7 @@ public final class AppModel {
     /// cleanup runs, so the removal in progress finishes and logs first.
     public func prepareToQuit() async {
         isQuitting = true
+        cleanupQueue.prepareToQuit()
         while isCleaningUp {
             try? await Task.sleep(for: .milliseconds(50), tolerance: nil, clock: SuspendingClock())
         }

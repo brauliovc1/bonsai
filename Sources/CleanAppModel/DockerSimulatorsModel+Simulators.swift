@@ -62,7 +62,7 @@ extension DockerSimulatorsModel {
         return report
     }
 
-    private func runDelete(confirmed: [SimulatorDevice], estimatedBytes: Int64) async -> CleanupCommandReport {
+    func runDelete(confirmed: [SimulatorDevice], estimatedBytes: Int64) async -> CleanupCommandReport {
         guard let cleaner = SimulatorCleaner(environment: app.environment, runner: runner) else {
             return Self.simulatorsReport(error: "There is no Xcode (xcrun) to run it with.", result: nil)
         }

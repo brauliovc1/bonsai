@@ -148,7 +148,11 @@ public final class WorktreesModel {
 
     /// The More menu's tooltip for Prune when there is nothing to prune; nil when there is.
     public var pruneDisabledReason: String? {
-        if !missingFolderRows.isEmpty { return app.isCleaningUp ? app.busySentence : nil }
+        if !missingFolderRows.isEmpty {
+            return missingFolderRows.allSatisfy {
+                app.cleanupQueue.task(for: "prune:" + $0.worktree.repoPath) != nil
+            } ? CleanupQueue.lockedHelp : nil
+        }
         return "No worktree's folder is missing, so there is nothing to prune."
     }
 

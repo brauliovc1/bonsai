@@ -6,10 +6,12 @@ import SwiftUI
 struct MainWindowView: View {
     let models: ScreenModels
     @Bindable private var navigation: NavigationModel
+    @Bindable private var queue: CleanupQueue
 
     init(models: ScreenModels) {
         self.models = models
         navigation = models.navigation
+        queue = models.app.cleanupQueue
     }
 
     var body: some View {
@@ -17,10 +19,21 @@ struct MainWindowView: View {
             AppSidebar(summary: models.overview.summary, selection: $navigation.section)
                 .navigationSplitViewColumnWidth(min: 214, ideal: 240)
         } detail: {
-            detail
+            VStack(spacing: 0) {
+                detail.frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 8) {
+                    ForEach(queue.toasts) { toast in CleanupToastView(toast: toast, queue: queue) }
+                    CleanupActivityView(queue: queue)
+                }
+                .padding(queue.hasPending || !queue.toasts.isEmpty ? 12 : 0)
+                .background(Color(nsColor: .windowBackgroundColor))
+            }
         }
         .frame(minWidth: 860, minHeight: 480)
         .modifier(DockIconWhileOpen())
+        .onAppear { queue.windowIsVisible = true }
+        .onDisappear { queue.windowIsVisible = false }
+        .sheet(item: $queue.selectedTask) { task in CleanupTaskSheet(task: task, queue: queue) }
         .task { await models.overview.loadIfNeeded() }
     }
 

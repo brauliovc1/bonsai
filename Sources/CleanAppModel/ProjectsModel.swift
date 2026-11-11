@@ -121,7 +121,7 @@ public final class ProjectsModel {
         }
     }
 
-    public var selectedRows: [ProjectRow] { rows.filter { selection.contains($0.id) } }
+    public var selectedRows: [ProjectRow] { rows.filter { selection.contains($0.id) && app.cleanupQueue.task(for: $0.path) == nil } }
 
     public func isExpanded(_ repoPath: String) -> Bool { !collapsedRepos.contains(repoPath) }
 
@@ -136,13 +136,13 @@ public final class ProjectsModel {
     /// Selects the projects ready to clean (`reclaimableRows`: idle at least the threshold, idle known, nothing
     /// stopping a clean, not a worktree that can be removed whole), whatever the filter shows.
     public func selectAllIdle() {
-        let ready = reclaimableRows
+        let ready = reclaimableRows.filter { app.cleanupQueue.task(for: $0.path) == nil }
         for row in ready { collapsedRepos.remove(row.worktree.repoPath) }
         selection = Set(ready.map(\.id))
         autoPicked = selection
     }
 
-    public var canClean: Bool { !selectedRows.isEmpty && !app.isCleaningUp && !isCleaning }
+    public var canClean: Bool { !selectedRows.isEmpty && !app.isQuitting }
 
     // MARK: - Totals
 

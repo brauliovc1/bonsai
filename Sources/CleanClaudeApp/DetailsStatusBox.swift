@@ -13,7 +13,9 @@ struct DetailsStatusBox: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
-                StatusChip(words: row.chip)
+                if model.app.cleanupQueue.task(for: row.path) != nil {
+                    QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path)
+                } else { StatusChip(words: row.chip) }
                 if let notes = row.notesText {
                     Text(notes)
                         .font(.caption)
@@ -54,14 +56,14 @@ struct DetailsStatusBox: View {
 
     @ViewBuilder
     private var fixButton: some View {
-        let busy = model.app.isCleaningUp
+        let busy = model.app.cleanupQueue.task(for: row.path) != nil
         switch row.fix {
         case .remove:
             Button(WorktreeFix.remove.title, role: .destructive) { Task { await model.beginRemoval([row.id]) } }
                 .buttonStyle(.borderedProminent)
                 .tint(Palette.red)
                 .disabled(busy || !row.canRemove)
-                .help(busy ? model.app.busySentence : "Remove this worktree (you confirm first). Its branch is kept.")
+                .help(busy ? CleanupQueue.lockedHelp : "Remove this worktree (you confirm first). Its branch is kept.")
         case .prune:
             Button(WorktreeFix.prune.title) { Task { await model.beginPrune() } }
                 .disabled(busy)
@@ -69,7 +71,7 @@ struct DetailsStatusBox: View {
             Button(WorktreeFix.cleanDependencies.title) { Task { await model.beginLightClean([row.id]) } }
                 .buttonStyle(.borderedProminent)
                 .disabled(busy || row.dependencies == .measured(nil))
-                .help(row.dependencies == .measured(nil)
+                .help(busy ? CleanupQueue.lockedHelp : row.dependencies == .measured(nil)
                     ? "No dependency or build folders to clean here."
                     : "Delete the dependency and build folders here (you confirm first).")
         case .openInTerminal:

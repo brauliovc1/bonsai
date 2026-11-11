@@ -62,10 +62,10 @@ struct DockerPruneSheet: View {
                     .keyboardShortcut(.cancelAction)
                     .disabled(model.isPruning)
                 // Deliberately not the default button: Return never prunes.
-                Button("Prune", role: .destructive) { Task { await model.confirmDockerPrune(confirmation) } }
+                Button("Prune", role: .destructive) { model.queueDockerPrune(confirmation) }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
-                    .disabled(!confirmation.isAllowed || model.isPruning || model.app.isCleaningUp)
+                    .disabled(!confirmation.isAllowed || model.isPruning)
                     .help(confirmation.blocker ?? "Run \(DockerPruneConfirmation.command)")
             }
         }

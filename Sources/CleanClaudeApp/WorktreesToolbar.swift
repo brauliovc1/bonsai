@@ -87,10 +87,12 @@ struct WorktreeContextMenu: View {
         if !all.isEmpty {
             if rows.contains(where: \.canRemove) {
                 Button("Remove…") { Task { await model.beginRemoval(Set(rows.map(\.id))) } }
-                    .disabled(model.app.isCleaningUp)
+                    .disabled(all.contains { model.app.cleanupQueue.task(for: $0.path) != nil })
+                .help(all.contains { model.app.cleanupQueue.task(for: $0.path) != nil } ? CleanupQueue.lockedHelp : "Confirm cleanup of these worktrees.")
             }
             Button("Clean dependencies…") { Task { await model.beginLightClean(Set(all.map(\.id))) } }
-                .disabled(model.app.isCleaningUp)
+                .disabled(all.contains { model.app.cleanupQueue.task(for: $0.path) != nil })
+                .help(all.contains { model.app.cleanupQueue.task(for: $0.path) != nil } ? CleanupQueue.lockedHelp : "Confirm cleanup of these worktrees.")
             Divider()
             Button("Show in Finder") { FolderActions.reveal(folders) }
                 .disabled(folders.isEmpty)
@@ -101,7 +103,8 @@ struct WorktreeContextMenu: View {
         if rows.contains(where: \.isMissingFolder) {
             Divider()
             Button("Prune missing folders…") { Task { await model.beginPrune() } }
-                .disabled(model.app.isCleaningUp)
+                .disabled(all.contains { model.app.cleanupQueue.task(for: $0.path) != nil })
+                .help(all.contains { model.app.cleanupQueue.task(for: $0.path) != nil } ? CleanupQueue.lockedHelp : "Confirm cleanup of these worktrees.")
         }
     }
 }

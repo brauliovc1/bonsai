@@ -89,6 +89,10 @@ Every worktree, grouped by repo, with its size, when you last worked in it, and 
   <img src="docs/images/remove-anyway-light.png" alt="Remove anyway: every file that would be lost, listed before anything is deleted">
 </picture>
 
+## Keep working while Bonsai cleans
+
+Confirm a cleanup and keep using the app. Bonsai queues tasks in order, shows live progress, and lets you stop after the current item. Anything that changed is left alone for you to review.
+
 ## Clean up while you sleep
 
 Turn on auto clean and Bonsai removes finished worktrees once a day. The first week it only reports what it would do.
@@ -157,7 +161,6 @@ make install
 
 ## What's next
 
-- Cleanups that run in the background while you keep working
 - Compare any branch with main before you open a pull request
 - A map of your branches: where each was cut from, and when it was merged
 

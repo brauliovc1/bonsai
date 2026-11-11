@@ -49,6 +49,11 @@ public final class ScreenModels {
         launchAtLogin = LaunchAtLoginModel(service: loginItems ?? UnavailableLoginItems())
         let menuBar = MenuBarModel(app: app, notifier: notifier, appName: appName)
         self.menuBar = menuBar
+        app.cleanupQueue.notify = { [weak app] task in
+            guard let app, !app.isQuitting else { return }
+            await notifier.post(NotificationContent(identifier: "cleanup-" + task.id.uuidString, title: appName,
+                                                     body: task.summary, opens: .recentlyRemoved))
+        }
         autoMode.onRunFinished = { await menuBar.refresh() }
         overview = OverviewModel(
             app: app,

@@ -30,7 +30,8 @@ extension AutoModeModel {
     }
 
     private func run(onlyIfDue: Bool) async -> AutoRunSummary? {
-        guard !isRunning else { return nil }
+        await app.cleanupQueue.waitUntilEmpty()
+        guard !isRunning, !app.isQuitting else { return nil }
         isRunning = true
         defer { isRunning = false }
         stopRequested = false

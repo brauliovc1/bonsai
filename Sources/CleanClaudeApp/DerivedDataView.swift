@@ -25,7 +25,9 @@ struct DerivedDataView: View {
     }
 
     private var table: some View {
-        Table(model.rows, selection: $model.selection, sortOrder: $model.sortOrder) {
+        Table(model.rows, selection: Binding(get: { model.selection }, set: { ids in
+            model.selection = Set(ids.filter { model.app.cleanupQueue.task(for: $0) == nil })
+        }), sortOrder: $model.sortOrder) {
             TableColumn("Folder", value: \.name) { row in
                 Text(row.name)
                     .lineLimit(1)
@@ -41,7 +43,9 @@ struct DerivedDataView: View {
             }
             .width(min: 120, ideal: 210)
             TableColumn("State") { row in
-                DerivedDataStateCell(row: row)
+                if model.app.cleanupQueue.task(for: row.id) != nil {
+                    QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.id)
+                } else { DerivedDataStateCell(row: row) }
             }
             .width(min: 200, ideal: 360)
             TableColumn("Size", value: \.sizeSortKey) { row in
@@ -58,7 +62,7 @@ struct DerivedDataView: View {
             if rows.contains(where: \.isSelectable) {
                 Divider()
                 Button("Delete orphaned…") { Task { await model.beginDelete(ids) } }
-                    .disabled(model.refusal != nil || model.app.isCleaningUp)
+                    .disabled(model.refusal != nil || rows.contains { model.app.cleanupQueue.task(for: $0.id) != nil })
             }
         }
         .overlay {

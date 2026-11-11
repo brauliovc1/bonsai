@@ -62,14 +62,16 @@ struct WorktreesView: View {
     }
 
     private var list: some View {
-        List(selection: $model.selection) {
+        List(selection: Binding(get: { model.selection }, set: { ids in
+            model.selection = Set(ids.filter { model.app.cleanupQueue.task(for: $0.path) == nil })
+        })) {
             if model.groupsByRepo {
                 ForEach(model.groups) { group in
                     RepoGroupHeader(model: model, group: group)
                         .tag(group.main?.id ?? WorktreeRow.ID(repoPath: group.repoPath, path: group.repoPath))
                     if model.isExpanded(group.repoPath) {
                         ForEach(group.rows) { row in
-                            WorktreeListRow(row: row, showsActivity: showsActivity)
+                            WorktreeListRow(row: row, showsActivity: showsActivity, queue: model.app.cleanupQueue)
                                 .tag(row.id)
                         }
                     }
@@ -77,7 +79,7 @@ struct WorktreesView: View {
             } else {
                 // One list across repos, each row with its repo's name.
                 ForEach(model.flatRows) { row in
-                    WorktreeListRow(row: row, showsActivity: showsActivity, showsRepo: true)
+                    WorktreeListRow(row: row, showsActivity: showsActivity, showsRepo: true, queue: model.app.cleanupQueue)
                         .tag(row.id)
                 }
             }

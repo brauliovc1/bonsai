@@ -73,11 +73,11 @@ struct SimulatorsDeleteSheet: View {
                 if confirmation.isAllowed {
                     // Deliberately not the default button: Return never deletes anything.
                     Button("Delete unavailable", role: .destructive) {
-                        Task { await model.confirmSimulatorsDelete(confirmation) }
+                        model.queueSimulatorsDelete(confirmation)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
-                    .disabled(model.isDeletingDevices || model.app.isCleaningUp)
+                    .disabled(model.isDeletingDevices)
                 }
             }
         }

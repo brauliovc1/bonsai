@@ -77,11 +77,11 @@ struct LightCleanSheet: View {
             if !confirmation.cleanable.isEmpty {
                 // Deliberately not the default button: Return never deletes anything.
                 Button(confirmation.deleteButtonTitle, role: .destructive) {
-                    Task { await model.confirmLightClean(confirmation) }
+                    model.queueLightClean(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .disabled(model.isLightCleaning || model.app.isCleaningUp)
+                .disabled(model.isLightCleaning)
             }
         }
     }

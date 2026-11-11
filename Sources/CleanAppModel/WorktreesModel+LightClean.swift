@@ -7,7 +7,7 @@ extension WorktreesModel {
     /// `LightCleanFinder` run again). Listed folders are the ones `confirmLightClean` deletes; the rest is
     /// shown with its reasons and left alone.
     public func prepareLightClean(_ ids: Set<WorktreeRow.ID>) async -> LightCleanConfirmation {
-        let chosen = (groups.compactMap(\.main) + rows).filter { ids.contains($0.id) }
+        let chosen = (groups.compactMap(\.main) + rows).filter { ids.contains($0.id) && app.cleanupQueue.task(for: $0.path) == nil }
         return LightCleanConfirmation(items: await LightCleanFlow(app: app).look(at: chosen.map(\.worktree)))
     }
 

@@ -61,8 +61,9 @@ struct RecentlyRemovedView: View {
         .contextMenu(forSelectionType: RemovalLogRow.ID.self) { ids in
             let rows = model.rows.filter { ids.contains($0.id) }
             if rows.count == 1, let row = rows.first, row.isRestorable {
-                Button("Restore") { Task { await model.restore(row.id) } }
-                    .disabled(model.restoringID != nil || model.app.isCleaningUp)
+                Button("Restore") { model.queueRestore(row.id) }
+                    .disabled(model.app.cleanupQueue.task(for: row.path) != nil)
+                    .help(model.app.cleanupQueue.task(for: row.path) != nil ? CleanupQueue.lockedHelp : "Restore from the kept branch or commit.")
             }
             if !rows.isEmpty {
                 Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.path)) }
@@ -81,12 +82,13 @@ struct RecentlyRemovedView: View {
 
     @ViewBuilder
     private func restoreCell(_ row: RemovalLogRow) -> some View {
-        if model.restoringID == row.id {
+        if model.app.cleanupQueue.task(for: row.path) != nil {
+            QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path)
+        } else if model.restoringID == row.id {
             ProgressView().controlSize(.small)
         } else if row.isRestorable {
-            Button("Restore") { Task { await model.restore(row.id) } }
+            Button("Restore") { model.queueRestore(row.id) }
                 .help("git worktree add from the kept branch; dependencies are not reinstalled")
-                .disabled(model.restoringID != nil || model.app.isCleaningUp)
         } else if let restoredAt = row.restoredAt {
             Text("Restored \(restoredAt, format: .dateTime.month(.abbreviated).day())")
                 .foregroundStyle(.secondary)

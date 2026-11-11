@@ -9,7 +9,7 @@ extension ProjectsModel {
     /// alone. A row "Select all idle" picked (`autoPicked`) whose idle days read now fall below the threshold, or
     /// became unknown, is listed as changed and not deleted unless the user ticks it (`setIncluded`).
     public func prepareClean(_ ids: Set<ProjectRow.ID>) async -> ProjectsConfirmation {
-        let chosen = rows.filter { ids.contains($0.id) }
+        let chosen = rows.filter { ids.contains($0.id) && app.cleanupQueue.task(for: $0.path) == nil }
         let autoPicked = Set(chosen.map(\.path).filter { self.autoPicked.contains($0) })
         guard !chosen.isEmpty else { return ProjectsConfirmation(items: []) }
         let looked = await LightCleanFlow(app: app).look(at: chosen.map(\.worktree))

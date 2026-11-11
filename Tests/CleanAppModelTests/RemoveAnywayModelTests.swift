@@ -156,7 +156,7 @@ struct RemoveAnywayModelTests {
         let gate = Gate()
         let other = Task { await app.cleaningUp { await gate.wait() } }
         while !app.isCleaningUp { await Task.yield() }
-        #expect(!model.canRemoveAnyway)
+        #expect(model.canRemoveAnyway, "another task no longer disables this row; the UI can queue it")
         let busy = try #require(await model.confirmRemoveAnyway(confirmation, understood: true))
         await gate.open()
         _ = await other.value

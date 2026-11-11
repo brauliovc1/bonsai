@@ -70,11 +70,11 @@ struct CachesCleanSheet: View {
             if !confirmation.allowed.isEmpty {
                 // Deliberately not the default button: Return never deletes anything.
                 Button(confirmation.cleanButtonTitle, role: .destructive) {
-                    Task { await model.confirmClean(confirmation) }
+                    model.queueClean(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .disabled(model.isCleaning || model.app.isCleaningUp)
+                .disabled(model.isCleaning)
             }
         }
     }

@@ -50,7 +50,11 @@ struct ProjectsView: View {
             }
             .width(min: 60, ideal: 78)
             TableColumn("Status", value: \ProjectTableItem.statusSortKey) { item in
-                if let row = item.row { ProjectStatusCell(row: row) }
+                if let row = item.row {
+                    if model.app.cleanupQueue.task(for: row.path) != nil {
+                        QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path)
+                    } else { ProjectStatusCell(row: row) }
+                }
             }
             .width(min: 120, ideal: 300)
         } rows: {
@@ -100,7 +104,7 @@ struct ProjectsView: View {
     private var tableSelection: Binding<Set<ProjectTableItem.ID>> {
         Binding(
             get: { Set(model.selection.map { ProjectTableItem.ID.project($0) }) },
-            set: { model.selection = rowIDs($0) }
+            set: { model.selection = Set(rowIDs($0).filter { model.app.cleanupQueue.task(for: $0) == nil }) }
         )
     }
 
@@ -133,7 +137,8 @@ struct ProjectsView: View {
             Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.path)) }
             Divider()
             Button("Clean…") { Task { await model.beginClean(ids) } }
-                .disabled(model.app.isCleaningUp || model.isCleaning)
+                .disabled(rows.contains { model.app.cleanupQueue.task(for: $0.path) != nil })
+                .help(rows.contains { model.app.cleanupQueue.task(for: $0.path) != nil } ? CleanupQueue.lockedHelp : "Clean these folders after confirmation.")
         }
     }
 

@@ -37,14 +37,16 @@ struct RepoGroupHeader: View {
             Spacer(minLength: 8)
             if let bytes = group.dependencyBytes {
                 Button("Clean dependencies…") { Task { await model.cleanDependencies(of: group) } }
-                    .help("Delete the repo folder's dependency and build folders (\(DisplayText.bytes(bytes))); you confirm first.")
-                    .disabled(model.app.isCleaningUp)
+                    .disabled(model.app.cleanupQueue.task(for: group.repoPath) != nil)
+                    .help(model.app.cleanupQueue.task(for: group.repoPath) != nil ? CleanupQueue.lockedHelp
+                        : "Delete the repo folder's dependency and build folders (\(DisplayText.bytes(bytes))); you confirm first.")
             }
             let removable = group.removableRows
             if !removable.isEmpty {
                 Button("Remove all \(removable.count)") { Task { await model.removeAll(in: group) } }
-                    .help(removeAllHelp(removable))
-                    .disabled(model.app.isCleaningUp)
+                    .disabled(removable.allSatisfy { model.app.cleanupQueue.task(for: $0.path) != nil })
+                    .help(removable.allSatisfy { model.app.cleanupQueue.task(for: $0.path) != nil }
+                        ? CleanupQueue.lockedHelp : removeAllHelp(removable))
             }
         }
         .controlSize(.small)
