@@ -7,6 +7,8 @@ import SwiftUI
 struct OverviewView: View {
     let model: OverviewModel
     let settings: SettingsModel
+    var quickClean: QuickCleanModel? = nil
+    var openBranches: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +24,14 @@ struct OverviewView: View {
         }
         .navigationTitle("Overview")
         .toolbar {
-            ToolbarItem {
+            ToolbarItemGroup {
+                if let openBranches {
+                    Button(action: openBranches) {
+                        Label("View branches", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
+                    .disabled(model.app.scan?.worktrees.isEmpty != false)
+                    .help("Open the branch timeline, distances and history")
+                }
                 Button { Task { await model.refresh() } } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -59,12 +68,37 @@ struct OverviewView: View {
             if let space = model.space {
                 SpaceBar(space: space, level: model.level)
             }
+            quickCleanAction
             cards
             lines
             AutoCleanRow(line: model.autoClean, settings: settings)
             Text(SizeText.estimateHelp)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var quickCleanAction: some View {
+        if let quickClean {
+            GroupedSection {
+                HStack(spacing: 18) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Review before cleaning").font(.headline)
+                        Text("Worktrees and project folders inactive for 7+ days, plus eligible caches and old installers.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Button { Task { await quickClean.begin() } } label: {
+                        Label("Quick clean…", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(quickClean.isPreparing || model.app.isQuitting)
+                    .help("Review the summary and expand its details before confirming")
+                }
+            }
         }
     }
 

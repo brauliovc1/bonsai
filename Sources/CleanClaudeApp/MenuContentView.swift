@@ -11,6 +11,8 @@ struct MenuContentView: View {
     let menuBar: MenuBarModel
     let overview: OverviewModel
     let navigation: NavigationModel
+    var quickClean: QuickCleanModel? = nil
+    var compare: CompareModel? = nil
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -23,6 +25,19 @@ struct MenuContentView: View {
                 openMainWindow()
             }
             .padding(.top, 14)
+            if let quickClean {
+                Button {
+                    openMainWindow()
+                    Task { await quickClean.begin() }
+                } label: {
+                    Label("Quick clean…", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(quickClean.isPreparing || app.isQuitting)
+                .padding(.top, 10)
+                .help("Review inactive worktrees, project folders and eligible caches before cleaning")
+            }
             CleanupActivityView(queue: app.cleanupQueue, compact: true)
                 .padding(.top, app.cleanupQueue.hasPending ? 10 : 0)
             statusLine
@@ -47,6 +62,14 @@ struct MenuContentView: View {
             VStack(alignment: .leading, spacing: 1) {
                 MenuButton(title: "Open \(AppInfo.name)", systemImage: "macwindow", shortcut: "⌘O") { openMainWindow() }
                     .keyboardShortcut("o")
+                if let compare {
+                    MenuButton(title: "View branches", systemImage: "point.3.connected.trianglepath.dotted") {
+                        navigation.show(.compare)
+                        openMainWindow()
+                        Task { await compare.openBranchMap() }
+                    }
+                    .disabled(app.scan?.worktrees.isEmpty != false)
+                }
                 MenuSettingsRow()
                 MenuButton(title: "Quit \(AppInfo.name)", systemImage: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")

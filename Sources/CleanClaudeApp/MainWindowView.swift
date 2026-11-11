@@ -7,11 +7,13 @@ struct MainWindowView: View {
     let models: ScreenModels
     @Bindable private var navigation: NavigationModel
     @Bindable private var queue: CleanupQueue
+    @Bindable private var quickClean: QuickCleanModel
 
     init(models: ScreenModels) {
         self.models = models
         navigation = models.navigation
         queue = models.app.cleanupQueue
+        quickClean = models.quickClean
     }
 
     var body: some View {
@@ -42,6 +44,9 @@ struct MainWindowView: View {
         .onAppear { queue.windowIsVisible = true }
         .onDisappear { queue.windowIsVisible = false }
         .sheet(item: $queue.selectedTask) { task in CleanupTaskSheet(task: task, queue: queue) }
+        .sheet(isPresented: $quickClean.isPresented) {
+            QuickCleanSheet(model: quickClean)
+        }
         .task { await models.overview.loadIfNeeded() }
     }
 
@@ -49,7 +54,11 @@ struct MainWindowView: View {
     private var detail: some View {
         switch navigation.section ?? .overview {
         case .compare: CompareView(model: models.compare, navigation: models.navigation, worktrees: models.worktrees)
-        case .overview: OverviewView(model: models.overview, settings: models.settings)
+        case .overview:
+            OverviewView(model: models.overview, settings: models.settings, quickClean: models.quickClean) {
+                models.navigation.show(.compare)
+                Task { await models.compare.openBranchMap() }
+            }
         case .worktrees: WorktreesView(model: models.worktrees)
         case .projects: ProjectsView(model: models.projects, navigation: models.navigation)
         case .caches: CachesView(model: models.caches)

@@ -15,6 +15,7 @@ public final class ScreenModels {
     public let dockerSimulators: DockerSimulatorsModel
     public let caches: CachesModel
     public let downloads: DownloadsTrashModel
+    public let quickClean: QuickCleanModel
     public let claudeUsage: ClaudeUsageModel
     public let overview: OverviewModel
     public let settings: SettingsModel
@@ -48,6 +49,10 @@ public final class ScreenModels {
         dockerSimulators = DockerSimulatorsModel(app: app, runner: runner)
         caches = CachesModel(app: app, processes: processes)
         downloads = DownloadsTrashModel(app: app, runner: runner, emptier: trashEmptier)
+        quickClean = QuickCleanModel(
+            app: app, worktrees: worktrees, projects: projects, caches: caches,
+            derivedData: derivedData, dockerSimulators: dockerSimulators, downloads: downloads
+        )
         claudeUsage = ClaudeUsageModel(app: app)
         settings = SettingsModel(app: app)
         autoMode = AutoModeModel(app: app, notifier: notifier, appName: appName)

@@ -17,6 +17,9 @@ public struct LightCleaner: Sendable {
     public var now: @Sendable () -> Date
     /// A fresh process index for each folder (lsof by default).
     public var captureCwdIndex: @Sendable () async -> ProcessCwdIndex
+    /// Optional caller policy, after the slow checks and before the final path identity check.
+    /// Returning a reason leaves this candidate alone; ordinary manual cleaning has no extra policy.
+    public var admission: (@Sendable (Worktree, LightCleanCandidate) async -> String?)?
     /// Test seam: the free space of the worktree's volume (default: read from the volume).
     var freeSpace: FreeSpaceProbe?
     /// Test seam: runs after a candidate's re-check, before the process index is taken.
@@ -91,6 +94,10 @@ public struct LightCleaner: Sendable {
                 if result.deleted.isEmpty && result.failed.isEmpty { throw Self.error(for: reason) }
                 result.refused += queue[position...].map { Self.skip($0, reason) }
                 break
+            }
+            if let reason = await admission?(fresh, candidate) {
+                result.refused.append(Self.skip(candidate, .notACandidate(reason)))
+                continue
             }
             let current = LightCleanCandidate(
                 worktreePath: candidate.worktreePath,
