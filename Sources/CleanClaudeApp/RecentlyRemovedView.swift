@@ -7,7 +7,7 @@ struct RecentlyRemovedView: View {
     private var days: [Date] { Set(model.rows.map { Calendar.current.startOfDay(for: $0.date) }).sorted(by: >) }
     var body: some View {
         VStack(spacing: 0) {
-            PageHeader(title: "Recently removed", subtitle: "Every cleanup is recorded here. Kept worktree branches can be restored.") {
+            PageHeader(title: "Recently removed", subtitle: "Restore kept worktrees or put downloads back while they remain in Trash.") {
                 Button("Refresh") { model.app.reloadLog() }
             }.padding(20)
             if let error = model.logError { ProblemBanner(text: error) }

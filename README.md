@@ -93,6 +93,8 @@ Every worktree, grouped by repo, with its size, when you last worked in it, and 
 
 Confirm a cleanup and keep using the app. Bonsai queues tasks in order, shows live progress, and lets you stop after the current item. Anything that changed is left alone for you to review.
 
+Downloads & Trash finds installers and archives added at least 30 days ago. Move them to Trash, then use Put back in Recently removed if you need them again. Empty Trash asks for confirmation and lets Finder handle the permanent deletion. Local Time Machine snapshots are shown for information; macOS manages them.
+
 ## Clean up while you sleep
 
 Turn on auto clean and Bonsai removes finished worktrees once a day. The first week it only reports what it would do.
@@ -120,6 +122,7 @@ bonsai caches               # package-manager caches
 | `bonsai light-clean` | Delete a worktree's dependency and build folders |
 | `bonsai projects` | Dependency and build folders across your checkouts |
 | `bonsai caches` | Package-manager caches and Cursor data |
+| `bonsai downloads` | Old installers and archives, Trash size and local snapshots; `--move-to-trash` previews a move and `--yes` confirms it |
 | `bonsai derived-data` | Xcode DerivedData, and orphaned folders to delete |
 | `bonsai docker` | Where Docker's space goes, and prune |
 | `bonsai simulators` | Simulator disk use, and delete unavailable ones |
@@ -152,6 +155,7 @@ make install
 
 - Sizes are estimates; what a cleanup frees is measured afterwards and can be a little lower.
 - The first scan of your Documents folder asks for macOS's permission once.
+- Reading Downloads can ask for its macOS folder permission. If Trash is unreadable, Bonsai shows that fact and never asks for Full Disk Access. The CLI never empties Trash.
 - Time Machine's local snapshots can keep deleted data for a while.
 - Docker cleanup works with Docker Desktop (not OrbStack or colima).
 - Remove anyway looks at the worktree again a moment before git deletes it; a file written in that last moment isn't in the list.
