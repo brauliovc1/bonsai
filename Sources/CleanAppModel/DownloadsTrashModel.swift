@@ -81,6 +81,10 @@ public final class DownloadsTrashModel {
             emptyTrashProblem = "The Trash changed while it was being checked. Refresh and try again."
             return
         }
+        guard !info.readable || after != .unreadable else {
+            emptyTrashProblem = "Could not verify the Trash contents. Refresh and try again."
+            return
+        }
         guard !app.isQuitting else { return }
         confirmedTrash = (info, after)
         isShowingEmptySheet = true
