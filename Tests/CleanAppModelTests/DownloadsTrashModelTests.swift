@@ -177,6 +177,21 @@ struct DownloadsTrashModelTests {
         #expect(model.files.map(\.name) == ["a.zip", "m.zip", "z.zip"])
         #expect(model.readyBytes == 151)
     }
+
+    @Test func aPreciseConfirmationRequiresVerifiableContents() async throws {
+        let world = try DownloadsModelWorld()
+        defer { world.fixture.remove() }
+        try Data("fixture".utf8).write(to: world.trash.appending(path: "keep.zip"))
+        let fake = ModelTrashEmptier()
+        let model = world.model(emptier: fake)
+        await model.refresh()
+        model.isShowingEmptySheet = true
+        // A size query can succeed even when a changing folder prevented a stable fingerprint.
+        model.confirmedTrash = (TrashInfo(bytes: 7, count: 1), .unreadable)
+        #expect(model.confirmEmptyTrash() == nil)
+        #expect(fake.calls == 0 && world.app.logEntries.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: world.trash.appending(path: "keep.zip").path))
+    }
 }
 
 @MainActor
