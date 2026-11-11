@@ -6,6 +6,7 @@ import Observation
 @MainActor @Observable
 public final class BranchMapModel {
     public enum Layout: String, CaseIterable, Sendable { case list, timeline }
+    public enum TimelineParent: Equatable { case base, branch(String) }
     public internal(set) var isOpen = false
     public var layout: Layout = .list
     public var sort: BranchMapLayout.Sort = .closest
@@ -47,7 +48,26 @@ public final class BranchMapModel {
     public func setIncludesRemotes(_ value: Bool) async { includesRemotes = value; if isOpen { await refresh() } }
     public func setLayout(_ value: Layout) async {
         layout = value
-        if isOpen && value == .timeline && family == nil { await refresh() }
+        if isOpen && value == .timeline && (family == nil || timeline.isEmpty) { await refresh() }
+    }
+
+    /// A hidden or unknown parent cannot be drawn as an edge from the base.
+    public func timelineParent(for ref: String) -> TimelineParent? {
+        guard let entry = snapshot?.entries.first(where: { $0.ref == ref }),
+              (timeline[ref]?.fork ?? entry.metrics.fork) != nil,
+              let parent = family?.origins[ref]?.parent else { return nil }
+        let base = snapshot?.base ?? ""
+        let baseRef: String?
+        if base == "HEAD", let repo = sourceRepository {
+            baseRef = catalog?.worktrees.first { CanonicalPath.same($0.url, URL(fileURLWithPath: repo)) }
+                .flatMap { $0.branch.map { "refs/heads/" + $0 } }
+        } else {
+            baseRef = catalog?.refs.first(where: { $0.fullName == base })?.fullName
+                ?? catalog?.refs.first(where: { $0.kind == .local && $0.name == base })?.fullName
+                ?? catalog?.refs.first(where: { $0.name == base })?.fullName
+        }
+        if parent == baseRef { return .base }
+        return snapshot?.entries.contains(where: { $0.ref == parent }) == true ? .branch(parent) : nil
     }
 
     /// Called at the end of the existing Compare refresh, after its selected refs have settled.
