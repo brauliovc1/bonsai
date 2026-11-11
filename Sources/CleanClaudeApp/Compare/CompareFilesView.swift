@@ -16,11 +16,11 @@ struct CompareFilesView: View {
                     ForEach(entries, id: \.id) { entry in
                         if let folder = entry.folder {
                             Button { toggleFolder(folder) } label: {
-                                Label(folder, systemImage: model.collapsedFolders.contains(folder) ? "chevron.right" : "chevron.down")
+                                Label(URL(fileURLWithPath: folder).lastPathComponent, systemImage: model.collapsedFolders.contains(folder) ? "chevron.right" : "chevron.down")
                                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
-                            }.buttonStyle(.plain).padding(.horizontal, 12)
-                        } else if let file = entry.file { fileRow(file) }
+                            }.buttonStyle(.plain).padding(.horizontal, 12).padding(.leading, CGFloat(min(5, folder.split(separator: "/").count - 1)) * 10)
+                        } else if let file = entry.file { fileRow(file).padding(.leading, model.flatList ? 0 : CGFloat(min(5, file.path.split(separator: "/").count - 1)) * 10) }
                     }
                     if model.generatedCount > 0 {
                         Button { model.showsGenerated.toggle() } label: {
@@ -43,7 +43,7 @@ struct CompareFilesView: View {
             Button { Task { await model.selectFile(file.path) } } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(model.flatList ? file.path : URL(fileURLWithPath: file.path).lastPathComponent).lineLimit(1).truncationMode(.middle)
+                        Text(DiffText.decode(Data((model.flatList ? file.path : URL(fileURLWithPath: file.path).lastPathComponent).utf8))).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: 2)
                         if file.isBinary { Text("Binary").font(.caption).foregroundStyle(.secondary) }
                         else {
@@ -73,7 +73,7 @@ struct CompareFilesView: View {
 
     private func status(_ file: CompareFile) -> String {
         if file.isGenerated { return "Generated · \(file.status.rawValue.capitalized)" }
-        if let old = file.oldPath { return "\(file.status == .copied ? "Copied" : "Renamed") from \(old)" }
+        if let old = file.oldPath { return "\(file.status == .copied ? "Copied" : "Renamed") from \(DiffText.decode(Data(old.utf8)))" }
         return file.status.rawValue.capitalized + (file.modeChanged ? " · Mode changed" : "")
     }
     private func toggleFolder(_ folder: String) {
@@ -84,9 +84,14 @@ struct CompareFilesView: View {
         var entries: [Entry] = []; var seen: Set<String> = []
         for file in model.files where (model.filter.isEmpty || file.path.localizedCaseInsensitiveContains(model.filter))
             && (model.showsGenerated || !file.isGenerated || !model.filter.isEmpty) {
-            let folder = (file.path as NSString).deletingLastPathComponent
-            if !model.flatList, !folder.isEmpty, seen.insert(folder).inserted {
-                entries.append(Entry(id: "folder:" + folder, folder: folder))
+            if !model.flatList {
+                let parts = file.path.split(separator: "/").dropLast()
+                var folder = ""
+                for part in parts {
+                    folder += (folder.isEmpty ? "" : "/") + part
+                    if seen.insert(folder).inserted { entries.append(Entry(id: "folder:" + folder, folder: folder)) }
+                    if model.collapsedFolders.contains(folder) { break }
+                }
             }
             if model.flatList || !model.collapsedFolders.contains(where: { file.path.hasPrefix($0 + "/") }) {
                 entries.append(Entry(id: file.path, file: file))

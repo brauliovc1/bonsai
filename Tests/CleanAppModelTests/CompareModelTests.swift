@@ -40,6 +40,23 @@ struct CompareModelTests {
         #expect(try GitMetadataSnapshot(directory: gitDir) == before)
     }
 
+    @Test func worktreeCommitNavigationPreservesDrafts() async throws {
+        let world = try await CompareFixture.make(); defer { world.fixture.remove() }
+        try world.fixture.write("draft\tvalue\r\n", to: "draft.txt", in: world.worktree)
+        let model = CompareModel(app: makeApp(world.fixture))
+        let directory = world.repo.appending(path: ".git")
+        let before = try GitMetadataSnapshot(directory: directory)
+        await model.configure(repo: world.repo.path, base: "main", compare: .worktree(world.worktree.path))
+        let commit = try #require(model.snapshot?.range.commits.first)
+        await model.selectCommit(commit.sha)
+        await model.selectCommit(nil)
+        #expect(model.files.contains { $0.path == "draft.txt" && $0.notCommitted })
+        await model.selectFile("draft.txt")
+        let patch = try await model.copyPatch(wholeCompare: false)
+        #expect(patch.contains("+draft\tvalue\r\n"))
+        #expect(try GitMetadataSnapshot(directory: directory) == before)
+    }
+
     @Test func preselectionAndCLI() async throws {
         let world = try await CompareFixture.make(); defer { world.fixture.remove() }
         let navigation = NavigationModel()

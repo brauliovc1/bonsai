@@ -10,7 +10,7 @@ struct CompareDiffPane: View {
         VStack(spacing: 0) {
             if let file = model.selectedFile {
                 HStack {
-                    Text(file.path).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                    Text(DiffText.decode(Data(file.path.utf8))).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                     Spacer()
                     Menu { CompareFileActions(model: model, file: file) } label: { Image(systemName: "ellipsis.circle") }
                         .menuStyle(.borderlessButton).fixedSize()

@@ -103,6 +103,6 @@ extension CompareModel {
     public func copyPatch(wholeCompare: Bool) async throws -> String {
         guard let reader, let range = wholeCompare ? snapshot?.range : activeRange else { return "" }
         let bytes = try await reader.patch(file: wholeCompare ? nil : selectedFile, range: range, whitespace: ignoresWhitespace)
-        return DiffText.decode(bytes)
+        return String(data: bytes, encoding: .utf8) ?? DiffText.decode(bytes)
     }
 }

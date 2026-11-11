@@ -1,4 +1,5 @@
 import CleanAppModel
+import CleanCore
 import SwiftUI
 
 struct CompareCommitsView: View {
@@ -11,7 +12,7 @@ struct CompareCommitsView: View {
                 ForEach(model.snapshot?.range.commits ?? []) { commit in
                     Button { Task { await model.selectCommit(commit.sha) } } label: {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(commit.subject).font(.callout.weight(.medium)).lineLimit(3)
+                            Text(DiffText.decode(Data(commit.subject.utf8))).font(.callout.weight(.medium)).lineLimit(3)
                             Text("\(commit.author) · \(DisplayText.timeAgo(commit.date, now: model.app.environment.now()))")
                                 .font(.caption).foregroundStyle(.secondary)
                             Text(String(commit.sha.prefix(8))).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
