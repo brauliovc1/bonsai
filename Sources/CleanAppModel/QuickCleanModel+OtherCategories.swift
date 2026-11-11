@@ -6,6 +6,8 @@ extension QuickCleanModel {
                          simulators: SimulatorReport, downloads: DownloadsReport) -> [QuickCleanOperation] {
         var result: [QuickCleanOperation] = []
         let environment = app.environment
+        let fence = sourceFence
+        let originalProcesses = self.caches.processes
         for finding in caches.ready {
             let paths: [String]
             if finding.entry.deletion == .contents {
@@ -20,8 +22,15 @@ extension QuickCleanModel {
             let item = CachesConfirmation.Item(row: CacheRow(finding: finding, home: environment.homeDirectory),
                                               id: finding.id, name: finding.entry.name, leftAlone: nil)
             let work = CleanupWork(CleanupItem(name: preview.title, resources: ["cache:" + finding.id] + paths,
-                                              estimatedBytes: finding.bytes)) { [self] in
-                let cleaned = await ToolCacheCleaner(environment: environment, processes: self.caches.processes).clean([finding])
+                                              estimatedBytes: finding.bytes)) {
+                let protectedProcesses = ProcessSource {
+                    var list = await originalProcesses.capture()
+                    if let reason = await fence.freshReason(paths: paths) {
+                        list.failure = [list.failure, reason].compactMap { $0 }.joined(separator: " ")
+                    }
+                    return list
+                }
+                let cleaned = await ToolCacheCleaner(environment: environment, processes: protectedProcesses).clean([finding])
                 return CleanupItemResult(CachesCleanReport(items: [item], result: cleaned, busy: ""))
             }
             result.append(QuickCleanOperation(kind: .toolCaches, items: [preview], work: work))
@@ -31,6 +40,7 @@ extension QuickCleanModel {
                 let preview = QuickCleanItem(id: "derived:" + orphan.folder, title: orphan.name,
                     detail: "Orphaned build data for " + orphan.workspacePath, path: orphan.folder, estimatedBytes: orphan.bytes)
                 let work = CleanupWork(CleanupItem(name: orphan.name, resources: [orphan.folder], estimatedBytes: orphan.bytes)) {
+                    if let reason = await fence.freshReason(paths: [orphan.folder]) { return CleanupItemResult(.refused, detail: reason) }
                     let cleaned = await DerivedDataCleaner(environment: environment).delete([orphan])
                     if cleaned.deleted.contains(orphan) {
                         return CleanupItemResult(.cleaned, freedBytes: cleaned.freedBytes, warnings: cleaned.warnings)
@@ -64,7 +74,8 @@ extension QuickCleanModel {
             let work = CleanupWork(CleanupItem(name: "Unavailable simulators",
                 resources: [DockerSimulatorsModel.simulatorsResource] + previews.compactMap(\.path),
                 estimatedBytes: simulatorConfirmation.estimatedBytes, sizeEstimates: devices.map(\.sizeBytes))) { [self] in
-                CleanupItemResult(await dockerSimulators.runDelete(confirmed: devices, estimatedBytes: simulatorConfirmation.estimatedBytes))
+                await protectedSimulatorDelete(devices, estimatedBytes: simulatorConfirmation.estimatedBytes,
+                                               paths: previews.compactMap(\.path), fence: fence)
             }
             result.append(QuickCleanOperation(kind: .simulators, items: previews, work: work))
         }

@@ -20,8 +20,15 @@ extension QuickCleanModel {
     func assemble(_ proposed: [QuickCleanOperation], warnings: [String]) -> QuickCleanPlan {
         var accepted: [QuickCleanOperation] = []
         var warnings = warnings
+        let fence = sourceFence
         for operation in proposed {
             let resources = operation.work.item.resources
+            let broad = [.toolCaches, .derivedData, .simulators].contains(operation.kind)
+            let own = operation.removed ?? operation.touched
+            if (broad || own != nil), let reason = fence.reason(paths: resources, broad: broad, own: own) {
+                warnings.append("\(operation.work.item.name) was left out. " + reason)
+                continue
+            }
             let alreadyQueued = resources.contains { app.cleanupQueue.task(for: $0) != nil }
             let overlaps = accepted.contains { other in
                 resources.contains { resource in other.work.item.resources.contains { CleanupQueue.overlaps(resource, $0) } }

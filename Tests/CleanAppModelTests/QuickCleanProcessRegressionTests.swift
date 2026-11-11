@@ -77,4 +77,29 @@ struct QuickCleanProcessRegressionTests {
         #expect(process.stop())
     }
 
+    @Test func quittingDuringPostCleanupDoesNotStartAdditionalCategoryRefreshes() async throws {
+        let world = try await QuickCleanProcessWorld.make()
+        defer { world.fixture.remove() }
+        let postItem = QueueGate()
+        let lateRefresh = CallGate()
+        defer { postItem.open(); lateRefresh.release() }
+        world.models.app.whenCheckoutsChange { _ in await postItem.wait() }
+        await world.quick.begin()
+        // There are no DerivedData cleanup items. This command can only be a later category refresh.
+        world.tools.hold = lateRefresh.hold { $0.executable == FakeToolchain.defaults }
+        let task = try #require(world.quick.confirm())
+        try #require(await eventually { postItem.entered })
+        #expect(task.completedCount == task.items.count)
+        var quitReturned = false
+        let quitting = Task { await world.models.app.prepareToQuit(); quitReturned = true }
+        try #require(await eventually { world.models.app.isQuitting })
+        postItem.open()
+        try #require(await eventually { quitReturned || lateRefresh.isReached })
+
+        #expect(!lateRefresh.isReached, "Quit after the current item must not start a new defaults/category refresh that can wait for a tool timeout.")
+        lateRefresh.release()
+        await quitting.value
+        await world.queue.waitUntilEmpty()
+    }
+
 }

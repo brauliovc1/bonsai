@@ -69,8 +69,14 @@ public final class QuickCleanModel {
         let task = app.cleanupQueue.enqueue(title: "Quick clean", unit: "steps", work: operations.map(\.work)) { [self] task in
             let cleaned = zip(operations, task.items).filter { $0.1.result?.state == .cleaned }.map(\.0)
             await app.cleanupFinished(touched: cleaned.compactMap(\.touched), removed: cleaned.compactMap(\.removed))
-            await projects.refresh(); await caches.refresh(); await derivedData.refresh()
-            await dockerSimulators.refresh(); await downloads.refresh()
+            let refreshes: [@MainActor () async -> Void] = [
+                { await self.projects.refresh() }, { await self.caches.refresh() }, { await self.derivedData.refresh() },
+                { await self.dockerSimulators.refresh() }, { await self.downloads.refresh() }
+            ]
+            for refresh in refreshes {
+                guard !app.isQuitting else { break }
+                await refresh()
+            }
         }
         guard let task else { problem = "An item is already queued, so nothing was added. Refresh Quick clean."; return nil }
         dismiss()
