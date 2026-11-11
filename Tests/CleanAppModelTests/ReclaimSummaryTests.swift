@@ -84,6 +84,7 @@ struct ReclaimSummaryTests {
             .docker: .unavailable("Docker isn't running, so its space isn't counted."),
             .derivedData: .measured(bytes: 3 * gib, count: 12),
             .simulators: .measured(bytes: gib, count: 3),
+            .downloads: .measured(bytes: 0, count: 0),
         ])
         #expect(summary.partsHelp == """
             Worktrees: 56.0 GB
@@ -95,7 +96,7 @@ struct ReclaimSummaryTests {
         #expect(!summary.partsHelp.contains("Docker"))
         #expect(summary.totalBytes == 60 * gib)
         #expect(summary.nonZeroParts == [.worktrees, .derivedData, .simulators])
-        #expect(summary.emptyParts == [.toolCaches])
+        #expect(summary.emptyParts == [.toolCaches, .downloads])
         #expect(summary.pendingParts == [.projectFolders])
 
         // Each clean-up screen's badge is its parts; the rest have none.

@@ -12,7 +12,10 @@ struct RemovalHistoryRow: View {
                 Text(row.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 if let loss = row.lossLine { Text(loss).font(.callout).foregroundStyle(Palette.orange) }
                 if let date = row.restoredAt {
-                    Text("Restored \(date, format: .dateTime.month(.abbreviated).day())").font(.caption).foregroundStyle(.secondary)
+                    Text("\(row.entry.action == .movedToTrash ? "Put back" : "Restored") \(date, format: .dateTime.month(.abbreviated).day())").font(.caption).foregroundStyle(.secondary)
+                } else if row.entry.action == .movedToTrash {
+                    Text(model.putBackUnavailableReason(row) ?? "Can be put back while still in the Trash.")
+                        .font(.caption).foregroundStyle(.secondary)
                 } else if !row.isRestorable {
                     Text(row.restoreNote)
                         .font(.caption).foregroundStyle(.secondary)
@@ -26,6 +29,10 @@ struct RemovalHistoryRow: View {
                 QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path)
             } else if row.isRestorable {
                 Button("Restore") { model.queueRestore(row.id) }.help("Recreate the worktree from its kept branch or commit. Dependencies are downloaded again when needed.")
+            } else if row.entry.action == .movedToTrash, row.restoredAt == nil {
+                Button("Put back") { model.queuePutBack(row.id) }
+                    .disabled(model.putBackUnavailableReason(row) != nil)
+                    .help(model.putBackUnavailableReason(row) ?? "Move this file back to its original Downloads location.")
             }
         }
         .contextMenu { Button("Copy path") { FolderActions.copy([row.path]) } }

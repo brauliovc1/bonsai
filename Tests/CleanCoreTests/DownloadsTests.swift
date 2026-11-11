@@ -127,4 +127,33 @@ struct DownloadsTests {
         #expect(try JSONDecoder().decode(RemovalLogEntry.self, from: data) == entry)
         #expect(!String(decoding: data, as: UTF8.self).contains("trashIdentity"))
     }
+
+    @Test func aDestinationAppearingAfterThePutBackCheckIsNeverReplaced() async throws {
+        let world = try DownloadsWorld()
+        defer { world.directory.remove() }
+        let original = try world.file("a.zip")
+        let results = await world.mover().move(await world.scanner().scan().eligible)
+        let entry = try #require(results.first?.entry)
+        var putBack = DownloadPutBack(home: world.home, log: world.log)
+        putBack.beforeRename = { try Data("competing file".utf8).write(to: original) }
+        #expect(throws: DownloadsError.self) { try putBack.putBack(entry) }
+        #expect(try String(contentsOf: original, encoding: .utf8) == "competing file")
+        #expect(try String(contentsOf: world.trash.appending(path: "a.zip"), encoding: .utf8) == "fixture")
+        #expect(try world.log.entries().map(\.action) == [.movedToTrash])
+    }
+
+    @Test func aTrashFileChangingAtThePutBackBoundaryStaysInTrash() async throws {
+        let world = try DownloadsWorld()
+        defer { world.directory.remove() }
+        _ = try world.file("a.zip")
+        let results = await world.mover().move(await world.scanner().scan().eligible)
+        let entry = try #require(results.first?.entry)
+        let source = world.trash.appending(path: "a.zip")
+        var putBack = DownloadPutBack(home: world.home, log: world.log)
+        putBack.beforeRename = { try Data("changed in Trash".utf8).write(to: source) }
+        #expect(throws: DownloadsError.self) { try putBack.putBack(entry) }
+        #expect(!FileManager.default.fileExists(atPath: world.downloads.appending(path: "a.zip").path))
+        #expect(try String(contentsOf: source, encoding: .utf8) == "changed in Trash")
+        #expect(try world.log.entries().count == 1)
+    }
 }

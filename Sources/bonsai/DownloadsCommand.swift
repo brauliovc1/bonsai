@@ -21,14 +21,14 @@ struct DownloadsCommand: AsyncParsableCommand {
 
     func run() async throws {
         let context = try CommandContext.load()
-        var environment = context.environment
-        if let home { environment.homeDirectory = context.absoluteURL(home) }
+        let environment = context.environment
+        let homeDirectory = home.map(context.absoluteURL) ?? environment.homeDirectory
         let lock = try CommandContext.holdCleanupLock(if: yes, environment: environment)
         defer { lock?.release() }
-        let scanner = DownloadsScanner(home: environment.homeDirectory, now: environment.now)
+        let scanner = DownloadsScanner(home: homeDirectory, now: environment.now)
         async let downloads = scanner.scan()
-        async let trash = TrashInfo.read(home: environment.homeDirectory)
-        async let snapshots = LocalSnapshots.read(home: environment.homeDirectory)
+        async let trash = TrashInfo.read(home: homeDirectory)
+        async let snapshots = LocalSnapshots.read(home: homeDirectory)
         let report = await DownloadsListing(downloads: downloads, trash: trash, timeMachine: snapshots)
         if json {
             let encoder = JSONEncoder()

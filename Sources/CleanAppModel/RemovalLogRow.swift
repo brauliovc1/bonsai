@@ -58,6 +58,9 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
         case .cacheClean: "The tool downloads or rebuilds this cache when needed."
         case .dockerPrune: "Docker recreates its unused data when needed. This cleanup can't be restored."
         case .simulatorsDeleteUnavailable: "Create a new device in Xcode to use that simulator again."
+        case .movedToTrash: "Can be put back while the file remains in the Trash."
+        case .putBack: "Returned to its original Downloads location."
+        case .trashEmptied: "Finder permanently deleted the Trash contents. These files can't be put back."
         default: "This cleanup can't be restored."
         }
     }

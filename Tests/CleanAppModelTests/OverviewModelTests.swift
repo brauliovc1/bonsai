@@ -36,7 +36,7 @@ struct OverviewModelTests {
         #expect(NavigationModel().section == .overview)
         #expect(SidebarSection.Group.allCases.map(\.title) == ["Clean up", "History and info"])
         #expect(SidebarSection.Group.cleanUp.sections.map(\.title) == [
-            "Overview", "Worktrees", "Project folders", "Tool caches", "Docker & Simulators", "Xcode DerivedData",
+            "Overview", "Worktrees", "Project folders", "Tool caches", "Downloads & Trash", "Docker & Simulators", "Xcode DerivedData",
         ])
         #expect(SidebarSection.Group.historyAndInfo.sections.map(\.title) == ["Recently removed", "Claude usage"])
         #expect(SidebarSection.allCases == SidebarSection.Group.allCases.flatMap(\.sections))
@@ -88,7 +88,7 @@ struct OverviewModelTests {
         #expect(derived.detail == "2 folders of deleted projects' DerivedData")
         #expect(world.overview.card(.worktrees)?.detail == "7 worktrees you can remove; branches are kept")
         #expect(world.overview.card(.projectFolders) == nil && world.overview.card(.toolCaches) == nil)
-        #expect(world.overview.nothingText == "Nothing to clean in Project folders or Tool caches.")
+        #expect(world.overview.nothingText == "Nothing to clean in Project folders, Tool caches or Downloads & Trash.")
         #expect(world.overview.notCountedText == nil && world.overview.measuringText == nil)
 
         // Nothing at all: no card, and the headline says so instead of "about 0 KB".
@@ -98,7 +98,7 @@ struct OverviewModelTests {
         #expect(world.overview.cards.isEmpty)
         #expect(world.overview.canFreeText == "Nothing to clean right now")
         #expect(world.overview.nothingText == "Nothing to clean in Worktrees, Project folders, Tool caches, "
-            + "Docker & Simulators or Xcode DerivedData.")
+            + "Downloads & Trash, Docker & Simulators or Xcode DerivedData.")
     }
 
     /// Each card's button opens its screen already filtered to what the card counted.

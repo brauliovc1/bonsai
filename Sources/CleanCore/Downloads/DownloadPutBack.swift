@@ -5,6 +5,8 @@ public struct DownloadPutBack: Sendable {
     public let home: URL
     public let log: RemovalLog
     public var now: @Sendable () -> Date
+    /// Runs after availability checks; tests create a competing destination at this boundary.
+    var beforeRename: (@Sendable () throws -> Void)?
 
     public init(home: URL, log: RemovalLog, now: @escaping @Sendable () -> Date = { Date() }) {
         self.home = home.resolvingSymlinksInPath()
@@ -45,6 +47,7 @@ public struct DownloadPutBack: Sendable {
         let targetFD = open(target.deletingLastPathComponent().path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
         guard targetFD >= 0 else { throw DownloadsError("Could not open the original Downloads folder.") }
         defer { close(targetFD) }
+        try beforeRename?()
         guard DownloadIdentity.read(source) == stored.trashIdentity else { throw DownloadsError("This file changed in the Trash.") }
         guard renameatx_np(sourceFD, source.lastPathComponent, targetFD, target.lastPathComponent, UInt32(RENAME_EXCL)) == 0 else {
             throw DownloadsError("Could not put the file back: \(String(cString: strerror(errno)))")
