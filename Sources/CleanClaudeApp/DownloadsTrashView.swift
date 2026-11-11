@@ -109,7 +109,9 @@ struct DownloadsTrashView: View {
                 Text(model.listing == nil ? "Not measured yet" : TrashInfo.unreadableMessage)
                     .font(.callout).foregroundStyle(.secondary)
             }
-            Button("Empty Trash…") { model.prepareEmptyTrash() }.disabled(!model.canEmptyTrash)
+            Button(model.isPreparingEmptyTrash ? "Checking Trash…" : "Empty Trash…") {
+                Task { await model.prepareEmptyTrash() }
+            }.disabled(!model.canEmptyTrash)
         }
     }
 

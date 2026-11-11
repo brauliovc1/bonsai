@@ -27,13 +27,13 @@ extension DownloadsTrashModel {
 
     @discardableResult
     public func confirmEmptyTrash() -> CleanupTask? {
-        guard isShowingEmptySheet, canEmptyTrash else { return nil }
+        guard isShowingEmptySheet, canEmptyTrash, let confirmedTrash else { return nil }
         let flow = EmptyTrashFlow(emptier: emptier, log: RemovalLog(environment: app.environment),
                                   home: app.environment.homeDirectory, now: app.environment.now)
         let item = CleanupItem(name: "Trash", resources: ["trash", app.environment.homeDirectory.appending(path: ".Trash").path])
         let task = app.cleanupQueue.enqueue(title: "Empty Trash", unit: "actions", work: [CleanupWork(item) {
             do {
-                let result = try await flow.run(confirmed: true)
+                let result = try await flow.run(confirmed: true, expected: confirmedTrash.fingerprint)
                 self.automationDenied = false
                 return CleanupItemResult(.cleaned, freedBytes: result?.entry.freedBytes,
                                          detail: "Finder emptied the Trash", warnings: result?.warnings ?? [])
@@ -45,7 +45,7 @@ extension DownloadsTrashModel {
             await self.app.cleanupFinished(rescanWorktrees: false)
             await self.refresh()
         }
-        if task != nil { isShowingEmptySheet = false }
+        if task != nil { isShowingEmptySheet = false; self.confirmedTrash = nil }
         return task
     }
 }

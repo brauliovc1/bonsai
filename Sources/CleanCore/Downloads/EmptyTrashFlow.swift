@@ -37,8 +37,14 @@ public struct EmptyTrashFlow: Sendable {
     }
 
     /// Call under the cleanup queue's guard and lock. False cannot send an Apple Event or write a log.
-    public func run(confirmed: Bool) async throws -> EmptyTrashResult? {
+    public func run(confirmed: Bool, expected: TrashFingerprint? = nil) async throws -> EmptyTrashResult? {
         guard confirmed else { return nil }
+        let confirmedContents: TrashFingerprint
+        if let expected { confirmedContents = expected }
+        else { confirmedContents = await TrashFingerprint.capture(home: home) }
+        guard await TrashFingerprint.capture(home: home) == confirmedContents else {
+            throw DownloadsError("The Trash changed since you confirmed. Review its contents and try again.")
+        }
         let before = freeSpace.availableBytes()
         try await emptier.empty()
         let after = freeSpace.availableBytes()

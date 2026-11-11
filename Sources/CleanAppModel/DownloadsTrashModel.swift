@@ -16,6 +16,9 @@ public final class DownloadsTrashModel {
     public var selection: Set<String> = []
     public var moveConfirmation: DownloadsConfirmation?
     public var isShowingEmptySheet = false
+    public private(set) var isPreparingEmptyTrash = false
+    public private(set) var emptyTrashProblem: String?
+    @ObservationIgnored var confirmedTrash: (info: TrashInfo, fingerprint: TrashFingerprint)?
     public internal(set) var automationDenied = false
 
     public init(app: AppModel, runner: CommandRunner = .live, trash: TrashOperation = .live,
@@ -32,16 +35,16 @@ public final class DownloadsTrashModel {
         eligible.filter { selection.contains($0.id) && app.cleanupQueue.task(for: $0.path) == nil }
     }
     public var selectedBytes: Int64 { selected.reduce(0) { $0 + $1.bytes } }
-    public var warnings: [String] { (listing?.downloads.warnings ?? []) + (listing?.timeMachine.warnings ?? []) }
+    public var warnings: [String] { (listing?.downloads.warnings ?? []) + (listing?.timeMachine.warnings ?? []) + [emptyTrashProblem].compactMap { $0 } }
     public var trash: TrashInfo? { listing?.trash }
     public var snapshots: LocalSnapshots? { listing?.timeMachine }
     public var emptyConfirmation: String {
-        guard let trash, let count = trash.count, let bytes = trash.bytes else {
+        guard let info = confirmedTrash?.info ?? trash, let count = info.count, let bytes = info.bytes else {
             return "Permanently delete everything in the Trash? This can't be undone."
         }
         return "Permanently delete \(count) \(count == 1 ? "item" : "items") (\(DisplayText.bytes(bytes)))? This can't be undone."
     }
-    public var canEmptyTrash: Bool { listing != nil && trash?.count != 0 && !app.isQuitting && app.cleanupQueue.task(for: "trash") == nil }
+    public var canEmptyTrash: Bool { listing != nil && trash?.count != 0 && !isPreparingEmptyTrash && !app.isQuitting && app.cleanupQueue.task(for: "trash") == nil }
 
     public func setSelected(_ file: DownloadFile, _ value: Bool) {
         if value, eligible.contains(file), app.cleanupQueue.task(for: file.path) == nil { selection.insert(file.id) }
@@ -57,8 +60,20 @@ public final class DownloadsTrashModel {
         moveConfirmation = DownloadsConfirmation(files: selected)
     }
 
-    public func prepareEmptyTrash() {
+    public func prepareEmptyTrash() async {
         guard canEmptyTrash else { return }
+        isPreparingEmptyTrash = true
+        defer { isPreparingEmptyTrash = false }
+        emptyTrashProblem = nil
+        let before = await TrashFingerprint.capture(home: app.environment.homeDirectory)
+        let info = await TrashInfo.read(home: app.environment.homeDirectory, runner: runner)
+        let after = await TrashFingerprint.capture(home: app.environment.homeDirectory)
+        guard before == after else {
+            emptyTrashProblem = "The Trash changed while it was being checked. Refresh and try again."
+            return
+        }
+        guard !app.isQuitting else { return }
+        confirmedTrash = (info, after)
         isShowingEmptySheet = true
     }
 

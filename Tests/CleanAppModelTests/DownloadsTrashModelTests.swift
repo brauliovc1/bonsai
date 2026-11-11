@@ -69,14 +69,14 @@ struct DownloadsTrashModelTests {
         await model.refresh()
         #expect(model.canEmptyTrash)
         #expect(model.confirmEmptyTrash() == nil && fake.calls == 0)
-        model.prepareEmptyTrash()
+        await model.prepareEmptyTrash()
         #expect(model.emptyConfirmation.contains("Permanently delete 1 item"))
         let task = try #require(model.confirmEmptyTrash())
         #expect(await eventually { !world.app.cleanupQueue.hasPending })
         #expect(fake.calls == 1 && model.automationDenied)
         #expect(task.items.first?.state == .failed && world.app.logEntries.isEmpty)
         fake.denied = false
-        model.prepareEmptyTrash()
+        await model.prepareEmptyTrash()
         _ = try #require(model.confirmEmptyTrash())
         #expect(await eventually { !world.app.cleanupQueue.hasPending })
         #expect(fake.calls == 2 && !model.automationDenied)
@@ -119,6 +119,45 @@ struct DownloadsTrashModelTests {
         model.listing = listing
         #expect(model.canEmptyTrash)
         #expect(model.emptyConfirmation == "Permanently delete everything in the Trash? This can't be undone.")
+    }
+
+    @Test func filesArrivingAfterTheEmptyConfirmationNeverReachFinder() async throws {
+        let world = try DownloadsModelWorld()
+        defer { world.fixture.remove() }
+        try Data("confirmed".utf8).write(to: world.trash.appending(path: "confirmed.zip"))
+        let fake = ModelTrashEmptier()
+        let model = world.model(emptier: fake)
+        await model.refresh()
+        await model.prepareEmptyTrash()
+        #expect(model.emptyConfirmation.contains("1 item"))
+        let lock = try #require(try CleanupLock.tryAcquire(environment: world.app.environment))
+        defer { lock.release() }
+        let task = try #require(model.confirmEmptyTrash())
+        #expect(await eventually { task.state == .waiting })
+        try Data("never confirmed".utf8).write(to: world.trash.appending(path: "new.zip"))
+        lock.release()
+        #expect(await eventually { !world.app.cleanupQueue.hasPending })
+        #expect(fake.calls == 0 && world.app.logEntries.isEmpty)
+        #expect(task.items.first?.result?.detail.contains("changed since you confirmed") == true)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: world.trash.path).count == 2)
+    }
+
+    @Test func editsDeepInsideTrashInvalidateItsConfirmation() async throws {
+        let world = try DownloadsModelWorld()
+        defer { world.fixture.remove() }
+        let file = world.trash.appending(path: "folder/nested/keep.txt")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("before".utf8).write(to: file)
+        let fake = ModelTrashEmptier()
+        let model = world.model(emptier: fake)
+        await model.refresh()
+        await model.prepareEmptyTrash()
+        try Data("after!".utf8).write(to: file)
+        let task = try #require(model.confirmEmptyTrash())
+        #expect(await eventually { !world.app.cleanupQueue.hasPending })
+        #expect(fake.calls == 0 && world.app.logEntries.isEmpty)
+        #expect(task.items.first?.result?.detail.contains("changed since you confirmed") == true)
+        #expect(try String(contentsOf: file, encoding: .utf8) == "after!")
     }
 }
 
