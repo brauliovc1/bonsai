@@ -13,16 +13,16 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
     public var date: Date { entry.date }
     public var path: String { entry.path }
 
-    /// "Removed worktree", "Light clean", "Docker prune"; an action this version has no label for shows its
+    /// Plain action labels; an action this version has no label for shows its
     /// raw name (no exhaustive switch, so a later phase's new action still compiles).
     public var actionText: String {
         let labels: [RemovalAction: String] = [
             .worktreeRemove: "Removed worktree",
             .worktreeRemoveAnyway: "Removed anyway",
             .worktreePrune: "Cleared missing folders",
-            .lightClean: "Light clean",
+            .lightClean: "Cleaned dependencies",
             .derivedDataDelete: "Deleted orphaned DerivedData",
-            .dockerPrune: "Docker prune",
+            .dockerPrune: "Cleaned up Docker",
             .simulatorsDeleteUnavailable: "Deleted unavailable simulators",
             .cacheClean: "Cleaned tool cache",
             .movedToTrash: "Moved to Trash",
@@ -50,6 +50,17 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
     public var freedSortKey: Int64 { entry.freedBytes ?? -1 }
 
     public var isRestorable: Bool { entry.isRestorable }
+    public var restoreNote: String {
+        switch entry.action {
+        case .worktreePrune: "Its folder was already missing; only git's record was cleared."
+        case .lightClean: "Run the project's package or build command to get these folders back."
+        case .derivedDataDelete: "Xcode builds this folder again when needed."
+        case .cacheClean: "The tool downloads or rebuilds this cache when needed."
+        case .dockerPrune: "Docker recreates its unused data when needed. This cleanup can't be restored."
+        case .simulatorsDeleteUnavailable: "Create a new device in Xcode to use that simulator again."
+        default: "This cleanup can't be restored."
+        }
+    }
     public var restoredAt: Date? { entry.restoredAt }
 
     /// For the row's tooltip: the notes the cleanup was accepted with.

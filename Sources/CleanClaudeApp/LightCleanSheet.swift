@@ -26,8 +26,7 @@ struct LightCleanSheet: View {
 
     private func confirmPage(_ confirmation: LightCleanConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(confirmation.cleanable.isEmpty ? "Nothing to delete" : "\(confirmation.deleteButtonTitle)?")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: confirmation.title)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(confirmation.cleanable) { item in
@@ -80,7 +79,7 @@ struct LightCleanSheet: View {
                     model.queueLightClean(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Palette.red)
                 .disabled(model.isLightCleaning)
             }
         }
@@ -93,17 +92,14 @@ private struct CleanableItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            WorktreeHeader(
-                repoName: item.repoName, branchText: item.branchText, kind: item.worktree.kind,
-                path: item.worktree.path, sizeText: DisplayText.bytes(item.estimatedBytes)
-            )
+            SheetItemHeader(title: item.repoName, detail: item.branchText, path: item.worktree.path, bytes: item.estimatedBytes)
             ForEach(item.candidates, id: \.relativePath) { candidate in
                 HStack(alignment: .firstTextBaseline) {
                     Label(candidate.relativePath, systemImage: "folder")
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
-                    Text(DisplayText.bytes(candidate.estimatedBytes)).monospacedDigit()
+                    SizeText(bytes: candidate.estimatedBytes)
                 }
                 if !candidate.packageClones.isEmpty {
                     Label(
@@ -126,10 +122,7 @@ private struct LeftAloneItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            WorktreeHeader(
-                repoName: item.repoName, branchText: item.branchText, kind: item.worktree.kind,
-                path: item.worktree.path
-            )
+            SheetItemHeader(title: item.repoName, detail: item.branchText, path: item.worktree.path)
             if let reason = item.leftAloneReason {
                 Label(reason, systemImage: "nosign")
             }
@@ -148,7 +141,7 @@ private struct SkippedList: View {
     var body: some View {
         ForEach(skipped, id: \.relativePath) { skip in
             Label {
-                Text("\(skip.relativePath) is left alone: \(skip.reason.sentence)")
+                Text("\(skip.relativePath) is left alone: \(CleanupPresentation.reason(skip.reason))")
             } icon: {
                 Image(systemName: "nosign")
             }
@@ -158,7 +151,7 @@ private struct SkippedList: View {
         ForEach(unreadable, id: \.self) { folder in
             Label("\(folder) couldn't be read; nothing below it was looked at.", systemImage: "exclamationmark.triangle")
                 .font(.callout)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Palette.orange)
         }
     }
 }

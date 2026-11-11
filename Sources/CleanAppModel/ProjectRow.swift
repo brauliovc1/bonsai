@@ -48,12 +48,24 @@ public struct ProjectRow: Identifiable, Hashable, Sendable {
     public var sizeBytes: Int64 { project.totalBytes }
     public var sizeText: String { DisplayText.bytes(sizeBytes) + (project.hasUnknownSizes ? "+" : "") }
 
-    public var statusText: String { status.label }
+    public var statusText: String { statusWords.text }
+
+    public var statusWords: StatusWords {
+        switch status {
+        case .ready: StatusWords("Ready to clean", .green, symbol: "checkmark.circle")
+        case .recent(let days): StatusWords("Worked here \(days) \(days == 1 ? "day" : "days") ago", .blue, symbol: "clock")
+        case .idleUnknown: StatusWords("Couldn't check", .grey, symbol: "questionmark.circle")
+        case .blocked(.inUse(let processes)), .usedElsewhere(let processes):
+            StatusWords("Open in " + Set(processes.map(\.command)).sorted().joined(separator: ", "), .blue, symbol: "macwindow")
+        case .blocked:
+            StatusWords("Couldn't check", .grey, symbol: "questionmark.circle")
+        }
+    }
 
     /// The status sentence, then the folders left alone with why, for the Status cell's tooltip.
     public var statusHelp: String {
         var lines = [status.sentence]
-        lines += project.skipped.map { "\($0.relativePath) is left alone: \($0.reason.sentence)" }
+        lines += project.skipped.map { "\($0.relativePath) is left alone: \(CleanupPresentation.reason($0.reason))" }
         lines += project.unreadable.map { "\($0) couldn't be read; nothing below it was looked at." }
         return lines.joined(separator: "\n")
     }

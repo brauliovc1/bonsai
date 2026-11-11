@@ -31,4 +31,6 @@ public struct PrunePlan: Sendable {
         let ref = entry.branch.map { "branch \($0)" } ?? entry.head.map { "detached at \($0.prefix(8))" } ?? "no HEAD"
         return "\(entry.path ?? "worktrees/\(entry.name)") (\(ref))"
     }
+    public var title: String { entryCount == 0 ? "Nothing to clear" : "Clear \(entryCount) missing folder \(entryCount == 1 ? "record" : "records")?" }
+
 }

@@ -5,18 +5,18 @@ import Foundation
 extension AutoModeModel {
     /// "Auto mode: off", "Auto mode: report-only until 15 Nov 2026 at 10:00", "Auto mode: on".
     public var statusText: String {
-        guard isEnabled else { return "Auto mode: off" }
+        guard isEnabled else { return "Auto clean: off" }
         if isReportOnly {
-            return "Auto mode: report-only" + (reportOnlyEndsAt.map { " until \(Self.dateText($0))" } ?? "")
+            return "Auto clean: report-only" + (reportOnlyEndsAt.map { " until \(Self.dateText($0))" } ?? "")
         }
-        return "Auto mode: on"
+        return "Auto clean: on"
     }
 
     /// "Report-only until <date>: it lists what it would remove and deletes nothing." while in the window.
     public var reportOnlyText: String? {
         guard isReportOnly else { return nil }
         let until = reportOnlyEndsAt.map { " until \(Self.dateText($0))" } ?? ""
-        return "Report-only\(until): auto mode lists what it would remove and deletes nothing."
+        return "Report-only\(until): auto clean lists what it would remove and deletes nothing."
     }
 
     /// What the last run did, in one line.
@@ -33,7 +33,7 @@ extension AutoModeModel {
 
     /// When the next run may start. No closing period after a date: some locales end the time with one.
     public var nextRunText: String {
-        guard isEnabled else { return "Next run: none while auto mode is off." }
+        guard isEnabled else { return "Next run: none while auto clean is off." }
         if isRunning { return "Running now…" }
         guard let next = nextRun, next > now else {
             return "Next run: at the next check (daily, at launch and when the Mac wakes)."
@@ -61,7 +61,7 @@ extension AutoModeModel {
         if run.notifiedCount > 0 { parts.append("\(run.notifiedCount) with local work") }
         if !run.refused.isEmpty { parts.append("\(run.refused.count) left alone") }
         if !run.failures.isEmpty { parts.append("\(run.failures.count) failed") }
-        return parts.joined(separator: ", ") + "." + (run.stopReason.map { " " + $0.sentence } ?? "")
+        return parts.joined(separator: ", ") + "." + (run.stopReason.map { " " + ($0 == .turnedOff ? "Auto clean was turned off, so the run stopped." : $0.sentence) } ?? "")
     }
 
     static func dateText(_ date: Date) -> String {

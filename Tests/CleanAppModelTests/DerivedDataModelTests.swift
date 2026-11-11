@@ -112,7 +112,7 @@ struct DerivedDataModelTests {
         #expect(confirmation.allowed.map(\.name) == ["Gone-aaa"])
         #expect(confirmation.blocked.map(\.name).sorted() == ["Live-bbb", "ModuleCache.noindex"])
         #expect(confirmation.blocked.allSatisfy { $0.orphan == nil && $0.leftAloneReason != nil })
-        #expect(confirmation.deleteButtonTitle == "Delete 1 folder")
+        #expect(confirmation.deleteButtonTitle == "Delete 1")
 
         let report = await world.model.confirmDelete(confirmation)
         #expect(report.deletedCount == 1)

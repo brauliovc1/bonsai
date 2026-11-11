@@ -51,7 +51,7 @@ public struct CachesConfirmation: Identifiable, Sendable {
     public var hasUnknownSizes: Bool { allowed.contains { $0.bytes == nil } }
 
     /// "Clean npm", "Clean 3 items".
-    public var cleanButtonTitle: String {
-        allowed.count == 1 ? "Clean \(allowed[0].name)" : "Clean \(allowed.count) items"
-    }
+    public var cleanButtonTitle: String { CleanupPresentation.button("Clean", count: allowed.count) }
+    public var title: String { CleanupPresentation.title("Clean", count: allowed.count, noun: "cache", plural: "caches", bytes: estimatedTotalBytes) }
+
 }

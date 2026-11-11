@@ -5,7 +5,7 @@ import Foundation
 import Testing
 
 /// Auto mode on the demo world (plus a 29-day worktree), with a fake clock and a recording notifier.
-@Suite("Auto mode runs")
+@Suite("Auto clean runs")
 @MainActor
 struct AutoModeModelTests {
     /// The worktrees that must survive every run with default settings: uncommitted changes, a Claude
@@ -19,7 +19,7 @@ struct AutoModeModelTests {
         world.app.reloadSettings()
         try await Task.sleep(for: .milliseconds(100))
         #expect(world.notifier.authorizationRequests == 0, "not at launch")
-        #expect(world.autoMode.statusText == "Auto mode: off")
+        #expect(world.autoMode.statusText == "Auto clean: off")
 
         await world.autoMode.enable()
         var saved = try world.saved()
@@ -27,7 +27,7 @@ struct AutoModeModelTests {
         #expect(saved.idleThresholdDays == 45, "other keys are kept")
         #expect(world.notifier.authorizationRequests == 1)
         let end = world.clock.now.addingTimeInterval(7 * 86_400)
-        #expect(world.autoMode.statusText == "Auto mode: report-only until \(end.formatted(date: .abbreviated, time: .shortened))")
+        #expect(world.autoMode.statusText == "Auto clean: report-only until \(end.formatted(date: .abbreviated, time: .shortened))")
         #expect(world.autoMode.reportOnlyText?.hasPrefix("Report-only until ") == true)
 
         world.clock.advance(by: 3_600)
@@ -64,7 +64,7 @@ struct AutoModeModelTests {
         #expect(world.notifier.posted == [NotificationContent(
             identifier: "auto-run",
             title: "Bonsai",
-            body: "Auto mode (report only): would remove 1 worktree, about \(size). 1 idle worktree has local work. "
+            body: "Auto clean (report only): would remove 1 worktree, about \(size). 1 idle worktree has local work. "
                 + "Nothing was deleted.",
             opens: .overview
         )])
@@ -131,8 +131,8 @@ struct AutoModeModelTests {
         #expect(summary.stopReason == .turnedOff && summary.stoppedCount == 2)
         #expect(try world.exists("atlas-archive") && world.exists("tidy-otter"))
         #expect(try world.logEntries().isEmpty)
-        #expect(world.notifier.posted.isEmpty, "auto mode is off when the run ends: no notification")
-        #expect(world.autoMode.lastRunText.hasSuffix("removed nothing, 1 with local work. Auto mode was turned off, so the run stopped."))
+        #expect(world.notifier.posted.isEmpty, "auto clean is off when the run ends: no notification")
+        #expect(world.autoMode.lastRunText.hasSuffix("removed nothing, 1 with local work. Auto clean was turned off, so the run stopped."))
     }
 
     /// The rules the plan used change on disk during the run (the CLI or the General tab): it stops.
@@ -153,7 +153,7 @@ struct AutoModeModelTests {
             #expect(summary.stopReason == .rulesChanged && summary.stoppedCount == 2)
             #expect(try world.logEntries().isEmpty)
             let body = try #require(world.notifier.posted.first?.body)
-            #expect(body == "Auto mode removed nothing. 1 idle worktree has local work. The rules changed, so the run stopped.")
+            #expect(body == "Auto clean removed nothing. 1 idle worktree has local work. The rules changed, so the run stopped.")
             #expect(!body.contains("left alone"))
         }
     }
@@ -210,7 +210,7 @@ struct AutoModeModelTests {
         let world = try await AutoWorld.make(enabledDaysAgo: nil)
         defer { world.remove() }
         #expect(await world.autoMode.runNow() == nil)
-        #expect(world.autoMode.error == "Auto mode is off.")
+        #expect(world.autoMode.error == "Auto clean is off.")
         await world.autoMode.checkSchedule()
         #expect(try world.saved().lastAutoRun == nil)
         #expect(world.notifier.posted.isEmpty && world.app.scanCount == 0)

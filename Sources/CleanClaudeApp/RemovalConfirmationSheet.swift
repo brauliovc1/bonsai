@@ -28,8 +28,7 @@ struct RemovalConfirmationSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             // Remove… is offered only for worktrees that can go, so "nothing" here means they changed since the
             // last scan; each one below says why.
-            Text(confirmation.allowed.isEmpty ? "These can't be removed now" : "\(confirmation.removeButtonTitle)?")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: confirmation.title)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(confirmation.allowed) { item in
@@ -80,7 +79,7 @@ struct RemovalConfirmationSheet: View {
                     model.queueRemoval(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Palette.red)
                 .disabled(model.isRemoving)
             }
         }
@@ -93,10 +92,10 @@ private struct AllowedItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ItemHeader(item: item)
+            SheetItemHeader(title: item.repoName, detail: item.branchText, path: item.worktree.path, bytes: item.estimatedBytes)
             if let warning = item.claudeWarning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Palette.orange)
             }
             ForEach(item.notes, id: \.self) { note in
                 Label(WorktreeStatusText.sentence(for: note), systemImage: "info.circle")
@@ -109,7 +108,7 @@ private struct AllowedItemView: View {
                 } icon: {
                     Image(systemName: "doc.badge.ellipsis")
                 }
-                .foregroundStyle(.orange)
+                .foregroundStyle(Palette.orange)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -122,7 +121,7 @@ private struct BlockedItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ItemHeader(item: item)
+            SheetItemHeader(title: item.repoName, detail: item.branchText, path: item.worktree.path, bytes: item.estimatedBytes)
             ForEach(item.blockers, id: \.self) { reason in
                 Label(WorktreeStatusText.sentence(for: reason), systemImage: "nosign")
             }

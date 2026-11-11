@@ -27,20 +27,10 @@ struct ProjectsFooter: View {
                     .popover(isPresented: $showingProblems) { problemList }
             }
             if let leftOut = model.leftOutText {
-                Button(action: showWorktrees) {
-                    Text(leftOut).lineLimit(1).truncationMode(.tail)
-                }
-                .buttonStyle(.link)
-                .foregroundStyle(Color.accentColor)
-                .help("Claude and Cursor worktrees are better removed whole on the Worktrees screen")
+                NothingLine(text: leftOut)
+                Button("Worktrees", action: showWorktrees).buttonStyle(.link)
             }
-            Spacer()
-            Text("Ready to clean: \(DisplayText.bytes(model.idleTotal.bytes)) in \(DisplayText.projects(model.idleTotal.count))")
-                .monospacedDigit()
-                .help("Idle \(model.threshold) days or more with nothing running inside, the same as the Overview's card. "
-                    + "Worktrees that can be removed whole are left out: Worktrees counts them, folders and all.")
-            Text("All: \(DisplayText.bytes(model.allTotal.bytes)) in \(DisplayText.projects(model.allTotal.count))")
-                .monospacedDigit()
+            Spacer(minLength: 0)
         }
         .font(.callout)
         .foregroundStyle(.secondary)

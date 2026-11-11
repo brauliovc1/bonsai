@@ -27,12 +27,7 @@ struct ProjectsCleanSheet: View {
 
     private func confirmPage(_ confirmation: ProjectsConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(confirmation.title).font(.title2.weight(.semibold))
-                if !confirmation.cleanable.isEmpty {
-                    Text(confirmation.summary).foregroundStyle(.secondary)
-                }
-            }
+            SheetHeading(title: confirmation.title, subtitle: confirmation.summary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(confirmation.ready) { item in
@@ -92,37 +87,9 @@ struct ProjectsCleanSheet: View {
                     model.queueClean(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Palette.red)
                 .disabled(model.isCleaning)
             }
-        }
-    }
-}
-
-/// The project's name, repo and size.
-private struct ProjectItemHeader: View {
-    let item: ProjectsConfirmation.Item
-    var sizeText: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(item.name).fontWeight(.semibold)
-                if item.repoName != item.name {
-                    Text(item.repoName).foregroundStyle(.secondary)
-                }
-                Badge(kind: item.worktree.kind)
-                Spacer()
-                if let sizeText {
-                    Text(sizeText).monospacedDigit()
-                }
-            }
-            Text(item.worktree.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .lineLimit(1)
-                .truncationMode(.middle)
         }
     }
 }
@@ -133,10 +100,10 @@ private struct ProjectCleanItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ProjectItemHeader(item: item, sizeText: DisplayText.bytes(item.estimatedBytes))
+            SheetItemHeader(title: item.name, detail: item.repoName == item.name ? nil : item.repoName, path: item.worktree.path, bytes: item.estimatedBytes)
             if let note = item.idleNote {
                 Label(note, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Palette.orange)
             }
             ForEach(item.candidates, id: \.relativePath) { candidate in
                 HStack(alignment: .firstTextBaseline) {
@@ -144,7 +111,7 @@ private struct ProjectCleanItemView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
-                    Text(DisplayText.bytes(candidate.estimatedBytes)).monospacedDigit()
+                    SizeText(bytes: candidate.estimatedBytes)
                 }
             }
             if !item.rebuildLines.isEmpty {
@@ -153,7 +120,7 @@ private struct ProjectCleanItemView: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(item.lightClean.skipped, id: \.relativePath) { skip in
-                Label("\(skip.relativePath) is left alone: \(skip.reason.sentence)", systemImage: "nosign")
+                Label("\(skip.relativePath) is left alone: \(CleanupPresentation.reason(skip.reason))", systemImage: "nosign")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -167,7 +134,7 @@ private struct ProjectLeftAloneView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ProjectItemHeader(item: item)
+            SheetItemHeader(title: item.name, path: item.worktree.path)
             if let reason = item.lightClean.leftAloneReason {
                 Label(reason, systemImage: "nosign")
             }

@@ -34,4 +34,7 @@ public struct SimulatorsConfirmation: Identifiable, Sendable {
     }
 
     public var isAllowed: Bool { blocker == nil }
+    public var title: String { CleanupPresentation.title("Delete", count: devices.count, noun: "simulator", bytes: estimatedBytes) }
+    public var buttonTitle: String { CleanupPresentation.button("Delete", count: devices.count) }
+
 }

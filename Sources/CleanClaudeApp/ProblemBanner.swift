@@ -6,7 +6,7 @@ struct ProblemBanner: View {
 
     var body: some View {
         Label(text, systemImage: "exclamationmark.triangle.fill")
-            .foregroundStyle(.red)
+            .foregroundStyle(Palette.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
             .background(.red.opacity(0.08))

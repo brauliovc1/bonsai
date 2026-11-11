@@ -33,7 +33,7 @@ public struct NotificationContent: Sendable, Hashable {
                 ? "would remove \(DisplayText.worktrees(summary.plannedCount)), about "
                     + "\(ByteFormatting.string(summary.estimatedBytes))."
                 : "nothing to remove."
-            let body = "Auto mode (report only): \(plan)\(localWork) Nothing was deleted."
+            let body = "Auto clean (report only): \(plan)\(localWork) Nothing was deleted."
             return NotificationContent(identifier: autoRunIdentifier, title: appName, body: body, opens: .overview)
         }
 
@@ -44,7 +44,7 @@ public struct NotificationContent: Sendable, Hashable {
         else { return nil }
         var body = summary.removedCount > 0
             ? "Removed \(DisplayText.worktrees(summary.removedCount)), freed \(ByteFormatting.string(summary.freedBytes))."
-            : "Auto mode removed nothing."
+            : "Auto clean removed nothing."
         body += localWork
         if leftAlone > 0 {
             body += " \(DisplayText.worktrees(leftAlone)) \(leftAlone == 1 ? "was" : "were") left alone after a last check."

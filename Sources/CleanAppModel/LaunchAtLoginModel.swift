@@ -22,7 +22,7 @@ public final class LaunchAtLoginModel {
     public var statusText: String {
         switch status {
         case .enabled: "Opens at login."
-        case .notRegistered: "Doesn't open at login, so auto mode only runs after you open it."
+        case .notRegistered: "Doesn't open at login, so auto clean only runs after you open it."
         case .requiresApproval: "Waiting for your OK in System Settings › General › Login Items."
         case .notFound: "This copy can't open at login. Move it to /Applications and open it from there."
         }

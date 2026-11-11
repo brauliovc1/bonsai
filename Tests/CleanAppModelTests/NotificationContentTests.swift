@@ -15,19 +15,19 @@ struct NotificationContentTests {
     @Test func reportOnly() throws {
         var summary = AutoRunSummary(date: date, reportOnly: true, plannedCount: 3, estimatedBytes: 3 * gib / 2)
         var content = try #require(NotificationContent.autoRun(summary))
-        #expect(content.body == "Auto mode (report only): would remove 3 worktrees, about 1.5 GB. Nothing was deleted.")
+        #expect(content.body == "Auto clean (report only): would remove 3 worktrees, about 1.5 GB. Nothing was deleted.")
         #expect(content.title == "Bonsai" && content.opens == .overview && content.identifier == "auto-run")
 
         summary.plannedCount = 1
         summary.notifiedCount = 2
         content = try #require(NotificationContent.autoRun(summary))
-        #expect(content.body == "Auto mode (report only): would remove 1 worktree, about 1.5 GB. "
+        #expect(content.body == "Auto clean (report only): would remove 1 worktree, about 1.5 GB. "
             + "2 idle worktrees have local work. Nothing was deleted.")
 
         summary.plannedCount = 0
         summary.notifiedCount = 1
         content = try #require(NotificationContent.autoRun(summary))
-        #expect(content.body == "Auto mode (report only): nothing to remove. 1 idle worktree has local work. Nothing was deleted.")
+        #expect(content.body == "Auto clean (report only): nothing to remove. 1 idle worktree has local work. Nothing was deleted.")
     }
 
     @Test func normalRun() throws {
@@ -48,7 +48,7 @@ struct NotificationContentTests {
             + "1 worktree could not be removed.")
 
         summary = AutoRunSummary(date: date, reportOnly: false, refused: ["/b: changed"])
-        #expect(NotificationContent.autoRun(summary)?.body == "Auto mode removed nothing. 1 worktree was left alone after a last check.")
+        #expect(NotificationContent.autoRun(summary)?.body == "Auto clean removed nothing. 1 worktree was left alone after a last check.")
     }
 
     @Test func nothingToRemoveAndNothingToReportPostsNothing() {

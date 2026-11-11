@@ -62,7 +62,7 @@ public struct LightCleanOutcome: Identifiable, Sendable {
             } else if let failure = result.failed.first(where: { $0.candidate.relativePath == candidate.relativePath }) {
                 status = .failed(failure.message)
             } else if let refusal = result.refused.first(where: { $0.relativePath == candidate.relativePath }) {
-                status = .refused(refusal.reason.sentence)
+                status = .refused(CleanupPresentation.reason(refusal.reason))
             } else {
                 status = .refused("it was not reached")
             }

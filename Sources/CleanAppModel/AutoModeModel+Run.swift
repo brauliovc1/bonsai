@@ -38,11 +38,11 @@ extension AutoModeModel {
         repairMissingStartDate()
         do {
             guard try SettingsEditor.current(app).autoEnabled else {
-                error = "Auto mode is off."
+                error = "Auto clean is off."
                 return nil
             }
         } catch {
-            self.error = "Auto mode didn't run: \(error)"
+            self.error = "Auto clean didn't run: \(error)"
             return nil
         }
         let finished = await app.cleaningUp(byAutoMode: true) { () -> RunResult in
@@ -52,14 +52,14 @@ extension AutoModeModel {
             return result
         }
         guard let result = finished else {
-            error = "Auto mode waited: \(app.busyReason). The next check tries again."
+            error = "Auto clean waited: \(app.busyReason). The next check tries again."
             return nil
         }
         switch result {
         case .notDue:
             return nil
         case .problem(let problem):
-            error = "Auto mode didn't run: \(problem)"
+            error = "Auto clean didn't run: \(problem)"
             return nil
         case .ran(let outcome, let summary):
             await finish(outcome, summary: summary)
@@ -106,7 +106,7 @@ extension AutoModeModel {
         guard let scan = app.scan, let git = app.git else { return .problem("nothing was scanned") }
         // The settings the scan read: its verdicts were made with them.
         let settings = app.settings
-        guard settings.autoEnabled else { return .problem("auto mode was turned off") }
+        guard settings.autoEnabled else { return .problem("auto clean was turned off") }
         let plan = AutoPlanner.plan(app.assessments, settings: settings, now: now)
         await afterPlanning()
         let remover = Remover(git: git, settings: settings, environment: app.environment)

@@ -6,6 +6,8 @@ import SwiftUI
 struct SizeText: View {
     let bytes: Int64?
     var isMeasuring = false
+    var isEstimate = true
+    var hasUnknownParts = false
 
     var body: some View {
         Group {
@@ -16,13 +18,13 @@ struct SizeText: View {
                 }
                 .foregroundStyle(.secondary)
             } else {
-                Text(DisplayText.bytes(bytes))
+                Text(DisplayText.bytes(bytes) + (hasUnknownParts ? "+" : ""))
                     .monospacedDigit()
                     .foregroundStyle(bytes == nil ? .secondary : .primary)
             }
         }
         .lineLimit(1)
-        .help(isMeasuring ? "Measuring the folder again after a cleanup" : Self.estimateHelp)
+        .help(isMeasuring ? "Measuring the folder again after a cleanup" : (isEstimate ? Self.estimateHelp : "Space freed, measured from the disk after cleanup."))
     }
 
     static let estimateHelp = "An estimate. What a cleanup really frees is measured from the disk afterwards."

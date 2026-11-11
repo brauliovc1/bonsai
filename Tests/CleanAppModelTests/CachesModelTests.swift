@@ -113,7 +113,7 @@ struct CachesModelTests {
         #expect(confirmation.allowed.first { $0.id == "mongodb-binaries" }?.note == "Tests download it again, ~300 MB.")
         #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.note.hasPrefix("Cursor's spare copy from ") == true)
         #expect(confirmation.allowed.first { $0.id == "cursor-state-backup" }?.keeps == ["state.vscdb", "state.vscdb-wal", "state.vscdb-shm"])
-        #expect(confirmation.cleanButtonTitle == "Clean 3 items")
+        #expect(confirmation.cleanButtonTitle == "Clean 3")
         #expect(CachesConfirmation.downloadsLine.contains("fetch or rebuild"))
 
         world.processes.run("pip3 install requests")

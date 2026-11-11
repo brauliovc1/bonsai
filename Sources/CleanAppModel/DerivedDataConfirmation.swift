@@ -45,5 +45,7 @@ public struct DerivedDataConfirmation: Identifiable, Sendable {
     public var hasUnknownSizes: Bool { allowed.contains { $0.bytes == nil } }
 
     /// "Delete 2 folders".
-    public var deleteButtonTitle: String { "Delete \(DisplayText.folders(allowed.count))" }
+    public var deleteButtonTitle: String { CleanupPresentation.button("Delete", count: allowed.count) }
+    public var title: String { CleanupPresentation.title("Delete", count: allowed.count, noun: "folder", bytes: estimatedTotalBytes) }
+
 }

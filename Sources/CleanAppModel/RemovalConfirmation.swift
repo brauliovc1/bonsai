@@ -64,5 +64,7 @@ public struct RemovalConfirmation: Identifiable, Sendable {
     public var hasUnknownSizes: Bool { allowed.contains { $0.estimatedBytes == nil } }
 
     /// "Remove 3 worktrees".
-    public var removeButtonTitle: String { "Remove \(DisplayText.worktrees(allowed.count))" }
+    public var removeButtonTitle: String { CleanupPresentation.button("Remove", count: allowed.count) }
+    public var title: String { CleanupPresentation.title("Remove", count: allowed.count, noun: "worktree", bytes: estimatedTotalBytes) }
+
 }

@@ -2,172 +2,80 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The Project folders screen: every checkout's light-clean folders (node_modules, .next, build…), grouped by
-/// repo, filtered to the projects idle at least the threshold or all of them, with "Select all idle" and
-/// "Clean selected…". Claude and Cursor worktrees are only counted in the footer.
 struct ProjectsView: View {
     @Bindable var model: ProjectsModel
     let navigation: NavigationModel
+    @State private var sort: ContentSort = .size
 
     var body: some View {
         VStack(spacing: 0) {
             TestModeBanner(app: model.app)
-            if let problem = model.app.problem {
-                ProblemBanner(text: problem)
-            }
-            table
+            PageHeader(title: "Project folders", subtitle: "Dependencies and build output you can get back when needed.") {
+                Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
+            }.padding(20)
+            if let problem = model.app.problem { ProblemBanner(text: problem) }
+            HStack {
+                Picker("Show projects", selection: $model.filter) {
+                    if model.filter == .canFree {
+                        Text("Ready to clean · \(model.idleTotal.count)").tag(ProjectsModel.Filter.canFree)
+                    }
+                    Text("Idle \(model.threshold)+ days · \(model.allRows.count { ($0.idleDays ?? -1) >= model.threshold })")
+                        .tag(ProjectsModel.Filter.idle)
+                    Text("All · \(model.allRows.count)").tag(ProjectsModel.Filter.all)
+                }.pickerStyle(.segmented).frame(maxWidth: 470)
+                Spacer()
+                Button("Select all idle") { model.selectAllIdle() }.disabled(model.idleTotal.count == 0)
+                Button("Refresh") { Task { await model.refreshAll() } }.disabled(model.isScanning || model.app.isScanning)
+            }.padding(.horizontal, 20).padding(.bottom, 8)
+            ContentSortBar(selection: $sort, showsActivity: true)
+                .onChange(of: sort) { _, value in
+                    switch value {
+                    case .size: model.sortOrder = [KeyPathComparator(\ProjectTableItem.sizeSortKey, order: .reverse)]
+                    case .activity: model.sortOrder = [KeyPathComparator(\ProjectTableItem.idleSortKey, order: .reverse)]
+                    case .name: model.sortOrder = [KeyPathComparator(\ProjectTableItem.nameSortKey)]
+                    }
+                }
             Divider()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    if model.report == nil {
+                        ProgressView(ProjectsFooter.progressText(model)).frame(maxWidth: .infinity).padding(30)
+                    } else if model.rows.isEmpty {
+                        EmptyState(systemImage: "cube.box", headline: model.allRows.isEmpty ? "No project folders found" : "Nothing idle",
+                                   line: model.allRows.isEmpty ? "No dependencies or build folders were found in your projects." : "No project has been idle \(model.threshold) days. All shows the other projects.",
+                                   actionTitle: model.allRows.isEmpty ? nil : "Show all", action: { model.filter = .all })
+                            .frame(maxWidth: .infinity)
+                    }
+                    ForEach(model.groups) { group in
+                        GroupedSection {
+                            Button { model.toggleExpanded(group.repoPath) } label: {
+                                HStack {
+                                    Image(systemName: model.isExpanded(group.repoPath) ? "chevron.down" : "chevron.right")
+                                    Text(group.name).fontWeight(.semibold)
+                                    Text(group.countText).foregroundStyle(.secondary)
+                                    Spacer()
+                                    SizeText(bytes: group.rows.reduce(Int64(0)) { $0 + $1.sizeBytes }, hasUnknownParts: group.rows.contains { $0.project.hasUnknownSizes })
+                                }
+                            }.buttonStyle(.plain).help(group.folderText)
+                            if model.isExpanded(group.repoPath) {
+                                ForEach(group.rows) { row in
+                                    Divider()
+                                    ProjectFolderRow(model: model, row: row)
+                                }
+                            }
+                        }
+                    }
+                }.padding(20)
+            }
             ProjectsFooter(model: model) { navigation.show(.worktrees) }
+            if !model.selectedRows.isEmpty {
+                SelectionBar(text: "\(model.selectedRows.count) selected · \(DisplayText.bytes(model.selectedRows.reduce(Int64(0)) { $0 + $1.sizeBytes }))") {
+                    Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
+                }
+            }
         }
         .navigationTitle("Project folders")
-        .toolbar { toolbar }
-        .sheet(isPresented: $model.isShowingCleanSheet, onDismiss: { model.dismissClean() }) {
-            ProjectsCleanSheet(model: model)
-        }
+        .sheet(isPresented: $model.isShowingCleanSheet, onDismiss: { model.dismissClean() }) { ProjectsCleanSheet(model: model) }
         .task { await model.loadIfNeeded() }
-    }
-
-    private var table: some View {
-        Table(of: ProjectTableItem.self, selection: tableSelection, sortOrder: $model.sortOrder) {
-            TableColumn("Project", value: \ProjectTableItem.nameSortKey) { item in
-                ProjectNameCell(item: item, isExpanded: isExpanded(item)) { toggle(item) }
-            }
-            .width(min: 140, ideal: 220)
-            TableColumn("Idle", value: \ProjectTableItem.idleSortKey) { item in
-                if let row = item.row {
-                    Text(row.idleText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-            .width(min: 44, ideal: 56)
-            TableColumn("Folders", value: \ProjectTableItem.foldersText) { item in
-                if let row = item.row {
-                    Text(row.foldersText).lineLimit(1).truncationMode(.tail).help(row.foldersHelp)
-                }
-            }
-            .width(min: 100, ideal: 180)
-            TableColumn("Size", value: \ProjectTableItem.sizeSortKey) { item in
-                ProjectSizeCell(item: item)
-            }
-            .width(min: 60, ideal: 78)
-            TableColumn("Status", value: \ProjectTableItem.statusSortKey) { item in
-                if let row = item.row {
-                    if model.app.cleanupQueue.task(for: row.path) != nil {
-                        QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path)
-                    } else { ProjectStatusCell(row: row) }
-                }
-            }
-            .width(min: 120, ideal: 300)
-        } rows: {
-            ForEach(model.tableItems) { item in
-                TableRow(item)
-            }
-        }
-        .contextMenu(forSelectionType: ProjectTableItem.ID.self) { ids in
-            contextMenu(for: rowIDs(ids))
-        } primaryAction: { ids in
-            let rows = rows(rowIDs(ids))
-            if rows.isEmpty {
-                for case .group(let repoPath) in ids { model.toggleExpanded(repoPath) }
-            } else {
-                FolderActions.reveal(rows.map(\.url))
-            }
-        }
-        .overlay { emptyState }
-    }
-
-    @ViewBuilder
-    private var emptyState: some View {
-        if model.report == nil {
-            if model.isScanning || model.app.isScanning {
-                ProgressView(ProjectsFooter.progressText(model))
-            }
-        } else if model.allRows.isEmpty {
-            ContentUnavailableView(
-                "No project folders found",
-                systemImage: "cube.box",
-                description: Text("No checkout under the scan roots has node_modules, build output or other folders "
-                    + "that light clean can delete.")
-            )
-        } else if model.rows.isEmpty {
-            ContentUnavailableView {
-                Label("Nothing idle", systemImage: "checkmark.circle")
-            } description: {
-                Text("No project with folders to delete has been idle \(model.threshold) days or more. "
-                    + "All shows the other \(DisplayText.projects(model.allRows.count)).")
-            } actions: {
-                Button("Show All") { model.filter = .all }
-            }
-        }
-    }
-
-    /// The table selects rows and group headers; the model keeps only the rows.
-    private var tableSelection: Binding<Set<ProjectTableItem.ID>> {
-        Binding(
-            get: { Set(model.selection.map { ProjectTableItem.ID.project($0) }) },
-            set: { model.selection = Set(rowIDs($0).filter { model.app.cleanupQueue.task(for: $0) == nil }) }
-        )
-    }
-
-    private func isExpanded(_ item: ProjectTableItem) -> Bool {
-        if case .group(let group) = item { return model.isExpanded(group.repoPath) }
-        return true
-    }
-
-    private func toggle(_ item: ProjectTableItem) {
-        if case .group(let group) = item { model.toggleExpanded(group.repoPath) }
-    }
-
-    private func rowIDs(_ ids: Set<ProjectTableItem.ID>) -> Set<ProjectRow.ID> {
-        Set(ids.compactMap { id in
-            if case .project(let rowID) = id { return rowID }
-            return nil
-        })
-    }
-
-    private func rows(_ ids: Set<ProjectRow.ID>) -> [ProjectRow] {
-        model.rows.filter { ids.contains($0.id) }
-    }
-
-    @ViewBuilder
-    private func contextMenu(for ids: Set<ProjectRow.ID>) -> some View {
-        let rows = rows(ids)
-        if !rows.isEmpty {
-            Button("Reveal in Finder") { FolderActions.reveal(rows.map(\.url)) }
-            Button("Open in Terminal") { FolderActions.openInTerminal(rows.map(\.url)) }
-            Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.path)) }
-            Divider()
-            Button("Clean…") { Task { await model.beginClean(ids) } }
-                .disabled(rows.contains { model.app.cleanupQueue.task(for: $0.path) != nil })
-                .help(rows.contains { model.app.cleanupQueue.task(for: $0.path) != nil } ? CleanupQueue.lockedHelp : "Clean these folders after confirmation.")
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItemGroup {
-            Button { Task { await model.refreshAll() } } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .help("Scan the worktrees and measure the project folders again")
-            .disabled(model.isScanning || model.app.isScanning)
-            Picker("Show", selection: $model.filter) {
-                ForEach(ProjectsModel.Filter.allCases) { filter in
-                    Text(model.filterTitle(filter)).tag(filter)
-                }
-            }
-            .pickerStyle(.segmented)
-            .help("Projects idle at least the threshold in Settings, or all of them")
-            Button { model.selectAllIdle() } label: {
-                Label("Select all idle", systemImage: "checklist")
-            }
-            .help("Select every project ready to clean: idle \(model.threshold)+ days, nothing running inside, not a "
-                + "worktree that can be removed whole")
-            .disabled(model.idleTotal.count == 0)
-            Button { Task { await model.beginClean() } } label: {
-                Label("Clean selected…", systemImage: "paintbrush")
-            }
-            .help("Delete the selected projects' dependency and build folders (you confirm first)")
-            .disabled(!model.canClean)
-        }
     }
 }

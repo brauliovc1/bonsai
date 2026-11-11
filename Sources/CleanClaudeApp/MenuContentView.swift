@@ -64,7 +64,7 @@ struct MenuContentView: View {
     private var statusLine: some View {
         let scanning = app.isScanning ? DisplayText.progress(app.progress) : nil
         let lastScan = app.lastScanAt
-        let auto = autoMode.isRunning ? "Auto mode is running…" : autoMode.statusText
+        let auto = autoMode.isRunning ? "Auto clean is running…" : autoMode.statusText
         return TimelineView(.everyMinute) { _ in
             let scan = scanning
                 ?? lastScan.map { "Scanned \($0.formatted(.relative(presentation: .named)))" }

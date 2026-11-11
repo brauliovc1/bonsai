@@ -1,152 +1,76 @@
 import CleanAppModel
 import SwiftUI
 
-/// The Xcode DerivedData screen: every folder of the root with its state and size. Only orphaned folders
-/// (their project is gone) can be selected and deleted; the rest is read-only with a one-line reason. A
-/// refused root is an error banner with no delete button.
 struct DerivedDataView: View {
     @Bindable var model: DerivedDataModel
-
+    @State private var sort: ContentSort = .size
     var body: some View {
         VStack(spacing: 0) {
-            if let refusal = model.refusal {
-                ProblemBanner(text: "The DerivedData folder is refused: \(refusal) Nothing can be deleted.")
-            }
-            table
+            PageHeader(title: "Xcode DerivedData", subtitle: "Old build folders whose projects are gone can be deleted.") {
+                Button("Delete selected…") { Task { await model.beginDelete() } }.disabled(!model.canDelete)
+            }.padding(20)
+            if let refusal = model.refusal { ProblemBanner(text: "Can't read this DerivedData folder: \(refusal)") }
+            HStack {
+                ContentSortBar(selection: $sort)
+                Button("Select all orphaned") { model.selection = model.selectableIDs }.disabled(model.selectableIDs.isEmpty)
+                Button("Refresh") { Task { await model.refresh() } }.disabled(model.isScanning)
+            }.padding(.trailing, 20)
             Divider()
-            statusBar
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if model.report == nil { ProgressView("Reading DerivedData…").frame(maxWidth: .infinity).padding(30) }
+                    else if model.orphanRows.isEmpty {
+                        EmptyState(systemImage: "hammer", headline: "No orphaned build folders", line: "Xcode's current projects and shared caches are kept.")
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        section("Ready to delete", rows: model.rows.filter(\.isSelectable))
+                    }
+                    let kept = model.rows.filter { !$0.isSelectable }
+                    if !kept.isEmpty { section("Kept for Xcode", rows: kept) }
+                    ForEach(model.warnings, id: \.self) { warning in
+                        Label(warning, systemImage: "exclamationmark.triangle").foregroundStyle(Palette.orange)
+                    }
+                }.padding(20)
+            }
+            if !model.selectedOrphans.isEmpty {
+                SelectionBar(text: "\(model.selectedOrphans.count) selected · \(DisplayText.bytes(model.selectedOrphans.compactMap(\.bytes).reduce(0, +)))") {
+                    Button("Delete selected…") { Task { await model.beginDelete() } }.disabled(!model.canDelete)
+                }
+            }
+        }
+        .onChange(of: sort) { _, value in
+            model.sortOrder = value == .size ? [KeyPathComparator(\DerivedDataRow.sizeSortKey, order: .reverse)] : [KeyPathComparator(\DerivedDataRow.name)]
         }
         .navigationTitle("Xcode DerivedData")
-        .toolbar { toolbar }
-        .sheet(isPresented: $model.isShowingDeleteSheet, onDismiss: { model.dismissDelete() }) {
-            DerivedDataDeleteSheet(model: model)
-        }
+        .sheet(isPresented: $model.isShowingDeleteSheet, onDismiss: { model.dismissDelete() }) { DerivedDataDeleteSheet(model: model) }
         .task { await model.loadIfNeeded() }
     }
-
-    private var table: some View {
-        Table(model.rows, selection: Binding(get: { model.selection }, set: { ids in
-            model.selection = Set(ids.filter { model.app.cleanupQueue.task(for: $0) == nil })
-        }), sortOrder: $model.sortOrder) {
-            TableColumn("Folder", value: \.name) { row in
-                Text(row.name)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(row.id)
+    private func section(_ title: String, rows: [DerivedDataRow]) -> some View {
+        GroupedSection(title: title) {
+            ForEach(rows) { row in
+                HStack(spacing: 12) {
+                    if row.isSelectable {
+                        Toggle("Select \(row.name)", isOn: Binding(get: { model.selection.contains(row.id) }, set: { on in
+                            if on { model.selection.insert(row.id) } else { model.selection.remove(row.id) }
+                        })).labelsHidden().toggleStyle(.checkbox).disabled(model.app.cleanupQueue.task(for: row.id) != nil)
+                    } else { Image(systemName: "lock").foregroundStyle(.tertiary).frame(width: 18) }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(row.name).fontWeight(.medium).lineLimit(1).truncationMode(.middle)
+                        Text(row.projectPath).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Text(row.shortReason).font(.callout).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).help(row.reason)
+                    if model.app.cleanupQueue.task(for: row.id) != nil {
+                        QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.id)
+                    } else if row.isSelectable {
+                        StatusChip(words: StatusWords("Ready to delete", .green, symbol: "checkmark.circle"))
+                    }
+                    SizeText(bytes: row.bytes).frame(width: 85, alignment: .trailing)
+                }.contextMenu {
+                    Button("Show in Finder") { FolderActions.reveal([URL(fileURLWithPath: row.id)]) }
+                    Button("Copy path") { FolderActions.copy([row.id]) }
+                }
+                if row.id != rows.last?.id { Divider() }
             }
-            .width(min: 120, ideal: 190)
-            TableColumn("Project", value: \.projectPath) { row in
-                Text(row.projectPath)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(row.projectPath)
-            }
-            .width(min: 120, ideal: 210)
-            TableColumn("State") { row in
-                if model.app.cleanupQueue.task(for: row.id) != nil {
-                    QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.id)
-                } else { DerivedDataStateCell(row: row) }
-            }
-            .width(min: 200, ideal: 360)
-            TableColumn("Size", value: \.sizeSortKey) { row in
-                Text(row.sizeText).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .width(min: 64, ideal: 78)
-        }
-        .contextMenu(forSelectionType: DerivedDataRow.ID.self) { ids in
-            let rows = model.rows.filter { ids.contains($0.id) }
-            if !rows.isEmpty {
-                Button("Reveal in Finder") { FolderActions.reveal(rows.map { URL(fileURLWithPath: $0.id, isDirectory: true) }) }
-                Button(rows.count == 1 ? "Copy Path" : "Copy Paths") { FolderActions.copy(rows.map(\.id)) }
-            }
-            if rows.contains(where: \.isSelectable) {
-                Divider()
-                Button("Delete orphaned…") { Task { await model.beginDelete(ids) } }
-                    .disabled(model.refusal != nil || rows.contains { model.app.cleanupQueue.task(for: $0.id) != nil })
-            }
-        }
-        .overlay {
-            if model.report == nil {
-                ProgressView("Reading DerivedData…")
-            } else if model.rootMissing {
-                ContentUnavailableView(
-                    "No DerivedData folder",
-                    systemImage: "hammer",
-                    description: Text("\(model.root ?? "The folder") doesn't exist: Xcode hasn't built anything yet.")
-                )
-            } else if model.allRows.isEmpty, model.refusal == nil {
-                ContentUnavailableView("DerivedData is empty", systemImage: "hammer")
-            }
-        }
-    }
-
-    private var statusBar: some View {
-        HStack(spacing: 10) {
-            if model.isScanning {
-                ProgressView().controlSize(.small)
-            }
-            if let date = model.lastScanAt {
-                Text("Scanned \(date, format: .relative(presentation: .named))")
-            }
-            if let root = model.root {
-                Text(root)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(root)
-            }
-            if !model.warnings.isEmpty {
-                Text("\(model.warnings.count) \(model.warnings.count == 1 ? "warning" : "warnings")")
-                    .help(model.warnings.joined(separator: "\n"))
-            }
-            Spacer()
-            Text("\(model.orphanRows.count) orphaned, \(DisplayText.bytes(model.orphanBytes))")
-            Text("of \(DisplayText.bytes(model.totalBytes))")
-                .monospacedDigit()
-        }
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-    }
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItemGroup {
-            Button { Task { await model.refresh() } } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .help("Scan again")
-            .disabled(model.isScanning)
-            Button { Task { await model.beginDelete() } } label: {
-                Label("Delete orphaned…", systemImage: "trash")
-            }
-            .help("Delete the selected orphaned folders (you confirm first)")
-            .disabled(!model.canDelete)
-        }
-    }
-}
-
-/// The State cell: a badge and the one line that says why the row is read-only (or deletable).
-private struct DerivedDataStateCell: View {
-    let row: DerivedDataRow
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Badge(text: row.stateText, color: color)
-            Text(row.shortReason)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .help(row.reason)
-    }
-
-    private var color: Color {
-        switch row.tone {
-        case .orphaned: .red
-        case .live: .green
-        case .internalOrCache: .secondary
-        case .warning: .orange
         }
     }
 }

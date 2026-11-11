@@ -44,4 +44,6 @@ public struct DerivedDataCleanupReport: Sendable {
         }
         return text
     }
+    public var headline: String { CleanupPresentation.headline(measuredFreedBytes) }
+
 }

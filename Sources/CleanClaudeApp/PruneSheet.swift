@@ -25,8 +25,7 @@ struct PruneSheet: View {
 
     private func confirmPage(_ plan: PrunePlan) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(plan.entryCount == 0 ? "Nothing to clear" : "Clear git's records of missing folders?")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: plan.title)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(plan.repos) { repo in
@@ -52,7 +51,7 @@ struct PruneSheet: View {
                 if plan.entryCount > 0 {
                     Button(plan.buttonTitle, role: .destructive) { model.queuePrune(plan) }
                         .buttonStyle(.borderedProminent)
-                        .tint(.red)
+                        .tint(Palette.red)
                         .disabled(model.isPruning)
                 }
             }
@@ -61,12 +60,12 @@ struct PruneSheet: View {
 
     private func results(_ outcomes: [PruneOutcome]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Missing folders").font(.title2.weight(.semibold))
+            SheetHeading(title: "Cleared missing folder records")
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(outcomes) { outcome in
                         Label(outcome.summary, systemImage: outcome.pruned.isEmpty ? "xmark.octagon" : "checkmark.circle")
-                            .foregroundStyle(outcome.pruned.isEmpty ? .red : .primary)
+                            .foregroundStyle(outcome.pruned.isEmpty ? Palette.orange : Palette.green)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -96,7 +95,7 @@ private struct RepoPlanView: View {
                 Label("Left alone: \(refusal)", systemImage: "nosign").foregroundStyle(.secondary)
             }
             if let error = repo.error {
-                Label("Left alone: \(error)", systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                Label("Left alone: \(error)", systemImage: "exclamationmark.triangle").foregroundStyle(Palette.orange)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

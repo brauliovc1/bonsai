@@ -5,7 +5,7 @@ import Foundation
 import Testing
 
 /// One cleanup at a time with auto mode, and when its checks run.
-@Suite("Auto mode guard and schedule")
+@Suite("Auto clean guard and schedule")
 @MainActor
 struct AutoModeScheduleTests {
     @Test func aManualCleanupKeepsTheRunFromStartingAndTheNextCheckTriesAgain() async throws {
@@ -17,7 +17,7 @@ struct AutoModeScheduleTests {
 
         await world.autoMode.checkSchedule()
         #expect(try world.saved().lastAutoRun == nil, "it did not start")
-        #expect(world.autoMode.error == "Auto mode waited: another cleanup is still running. The next check tries again.")
+        #expect(world.autoMode.error == "Auto clean waited: another cleanup is still running. The next check tries again.")
         #expect(try world.exists("atlas-archive"))
         #expect(world.app.busyReason == "another cleanup is still running")
 
@@ -44,8 +44,8 @@ struct AutoModeScheduleTests {
         }
         await world.autoMode.runNow()
 
-        #expect(reason == "Auto mode is running.")
-        #expect(outcomes.map(\.error) == ["Auto mode is running"])
+        #expect(reason == "Auto clean is running.")
+        #expect(outcomes.map(\.error) == ["Auto clean is running"])
         #expect(try world.exists("atlas-review"), "the manual removal was refused")
         #expect(try world.removedNames() == ["atlas-archive"], "the auto run went on")
         #expect(!world.app.isAutoRunning && !world.app.isCleaningUp)
