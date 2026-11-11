@@ -52,14 +52,20 @@ struct CompareView: View {
             Button("Refresh") { Task { await model.refresh() } }.keyboardShortcut("r").hidden()
             Button("Find in diff") { find() }.keyboardShortcut("f").hidden()
         }
-        .onKeyPress(.downArrow) { Task { await model.moveFile(1) }; return .handled }
-        .onKeyPress(.upArrow) { Task { await model.moveFile(-1) }; return .handled }
-        .onKeyPress("n") { change += 1; return .handled }
-        .onKeyPress("p") { change -= 1; return .handled }
+        .onKeyPress(.downArrow) { reviewKey { Task { await model.moveFile(1) } } }
+        .onKeyPress(.upArrow) { reviewKey { Task { await model.moveFile(-1) } } }
+        .onKeyPress("n") { reviewKey { change += 1 } }
+        .onKeyPress("p") { reviewKey { change -= 1 } }
         .onKeyPress(.space) {
-            if let path = model.selectedPath { model.toggleViewed(path) }
-            return .handled
+            reviewKey { if let path = model.selectedPath { model.toggleViewed(path) } }
         }
+    }
+
+    private func reviewKey(_ action: () -> Void) -> KeyPress.Result {
+        let window = NSApp.currentEvent?.window ?? NSApp.keyWindow
+        if let editor = window?.firstResponder as? NSTextView, editor.isFieldEditor { return .ignored }
+        action()
+        return .handled
     }
 
     private func copyPatch(whole: Bool) {
