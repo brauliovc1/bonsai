@@ -34,7 +34,7 @@ struct OverviewModelTests {
     /// PLAN §8.3: "Clean up" then "History and info", in this order, every icon different.
     @Test func theWindowOpensOnTheOverviewAndTheSidebarIsInTwoGroups() {
         #expect(NavigationModel().section == .overview)
-        #expect(SidebarSection.Group.allCases.map(\.title) == ["Clean up", "History and info"])
+        #expect(SidebarSection.Group.allCases.map(\.title) == ["Clean up", "History and info", "Review"])
         #expect(SidebarSection.Group.cleanUp.sections.map(\.title) == [
             "Overview", "Worktrees", "Project folders", "Tool caches", "Downloads & Trash", "Docker & Simulators", "Xcode DerivedData",
         ])

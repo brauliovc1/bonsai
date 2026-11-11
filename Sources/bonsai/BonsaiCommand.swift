@@ -7,6 +7,8 @@ struct BonsaiCommand: AsyncParsableCommand {
         abstract: "Find git worktrees and developer caches, and remove only what is safe to remove.",
         subcommands: [
             ScanCommand.self,
+            CompareCommand.self,
+            BranchesCommand.self,
             RemoveCommand.self,
             RestoreCommand.self,
             PruneCommand.self,

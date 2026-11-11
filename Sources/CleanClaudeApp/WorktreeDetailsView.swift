@@ -39,6 +39,7 @@ struct WorktreeDetailsContent: View {
         VStack(alignment: .leading, spacing: 18) {
             header
             DetailsStatusBox(model: model, row: row)
+            WorktreeCompareButton(model: model, row: row)
             if row.kind == .claude {
                 Label(SafetyReason.claudeSessionWarning, systemImage: "exclamationmark.bubble")
                     .font(.callout)

@@ -49,6 +49,7 @@ struct WorktreesMoreMenu: View {
         Button("Prune missing folders…") { Task { await model.beginPrune() } }
             .disabled(model.pruneDisabledReason != nil)
             .help(model.pruneDisabledReason ?? "Clear git's records of worktrees whose folders are gone (you confirm first)")
+        if let row = model.compareSelection { WorktreeCompareButton(model: model, row: row) }
         Button(cleanTitle) { Task { await model.beginLightClean() } }
             .disabled(!model.canCleanDependencies)
         // PLAN §4.8: one blocked worktree at a time, never from Remove… or the Delete key.
@@ -84,6 +85,7 @@ struct WorktreeContextMenu: View {
         let repos = model.groups.compactMap(\.main).filter { ids.contains($0.id) }
         let all = repos + rows
         let folders = all.filter(\.isOpenableFolder).map(\.url)
+        if all.count == 1, let row = all.first { WorktreeCompareButton(model: model, row: row) }
         if !all.isEmpty {
             if rows.contains(where: \.canRemove) {
                 Button("Remove…") { Task { await model.beginRemoval(Set(rows.map(\.id))) } }
