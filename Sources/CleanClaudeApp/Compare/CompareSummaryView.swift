@@ -14,7 +14,7 @@ struct CompareSummaryView: View {
                     Text("+\(snapshot.additions)").foregroundStyle(Palette.green)
                     Text("−\(snapshot.deletions)").foregroundStyle(Palette.red)
                 }.monospacedDigit()
-                Text("\(snapshot.range.ahead) ahead · \(snapshot.range.behind) behind \(snapshot.range.base)")
+                Text("\(snapshot.range.ahead) ahead · \(snapshot.range.behind) behind \(baseLabel)")
                     .font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 if snapshot.range.compare.isWorktree {
                     Text("Merge check uses committed changes").font(.caption).foregroundStyle(.secondary)
@@ -22,17 +22,24 @@ struct CompareSummaryView: View {
             }
             Spacer(minLength: 0)
             Button { showsDetails.toggle() } label: {
-                StatusChip(words: StatusWords(snapshot.merge.message(base: snapshot.range.base), tone, symbol: icon))
+                StatusChip(words: StatusWords(snapshot.merge.message(base: baseLabel), tone, symbol: icon))
             }.buttonStyle(.plain)
                 .popover(isPresented: $showsDetails) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(snapshot.merge.message(base: snapshot.range.base)).font(.headline)
+                        Text(snapshot.merge.message(base: baseLabel)).font(.headline)
                         ForEach(snapshot.merge.files, id: \.self) { Text($0).font(.system(.body, design: .monospaced)) }
                         if let detail = snapshot.merge.detail { Text(detail).textSelection(.enabled) }
                         if snapshot.range.compare.isWorktree { Text("The merge check uses committed changes. Unsaved files are shown in Files.").foregroundStyle(.secondary) }
                     }.padding(18).frame(maxWidth: 440)
                 }
         }.padding(.horizontal, 18).padding(.bottom, 16)
+    }
+    private var baseLabel: String {
+        let name = snapshot.range.base
+        for prefix in ["refs/heads/", "refs/remotes/", "refs/tags/"] where name.hasPrefix(prefix) {
+            return String(name.dropFirst(prefix.count))
+        }
+        return name
     }
     private var tone: CleanAppModel.StatusTone {
         switch snapshot.merge.state { case .clean: .green; case .conflicts: .orange; case .unavailable: .grey }

@@ -12,12 +12,12 @@ struct CompareTopBar: View {
                     options: model.repositories.map { ($0, URL(fileURLWithPath: $0).lastPathComponent) }) { repo in
                     Task { await model.configure(repo: repo) }
                 }.frame(minWidth: 120, maxWidth: 200)
-                ComparePicker(title: "Base", value: model.base.isEmpty ? "Choose base" : model.base, options: refs) { ref in
+                ComparePicker(title: "Base", value: model.base.isEmpty ? "Choose base" : refLabel(model.base), options: refs) { ref in
                     model.base = ref; Task { await model.refresh() }
                 }.frame(maxWidth: .infinity)
                 Button { Task { await model.swap() } } label: { Image(systemName: "arrow.left.arrow.right") }
                     .help("Swap base and compare")
-                ComparePicker(title: "Compare", value: model.compare.label, options: compareOptions) { value in
+                ComparePicker(title: "Compare", value: compareLabel, options: compareOptions) { value in
                     model.compare = value.hasPrefix("worktree:") ? .worktree(String(value.dropFirst(9))) : .ref(value)
                     Task { await model.refresh() }
                 }.frame(maxWidth: .infinity)
@@ -28,7 +28,12 @@ struct CompareTopBar: View {
         }.padding(18)
     }
 
-    private var refs: [(String, String)] { model.catalog?.refs.map { ($0.name, $0.name + ($0.kind == .tag ? " · Tag" : "")) } ?? [] }
+    private var refs: [(String, String)] { model.catalog?.refs.map { ($0.fullName, $0.name + ($0.kind == .tag ? " · Tag" : "")) } ?? [] }
+    private func refLabel(_ name: String) -> String { model.catalog?.refs.first { $0.fullName == name }?.name ?? name }
+    private var compareLabel: String {
+        if case .ref(let name) = model.compare { return refLabel(name) }
+        return model.compare.label
+    }
     private var compareOptions: [(String, String)] {
         refs + (model.catalog?.worktrees.filter { !$0.isBare && !$0.isPrunable }.map {
             ("worktree:" + $0.path, ($0.branch ?? "Detached") + " · " + $0.url.lastPathComponent + " (worktree)")
