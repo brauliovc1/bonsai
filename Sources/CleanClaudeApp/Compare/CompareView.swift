@@ -5,13 +5,14 @@ import SwiftUI
 struct CompareView: View {
     @Bindable var model: CompareModel
     let navigation: NavigationModel
+    var worktrees: WorktreesModel?
     @State private var change = 0
 
     var body: some View {
         VStack(spacing: 0) {
             CompareTopBar(model: model)
             if let snapshot = model.snapshot { CompareSummaryView(snapshot: snapshot) }
-            // P16 inserts its optional branch map here, without changing the file/commit viewer.
+            BranchMapPanel(model: model.branches, navigation: navigation, worktrees: worktrees)
             Divider()
             HStack {
                 Picker("Review", selection: $model.showsCommits) {

@@ -34,6 +34,7 @@ enum CompareGitView {
         try fm.createDirectory(at: target.appending(path: "refs"), withIntermediateDirectories: true)
         // No copied config: filters, includes, external diff, merge drivers, hooks and fsmonitor stay out.
         let config = safeConfig(in: location.common)
+            + BranchTrackingConfig.sanitized(common: location.common, worktree: location.git)
         try Data(config.utf8).write(to: target.appending(path: "config"))
         for name in ["HEAD", "index"] { try copyFile(location.git.appending(path: name), to: target.appending(path: name)) }
         for name in ["packed-refs", "shallow", "info/exclude"] {

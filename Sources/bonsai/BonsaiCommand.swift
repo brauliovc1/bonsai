@@ -8,6 +8,7 @@ struct BonsaiCommand: AsyncParsableCommand {
         subcommands: [
             ScanCommand.self,
             CompareCommand.self,
+            BranchesCommand.self,
             RemoveCommand.self,
             RestoreCommand.self,
             PruneCommand.self,

@@ -6,6 +6,7 @@ import Observation
 @MainActor @Observable
 public final class CompareModel {
     public let app: AppModel
+    @ObservationIgnored public lazy var branches = BranchMapModel(compare: self)
     public var repository: String?
     public var base = ""
     public var compare: CompareSelection = .ref("HEAD")
@@ -99,6 +100,7 @@ public final class CompareModel {
         }
         loadTask = task
         await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+        if token == generation, !Task.isCancelled { await branches.compareRefreshed() }
     }
 
     public func swap() async {
