@@ -56,8 +56,10 @@ struct NativeDiffView: NSViewRepresentable {
                 let origin = scroll.contentView.bounds.origin
                 let rendered = DiffRenderer.text(document, path: path, side: sideBySide ? (i == 0 ? .old : .new) : nil)
                 text.textStorage?.setAttributedString(rendered)
-                let longest = rendered.string.split(separator: "\n").map(\.utf16.count).max() ?? 0
-                text.setFrameSize(NSSize(width: max(scroll.contentSize.width, CGFloat(longest) * 7.3 + 30), height: max(scroll.contentSize.height, CGFloat(document.hunks.reduce(0) { $0 + $1.lines.count + 1 }) * 20 + 30)))
+                // Font fallback changes glyph advances (CJK, emoji). Measure the actual attributed
+                // layout once; TextKit still draws and scrolls only the visible part of the document.
+                let width = ceil(rendered.size().width) + text.textContainerInset.width * 2 + 16
+                text.setFrameSize(NSSize(width: max(scroll.contentSize.width, width), height: max(scroll.contentSize.height, CGFloat(document.hunks.reduce(0) { $0 + $1.lines.count + 1 }) * 20 + 30)))
                 if sameFile {
                     scroll.contentView.scroll(to: origin); scroll.reflectScrolledClipView(scroll.contentView)
                 } else { text.scrollToBeginningOfDocument(nil) }
