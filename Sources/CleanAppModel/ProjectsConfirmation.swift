@@ -90,6 +90,7 @@ public struct ProjectsConfirmation: Identifiable, Sendable {
 
     /// "2 projects, 5 folders, at least 1.2 GB (estimate)" when some measurements are missing.
     public var summary: String {
-        "\(DisplayText.projects(cleanable.count)), \(DisplayText.folders(folderCount)), \(estimatedSizeText) (estimate)"
+        let amount = hasUnknownSizes ? estimatedSizeText : "about " + estimatedSizeText
+        return "\(DisplayText.projects(cleanable.count)), \(DisplayText.folders(folderCount)), \(amount) (estimate)"
     }
 }
