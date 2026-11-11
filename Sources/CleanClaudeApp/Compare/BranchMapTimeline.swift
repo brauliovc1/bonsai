@@ -10,8 +10,6 @@ struct BranchMapTimeline: View {
     var body: some View {
         let rows = model.rows
         let timeline = model.timeline
-        let origins = model.family?.origins ?? [:]
-        let baseSHA = model.snapshot?.baseSHA
         let dates = rows.compactMap { $0.metrics.tip?.date } + timeline.values.compactMap { $0.fork?.date }
         let first = dates.min() ?? Date(), last = dates.max() ?? Date()
         let start = first.addingTimeInterval(-86400), end = max(last, first).addingTimeInterval(86400)
@@ -35,14 +33,19 @@ struct BranchMapTimeline: View {
                             var base = Path(); base.move(to: CGPoint(x: 0, y: 20)); base.addLine(to: CGPoint(x: size.width, y: 20))
                             context.stroke(base, with: .color(grey.opacity(0.6)), lineWidth: 2)
                             for (index, entry) in rows.enumerated() {
-                                guard let tip = entry.metrics.tip else { continue }
+                                guard let tip = entry.metrics.tip,
+                                      let fork = timeline[entry.ref]?.fork ?? entry.metrics.fork,
+                                      let parent = model.timelineParent(for: entry.ref) else { continue }
                                 let y = heading + CGFloat(index) * rowHeight + rowHeight / 2
-                                let fork = timeline[entry.ref]?.fork ?? entry.metrics.fork
-                                let forkX = Self.x(fork?.date ?? tip.date, width: size.width, start: start, end: end)
+                                let forkX = Self.x(fork.date, width: size.width, start: start, end: end)
                                 let tipX = Self.x(tip.date, width: size.width, start: start, end: end)
-                                let parent = origins[entry.ref]?.parent
-                                let parentIndex = rows.firstIndex { $0.ref == parent }
-                                let parentY = parentIndex.flatMap { rows[$0].sha == baseSHA ? nil : heading + CGFloat($0) * rowHeight + rowHeight / 2 } ?? 20
+                                let parentY: CGFloat
+                                switch parent {
+                                case .base: parentY = 20
+                                case .branch(let ref):
+                                    guard let parentIndex = rows.firstIndex(where: { $0.ref == ref }) else { continue }
+                                    parentY = heading + CGFloat(parentIndex) * rowHeight + rowHeight / 2
+                                }
                                 var path = Path(); path.move(to: CGPoint(x: forkX, y: parentY))
                                 path.addLine(to: CGPoint(x: forkX, y: y)); path.addLine(to: CGPoint(x: tipX, y: y))
                                 context.stroke(path, with: .color(entry.metrics.problem == nil ? green.opacity(0.7) : grey), lineWidth: 1.5)
@@ -90,7 +93,7 @@ struct BranchMapTimeline: View {
     private func tooltip(_ entry: BranchMapEntry, data: BranchTimelineEntry?) -> String {
         var text = BranchHistoryText.plain(entry.name) + "\n" + BranchHistoryText.counts(entry)
         if let fork = data?.fork { text += "\nFork: " + BranchHistoryText.commit(fork) }
-        if let data { text += "\n\(data.commitCount) commits since this fork" }
+        if let data, data.fork != nil { text += "\n\(data.commitCount) commits since this fork" }
         if let problem = data?.problem ?? entry.metrics.problem { text += "\n" + BranchHistoryText.plain(problem) }
         return text
     }

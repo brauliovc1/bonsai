@@ -53,6 +53,60 @@ struct BranchMapModelTests {
         #expect(await compare.branches.cache.computations == 0)
     }
 
+    @Test func switchingFromListToTimelineLoadsCommitsAfterHistoryLoadedTheFamily() async throws {
+        let world = try await BranchHistoryFixture.make()
+        defer { world.remove() }
+        let compare = CompareModel(app: makeApp(world.fixture))
+        _ = compare.branches
+        await compare.configure(repo: world.repo.path, base: "main", compare: .ref("c"))
+        let model = compare.branches
+        #expect(model.history?.branch == "refs/heads/c")
+        await model.setOpen(true)
+        #expect(model.layout == .list && model.family != nil && model.timeline.isEmpty)
+
+        await model.setLayout(.timeline)
+
+        let timeline = try #require(model.timeline["refs/heads/c"])
+        #expect(timeline.fork?.sha == (try await world.sha("b")))
+        #expect(timeline.commitCount == 1 && timeline.commits.count == 1)
+        #expect(timeline.commits.first?.sha == (try await world.sha("c")))
+    }
+
+    @Test func timelineConnectsOnlyKnownForksToDisplayedParentsOrTheSelectedBase() async throws {
+        let world = try await BranchHistoryFixture.make()
+        defer { world.remove() }
+        try await world.branch("remote-child", from: "origin/main", date: world.epoch + 40_000)
+        try await world.commit("remote.txt", date: world.epoch + 40_100)
+        try await world.branch("temporary-parent", from: "main", date: world.epoch + 50_000)
+        try await world.commit("parent.txt", date: world.epoch + 50_100)
+        try await world.branch("survivor", from: "temporary-parent", date: world.epoch + 60_000)
+        try await world.commit("survivor.txt", date: world.epoch + 60_100)
+        try await world.fixture.run(["branch", "-D", "temporary-parent"], in: world.repo)
+        try await world.fixture.run(["checkout", "--quiet", "--orphan", "disconnected"], in: world.repo)
+        try await world.fixture.run(["rm", "--quiet", "-rf", "."], in: world.repo)
+        try await world.commit("orphan.txt", date: world.epoch + 70_100)
+        try await world.fixture.run(["checkout", "--quiet", "main"], in: world.repo)
+        let compare = CompareModel(app: makeApp(world.fixture))
+        await compare.configure(repo: world.repo.path, base: "main", compare: .ref("c"))
+        let model = compare.branches
+        await model.setOpen(true)
+        await model.setLayout(.timeline)
+
+        #expect(model.timelineParent(for: "refs/heads/a") == .base)
+        #expect(model.timelineParent(for: "refs/heads/c") == .branch("refs/heads/b"))
+        #expect(model.timelineParent(for: "refs/heads/remote-child") == nil)
+        #expect(model.timelineParent(for: "refs/heads/survivor") == nil)
+        #expect(model.timeline["refs/heads/disconnected"]?.fork == nil)
+        #expect(model.snapshot?.entries.first { $0.ref == "refs/heads/disconnected" }?.metrics.tip != nil)
+        #expect(model.timelineParent(for: "refs/heads/disconnected") == nil)
+
+        await model.setIncludesRemotes(true)
+        #expect(model.timelineParent(for: "refs/heads/remote-child") == .branch("refs/remotes/origin/main"))
+        await model.setIncludesRemotes(false)
+        await compare.configure(repo: world.repo.path, base: "origin/main", compare: .ref("c"))
+        #expect(model.timelineParent(for: "refs/heads/remote-child") == .base)
+    }
+
     @Test func historyWorktreeLinkRevealsTheMatchingRow() async throws {
         let world = try await BranchHistoryFixture.make()
         defer { world.remove() }
