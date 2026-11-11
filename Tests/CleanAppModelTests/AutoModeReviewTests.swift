@@ -46,8 +46,8 @@ struct AutoModeReviewTests {
         #expect(hooksRun.value == 1, "only the instance that ran planned")
         #expect(try world.removedNames() == ["atlas-archive"], "removed once, one log entry")
         let errors = [world.autoMode.error, other.autoMode.error].compactMap { $0 }
-        #expect(errors == ["Auto clean waited: \(CleanupLock.busyMessage). The next check tries again."])
-        #expect(manual.value.map(\.error) == [CleanupLock.busyMessage])
+        #expect(errors == ["Auto clean waited: \(CleanupPresentation.busyReason). The next check tries again."])
+        #expect(manual.value.map(\.error) == [CleanupPresentation.busyReason])
         #expect(try world.exists("atlas-review"))
 
         let skipped = try #require(results.firstIndex { $0 == nil }.map { instances[$0] })

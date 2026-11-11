@@ -67,7 +67,7 @@ public struct CacheRow: Identifiable, Hashable, Sendable {
         case .empty: StatusWords("Empty", .grey)
         case .displayOnly(let why): StatusWords(Self.sentence(why), .grey, symbol: "lock")
         case .refused(let why):
-            StatusWords(why.lowercased().contains("quit") ? Self.sentence(why) : "Can't clean: " + why, .blue, symbol: "info.circle")
+            StatusWords(why.lowercased().contains("quit") ? Self.sentence(why).replacingOccurrences(of: " to clean this", with: " to clean") : "Can't clean: " + why, why.lowercased().contains("quit") ? .blue : .grey, symbol: "info.circle")
         }
     }
 

@@ -151,7 +151,7 @@ struct RemoveAnywayModelTests {
         let lock = try #require(try CleanupLock.tryAcquire(environment: app.environment))
         let locked = try #require(await model.confirmRemoveAnyway(confirmation, understood: true))
         lock.release()
-        #expect(locked.text == "Not removed: \(CleanupLock.busyMessage).")
+        #expect(locked.text == "Not removed: \(CleanupPresentation.busyReason).")
 
         let gate = Gate()
         let other = Task { await app.cleaningUp { await gate.wait() } }

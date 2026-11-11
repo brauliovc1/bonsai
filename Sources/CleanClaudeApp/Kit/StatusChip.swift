@@ -5,6 +5,7 @@ import SwiftUI
 /// "Open in node" (PLAN §8.4). Sentence case, never all caps.
 struct StatusChip: View {
     let words: StatusWords
+    var wraps = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -14,12 +15,12 @@ struct StatusChip: View {
             Text(words.text)
         }
         .font(.callout.weight(.medium))
-        .lineLimit(1)
+        .lineLimit(wraps ? nil : 1)
         .foregroundStyle(Palette.color(words.tone))
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Palette.tint(words.tone), in: Capsule())
-        .fixedSize()
+        .fixedSize(horizontal: !wraps, vertical: true)
         .accessibilityElement(children: .combine)
     }
 }

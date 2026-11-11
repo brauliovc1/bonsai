@@ -140,7 +140,7 @@ struct CachesModelTests {
         let lock = try #require(try CleanupLock.tryAcquire(environment: world.environment))
         var report = await model.cleanSelected()
         lock.release()
-        #expect(report.outcomes.map(\.status) == [.refused("\(CleanupLock.busyMessage); nothing was deleted")])
+        #expect(report.outcomes.map(\.status) == [.refused("\(CleanupPresentation.busyReason); nothing was deleted")])
 
         let inner = await model.app.cleaningUp { await model.cleanSelected() }
         report = try #require(inner)

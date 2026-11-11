@@ -205,6 +205,7 @@ public final class AppModel {
     public var busyReason: String {
         if isAutoRunning { return "Auto clean is running" }
         if isCleaningUp { return "another cleanup is still running" }
+        if lastRefusal == CleanupLock.busyMessage { return CleanupPresentation.busyReason }
         return lastRefusal ?? "another cleanup is still running"
     }
 

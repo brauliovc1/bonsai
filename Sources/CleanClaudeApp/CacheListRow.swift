@@ -22,7 +22,7 @@ struct CacheListRow: View {
                 if let kept = row.keptText { Text(kept).font(.caption).foregroundStyle(.secondary) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             if queued { QueuedItemStatus(queue: model.app.cleanupQueue, resource: model.queueResource(row.id)) }
-            else if !row.isDisplayOnly { StatusChip(words: row.statusWords).help(row.statusText) }
+            else if !row.isDisplayOnly { StatusChip(words: row.statusWords, wraps: true).frame(maxWidth: 280, alignment: .trailing).help(row.statusText) }
             SizeText(bytes: row.bytes).frame(width: 85, alignment: .trailing)
         }
         .foregroundStyle(row.isDisplayOnly ? .secondary : .primary)

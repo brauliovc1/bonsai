@@ -231,7 +231,7 @@ struct ProjectsModelTests {
         let lock = try #require(try CleanupLock.tryAcquire(environment: world.environment))
         let locked = await model.cleanSelected(confirmation)
         lock.release()
-        #expect(locked.outcomes.first?.error == "\(CleanupLock.busyMessage); nothing was deleted")
+        #expect(locked.outcomes.first?.error == "\(CleanupPresentation.busyReason); nothing was deleted")
         #expect(world.exists("node_modules", in: "delta"))
 
         // While the clean runs (stopped at its first process check), a manual removal is refused.
