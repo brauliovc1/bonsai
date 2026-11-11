@@ -50,7 +50,7 @@ public final class CleanupQueue {
                  finish: @escaping @MainActor (CleanupTask) async -> Void = { _ in }) -> CleanupTask? {
         guard !app.isQuitting, !work.isEmpty else { return nil }
         let resources = work.flatMap { $0.item.resources }
-        guard !resources.contains(where: { task(for: $0) != nil }) else { return nil }
+        guard !resources.contains(where: { self.task(for: $0) != nil }) else { return nil }
         for index in work.indices {
             let previous = work[..<index].flatMap { $0.item.resources }
             guard !work[index].item.resources.contains(where: { resource in
