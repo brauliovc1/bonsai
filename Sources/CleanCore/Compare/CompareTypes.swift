@@ -58,6 +58,22 @@ public struct CompareSnapshot: Sendable, Codable {
     public let merge: MergeCheck
     public var additions: Int { files.reduce(0) { $0 + $1.additions } }
     public var deletions: Int { files.reduce(0) { $0 + $1.deletions } }
+    private enum CodingKeys: String, CodingKey { case range, files, merge, additions, deletions, summary }
+    public init(range: CompareRange, files: [CompareFile], merge: MergeCheck) {
+        self.range = range; self.files = files; self.merge = merge
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        range = try container.decode(CompareRange.self, forKey: .range)
+        files = try container.decode([CompareFile].self, forKey: .files)
+        merge = try container.decode(MergeCheck.self, forKey: .merge)
+    }
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(range, forKey: .range); try container.encode(files, forKey: .files)
+        try container.encode(merge, forKey: .merge); try container.encode(additions, forKey: .additions)
+        try container.encode(deletions, forKey: .deletions); try container.encode(summary, forKey: .summary)
+    }
     public var summary: String {
         "\(range.commits.count) commits · \(files.count) files · +\(additions) −\(deletions)\n\(range.ahead) ahead, \(range.behind) behind \(range.base)\n\(merge.message(base: range.base))"
     }

@@ -10,7 +10,12 @@ import CleanCore
         let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = 3
         let defaults: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph]
-        for hunk in document.hunks {
+        for (index, hunk) in document.hunks.enumerated() {
+            if index > 0 {
+                let gap = NSMutableAttributedString(string: "Show 20 more lines\n", attributes: defaults)
+                gap.addAttribute(.link, value: "bonsai-compare-context", range: NSRange(location: 0, length: gap.length - 1))
+                output.append(gap)
+            }
             var oldState = SyntaxHighlighter.State(); var newState = SyntaxHighlighter.State()
             let heading = NSMutableAttributedString(string: hunk.header + "\n", attributes: defaults)
             heading.addAttribute(.foregroundColor, value: Palette.syntax(.keyword), range: NSRange(location: 0, length: heading.length))

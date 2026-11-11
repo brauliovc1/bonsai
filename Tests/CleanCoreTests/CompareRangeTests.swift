@@ -44,7 +44,7 @@ struct CompareRangeTests {
     @Test func uncommittedAndUntracked() async throws {
         let world = try await CompareFixture.make(); defer { world.fixture.remove() }
         try world.fixture.write("let draft = true\n", to: "Sources/Welcome.swift", in: world.worktree)
-        try world.fixture.write("new work\n", to: "new file.txt", in: world.worktree)
+        try world.fixture.write("new work\tvalue\r\n", to: "new file.txt", in: world.worktree)
         let reader = try world.reader()
         let result = try await reader.load(base: "main", compare: .worktree(world.worktree.path))
         #expect(result.range.ahead == 2)
@@ -54,7 +54,7 @@ struct CompareRangeTests {
         #expect(added.notCommitted && added.status == .added && added.additions == 1)
         #expect(result.files.first { $0.path == "src/greet.ts" }?.notCommitted == false)
         let patch = try await reader.patch(file: added, range: result.range)
-        #expect(String(decoding: patch, as: UTF8.self).contains("+new work"))
+        #expect(String(decoding: patch, as: UTF8.self).contains("+new work\tvalue\r\n"))
     }
 
     @Test func whitespaceAndSizes() async throws {

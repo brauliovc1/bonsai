@@ -24,11 +24,11 @@ public struct CompareReader: Sendable {
             let untracked = try await work.git.data(["ls-files", "--others", "--exclude-standard", "-z"])
             for field in untracked.split(separator: 0) {
                 let path = String(decoding: field, as: UTF8.self)
-                let bytes = try work.worktreeBytes(path)
-                let binary = bytes.contains(0)
+                let info = try work.worktreeInfo(path)
+                let binary = info.binary
                 files.append(CompareFile(path: path, status: .added,
-                    additions: binary ? 0 : Self.lineCount(bytes), deletions: 0, isBinary: binary,
-                    oldMode: "000000", newMode: "100644", notCommitted: true, oldBytes: 0, newBytes: bytes.count))
+                    additions: binary ? 0 : info.lines, deletions: 0, isBinary: binary,
+                    oldMode: "000000", newMode: info.mode, notCommitted: true, oldBytes: 0, newBytes: info.bytes))
             }
         }
         let merge = await MergeCheck.check(base: baseSHA, compare: tip, using: git)
@@ -36,7 +36,7 @@ public struct CompareReader: Sendable {
     }
 
     public func files(from: String, to: String?) async throws -> [CompareFile] {
-        let args = ["diff", "--raw", "--numstat", "-z", "-M", "-C", "--find-copies-harder", "--ignore-submodules=all", from]
+        let args = ["diff", "--raw", "--numstat", "-z", "-M", "-C", "--find-copies-harder", to == nil ? "--ignore-submodules=all" : "--ignore-submodules=none", "--submodule=short", from]
             + (to.map { [$0] } ?? []) + ["--"]
         return CompareFileParser.parse(try await git.data(args))
     }
@@ -46,16 +46,11 @@ public struct CompareReader: Sendable {
         if let file, range.compare.isWorktree, file.status == .added, file.notCommitted {
             let tracked = try await work.git.data(["ls-files", "--cached", "-z", "--", file.path])
             if tracked.isEmpty {
-                let bytes = try work.worktreeBytes(file.path)
-                let text = DiffText.decode(bytes)
-                let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-                let body = lines.enumerated().filter { $0.offset < lines.count - 1 || !$0.element.isEmpty }.map { "+" + $0.element }.joined(separator: "\n")
-                let marker = bytes.last == 10 || bytes.isEmpty ? "" : "\n\\ No newline at end of file"
-                return Data("diff --git a/\(file.path) b/\(file.path)\nnew file mode 100644\n--- /dev/null\n+++ b/\(file.path)\n@@ -0,0 +1,\(Self.lineCount(bytes)) @@\n\(body)\(marker)\n".utf8)
+                return try await work.untrackedPatch(file.path, whitespace: whitespace, context: context)
             }
         }
-        var arguments = ["diff", "--no-color", "--full-index", "-M", "-C", "--find-copies-harder",
-            "--ignore-submodules=all", "--unified=\(context)"]
+        var arguments = ["diff", "--no-color", "--full-index", "--binary", "-M", "-C", "--find-copies-harder",
+            range.compare.isWorktree ? "--ignore-submodules=all" : "--ignore-submodules=none", "--submodule=short", "--unified=\(context)"]
         if whitespace { arguments.append("--ignore-all-space") }
         arguments += [range.mergeBase] + (range.compare.isWorktree ? [] : [range.compareSHA]) + ["--"]
         if let file { arguments += Array(Set([file.oldPath, file.path].compactMap { $0 })).sorted() }
@@ -73,10 +68,12 @@ public struct CompareReader: Sendable {
     public func fileDetails(_ file: CompareFile, range: CompareRange) async throws -> CompareFile {
         var file = file
         let work = try worktreeReader(range.compare)
-        if file.status != .added {
+        if file.oldMode == "160000" { file.oldBytes = nil }
+        else if file.status != .added {
             file.oldBytes = Int(try await git.string(["cat-file", "-s", range.mergeBase + ":" + (file.oldPath ?? file.path)]))
         } else { file.oldBytes = 0 }
-        if file.status == .deleted { file.newBytes = 0 }
+        if file.newMode == "160000" { file.newBytes = nil }
+        else if file.status == .deleted { file.newBytes = 0 }
         else if range.compare.isWorktree {
             let attributes = try FileManager.default.attributesOfItem(atPath: work.git.repository.appending(path: file.path).path)
             file.newBytes = (attributes[.size] as? NSNumber)?.intValue
@@ -105,13 +102,6 @@ public struct CompareReader: Sendable {
         return CompareReader(git: try GitReadOnly(repository: URL(fileURLWithPath: path), executable: git.executable, timeout: git.timeout))
     }
 
-    func worktreeBytes(_ path: String) throws -> Data {
-        guard !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else { throw CompareError("The file path is outside this checkout.") }
-        let file = git.repository.appending(path: path)
-        let values = try file.resourceValues(forKeys: [.isSymbolicLinkKey])
-        if values.isSymbolicLink == true { return Data(try FileManager.default.destinationOfSymbolicLink(atPath: file.path).utf8) }
-        return try Data(contentsOf: file)
-    }
 
     static func lineCount(_ bytes: Data) -> Int { bytes.isEmpty ? 0 : bytes.filter { $0 == 10 }.count + (bytes.last == 10 ? 0 : 1) }
 }
