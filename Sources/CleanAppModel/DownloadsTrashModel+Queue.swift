@@ -31,7 +31,8 @@ extension DownloadsTrashModel {
         guard !confirmedTrash.info.readable || confirmedTrash.fingerprint != .unreadable else { return nil }
         let flow = EmptyTrashFlow(emptier: emptier, log: RemovalLog(environment: app.environment),
                                   home: app.environment.homeDirectory, now: app.environment.now)
-        let item = CleanupItem(name: "Trash", resources: ["trash", app.environment.homeDirectory.appending(path: ".Trash").path])
+        let item = CleanupItem(name: "Trash", resources: ["trash", app.environment.homeDirectory.appending(path: ".Trash").path],
+                               estimatedBytes: confirmedTrash.info.bytes)
         let task = app.cleanupQueue.enqueue(title: "Empty Trash", unit: "actions", work: [CleanupWork(item) {
             do {
                 let result = try await flow.run(confirmed: true, expected: confirmedTrash.fingerprint)
