@@ -22,7 +22,15 @@ struct MainWindowView: View {
             VStack(spacing: 0) {
                 detail.frame(maxWidth: .infinity, maxHeight: .infinity)
                 VStack(spacing: 8) {
-                    ForEach(queue.toasts) { toast in CleanupToastView(toast: toast, queue: queue) }
+                    if !queue.toasts.isEmpty {
+                        ScrollView {
+                            VStack(spacing: 8) {
+                                ForEach(queue.toasts) { toast in CleanupToastView(toast: toast, queue: queue) }
+                            }
+                            .padding(.horizontal, 1)
+                        }
+                        .frame(height: min(CGFloat(queue.toasts.count) * 76, 152))
+                    }
                     CleanupActivityView(queue: queue)
                 }
                 .padding(queue.hasPending || !queue.toasts.isEmpty ? 12 : 0)
