@@ -11,6 +11,7 @@ struct BranchMapTimeline: View {
         let rows = model.rows
         let timeline = model.timeline
         let origins = model.family?.origins ?? [:]
+        let baseSHA = model.snapshot?.baseSHA
         let dates = rows.compactMap { $0.metrics.tip?.date } + timeline.values.compactMap { $0.fork?.date }
         let first = dates.min() ?? Date(), last = dates.max() ?? Date()
         let start = first.addingTimeInterval(-86400), end = max(last, first).addingTimeInterval(86400)
@@ -41,7 +42,7 @@ struct BranchMapTimeline: View {
                                 let tipX = Self.x(tip.date, width: size.width, start: start, end: end)
                                 let parent = origins[entry.ref]?.parent
                                 let parentIndex = rows.firstIndex { $0.ref == parent }
-                                let parentY = parentIndex.map { heading + CGFloat($0) * rowHeight + rowHeight / 2 } ?? 20
+                                let parentY = parentIndex.flatMap { rows[$0].sha == baseSHA ? nil : heading + CGFloat($0) * rowHeight + rowHeight / 2 } ?? 20
                                 var path = Path(); path.move(to: CGPoint(x: forkX, y: parentY))
                                 path.addLine(to: CGPoint(x: forkX, y: y)); path.addLine(to: CGPoint(x: tipX, y: y))
                                 context.stroke(path, with: .color(entry.metrics.problem == nil ? green.opacity(0.7) : grey), lineWidth: 1.5)

@@ -2,11 +2,11 @@ import Foundation
 
 /// Only tracking names/refspecs cross the isolated Git boundary. URLs, includes and command keys do not.
 enum BranchTrackingConfig {
-    struct Entry: Equatable { let section: String; let subsection: String?; let key: String; let value: String }
+    struct Entry: Equatable { let section: String; let subsection: String?; let key: String; let value: String; let implicitBoolean: Bool }
 
     static func sanitized(common: URL, worktree: URL) -> String {
         entries(common: common, worktree: worktree).compactMap { entry in
-            guard let subsection = entry.subsection,
+            guard !entry.implicitBoolean, let subsection = entry.subsection,
                   (entry.section == "branch" && ["remote", "merge"].contains(entry.key))
                     || (entry.section == "remote" && entry.key == "fetch") else { return nil }
             return "[\(entry.section) \"\(escaped(subsection))\"]\n\(entry.key) = \"\(escaped(entry.value))\"\n"
@@ -19,8 +19,10 @@ enum BranchTrackingConfig {
 
     private static func entries(common: URL, worktree: URL) -> [Entry] {
         let base = parse((try? String(contentsOf: common.appending(path: "config"), encoding: .utf8)) ?? "")
-        let enabled = base.last { $0.section == "extensions" && $0.key == "worktreeconfig" }?.value.lowercased()
-        guard ["true", "yes", "on", "1"].contains(enabled ?? "") else { return base }
+        let flag = base.last { $0.section == "extensions" && $0.key == "worktreeconfig" }
+        let enabled = flag?.implicitBoolean == true || ["true", "yes", "on"].contains(flag?.value.lowercased() ?? "")
+            || Int(flag?.value ?? "").map { $0 != 0 } == true
+        guard enabled else { return base }
         return base + parse((try? String(contentsOf: worktree.appending(path: "config.worktree"), encoding: .utf8)) ?? "")
     }
 
@@ -44,9 +46,10 @@ enum BranchTrackingConfig {
             let key = String(line.prefix { $0.isLetter || $0.isNumber || $0 == "-" }).lowercased()
             guard !key.isEmpty else { continue }
             var rest = String(line.dropFirst(key.count)).trimmingCharacters(in: .whitespaces)
+            let implicit = rest.isEmpty
             if rest.hasPrefix("=") { rest.removeFirst() }
             guard let value = decoded(rest.trimmingCharacters(in: .whitespaces)) else { continue }
-            entries.append(Entry(section: section.0, subsection: section.1, key: key, value: value))
+            entries.append(Entry(section: section.0, subsection: section.1, key: key, value: value, implicitBoolean: implicit))
         }
         return entries
     }

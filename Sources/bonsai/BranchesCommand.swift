@@ -31,7 +31,7 @@ struct BranchListCommand: AsyncParsableCommand {
         let (git, catalog, base) = try await options.reader()
         let map = try await BranchMap().load(base: base, catalog: catalog, includeRemotes: includesRemotes, using: git)
         let reader = BranchLineageReader(git: git, catalog: catalog)
-        let family = try await reader.family(base: base)
+        let family = try await reader.family(base: base, includeRemotes: includesRemotes)
         let rows = map.entries.map { BranchListRow(entry: $0, origin: family.origins[$0.ref]) }
         if options.json { try BranchCLI.json(BranchListReport(base: map.base, baseSHA: map.baseSHA, branches: rows)) }
         else {
@@ -77,10 +77,11 @@ struct BranchShowCommand: AsyncParsableCommand {
 private struct BranchListReport: Encodable { let base: String; let baseSHA: String; let branches: [BranchListRow] }
 private struct BranchListRow: Encodable {
     let ref: String; let name: String; let sha: String; let kind: BranchMapEntry.Kind; let worktree: String?
-    let metrics: BranchMapMetrics; let origin: BranchOrigin?
+    let metrics: BranchMapMetrics; let merged: Bool; let origin: BranchOrigin
     init(entry: BranchMapEntry, origin: BranchOrigin?) {
         ref = entry.ref; name = entry.name; sha = entry.sha; kind = entry.kind; worktree = entry.worktree
-        metrics = entry.metrics; self.origin = origin
+        metrics = entry.metrics; merged = entry.metrics.isMerged
+        self.origin = origin ?? BranchOrigin(parent: nil, source: .unknown, reason: "No local creation record names this ref.")
     }
 }
 
