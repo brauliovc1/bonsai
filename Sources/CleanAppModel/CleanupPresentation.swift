@@ -3,6 +3,7 @@ import Foundation
 
 /// Shared wording for confirmations and measured cleanup reports.
 public enum CleanupPresentation {
+    public static let busyReason = "another Bonsai cleanup is running"
     public static func title(_ action: String, count: Int, noun: String, plural: String? = nil, bytes: Int64?) -> String {
         guard count > 0 else { return "Nothing to " + action.lowercased() }
         let what = count == 1 ? noun : (plural ?? noun + "s")
