@@ -2,9 +2,12 @@ import Foundation
 
 /// Metrics survive refreshes only while the two immutable commit IDs remain the same.
 public actor BranchMap {
-    struct Key: Hashable { let base: String; let tip: String }
+    struct Visibility: Hashable, Sendable { let repository: String; let shallow: Data }
+    struct Key: Hashable, Sendable { let visibility: Visibility; let base: String; let tip: String }
+    struct Pending: Sendable { let token: UUID; let task: Task<BranchMapMetrics, Never> }
     var cache: [Key: BranchMapMetrics] = [:]
-    var pending: [Key: Task<BranchMapMetrics, Never>] = [:]
+    var pending: [Key: Pending] = [:]
+    var visibility: Visibility?
     var computations = 0
     var cacheHits = 0
     public static let concurrency = 4
@@ -14,6 +17,8 @@ public actor BranchMap {
     public init() {}
 
     public func load(base: String, catalog: RefCatalog, includeRemotes: Bool = false, using git: GitReadOnly) async throws -> BranchMapSnapshot {
+        let graph = Self.graphVisibility(git)
+        if visibility != graph { cache = [:]; visibility = graph }
         let baseSHA = try await git.resolve(base)
         let seeds = await Self.seeds(catalog, includeRemotes: includeRemotes, git: git)
         let entries = await BoundedConcurrency.map(seeds, limit: Self.concurrency) { seed in
@@ -25,16 +30,33 @@ public actor BranchMap {
     }
 
     func metrics(base: String, tip: String, git: GitReadOnly) async -> BranchMapMetrics {
-        let key = Key(base: base, tip: tip)
+        let graph = Self.graphVisibility(git)
+        if visibility == nil { visibility = graph }
+        let key = Key(visibility: graph, base: base, tip: tip)
         if let value = cache[key] { cacheHits += 1; return value }
-        if let task = pending[key] { return await task.value }
+        if let held = pending[key] {
+            let value = await withTaskCancellationHandler { await held.task.value } onCancel: { held.task.cancel() }
+            if held.task.isCancelled && !Task.isCancelled {
+                if pending[key]?.token == held.token { pending[key] = nil }
+                return await metrics(base: base, tip: tip, git: git)
+            }
+            return value
+        }
         computations += 1
         let task = Task { await Self.readMetrics(base: base, tip: tip, git: git) }
-        pending[key] = task
+        let token = UUID()
+        pending[key] = Pending(token: token, task: task)
         let value = await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
-        pending[key] = nil
-        if !Task.isCancelled, value.problem == nil || value.problem == Self.unrelated { cache[key] = value }
+        if pending[key]?.token == token { pending[key] = nil }
+        if !Task.isCancelled, !task.isCancelled, visibility == graph,
+           value.problem == nil || value.problem == Self.unrelated { cache[key] = value }
         return value
+    }
+
+    nonisolated static func graphVisibility(_ git: GitReadOnly) -> Visibility {
+        // The copied metadata is immutable even when a fetch deepens the original repo afterwards.
+        Visibility(repository: CanonicalPath.resolve(git.commonDirectory),
+                   shallow: (try? Data(contentsOf: git.metadata.appending(path: "shallow"))) ?? Data())
     }
 
     private static func readMetrics(base: String, tip: String, git: GitReadOnly) async -> BranchMapMetrics {
@@ -71,11 +93,11 @@ public actor BranchMap {
             seeds.append(Seed(ref: ref.fullName, name: ref.name, sha: ref.sha,
                               kind: worktree.map(kind) ?? (ref.kind == .remote ? .remote : .branch), worktree: worktree?.path))
         }
-        let names = Set(seeds.map(\.ref))
+        var names = Set(seeds.map(\.ref))
         for worktree in catalog.worktrees where !worktree.isBare {
             guard let sha = worktree.head else { continue }
             let ref = worktree.branch.map { "refs/heads/" + $0 } ?? "worktree:" + worktree.path
-            guard !names.contains(ref) else { continue }
+            guard names.insert(ref).inserted else { continue }
             seeds.append(Seed(ref: ref, name: worktree.branch ?? "Detached · " + worktree.url.lastPathComponent,
                               sha: sha, kind: kind(worktree), worktree: worktree.path))
         }

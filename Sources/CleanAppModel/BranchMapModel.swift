@@ -39,7 +39,10 @@ public final class BranchMapModel {
     public func setOpen(_ open: Bool) async {
         isOpen = open
         if open { await refresh() }
-        else if !showsHistory { cancelLoading() }
+        else {
+            cancelLoading()
+            if showsHistory && history == nil { await refresh() }
+        }
     }
     public func setIncludesRemotes(_ value: Bool) async { includesRemotes = value; if isOpen { await refresh() } }
     public func setLayout(_ value: Layout) async {
@@ -91,7 +94,7 @@ public final class BranchMapModel {
                 let resolvedBase = base.isEmpty ? catalog.defaultBase ?? "HEAD" : base
                 let reader = BranchLineageReader(git: git, catalog: catalog)
                 let map = wantsMap ? try await cache.load(base: resolvedBase, catalog: catalog, includeRemotes: includeRemotes, using: git) : nil
-                let family = wantsFamily ? try await reader.family(base: resolvedBase) : nil
+                let family = wantsFamily ? try await reader.family(base: resolvedBase, includeRemotes: includeRemotes) : nil
                 let timeline = wantsTimeline ? try await reader.timeline(entries: map?.entries ?? [], origins: family?.origins ?? [:]) : [:]
                 try Task.checkCancellation()
                 guard generation == token else { return }

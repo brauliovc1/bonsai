@@ -16,6 +16,8 @@ struct BranchesCLITests {
         #expect(json["base"] as? String == "main")
         let rows = try #require(json["branches"] as? [[String: Any]])
         let row = try #require(rows.first { $0["name"] as? String == "c" })
+        #expect(row["merged"] as? Bool == false)
+        #expect(rows.first { $0["name"] as? String == "main" }?["merged"] as? Bool == true)
         #expect((row["metrics"] as? [String: Any])?["ahead"] as? Int == 3)
         #expect((row["origin"] as? [String: Any])?["source"] as? String == "reflog")
         #expect((row["origin"] as? [String: Any])?["parent"] as? String == "refs/heads/b")

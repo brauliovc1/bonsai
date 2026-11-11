@@ -18,21 +18,28 @@ public struct BranchLineageReader: Sendable {
         else { family = try await self.family(base: baseRef) }
         let origin: BranchOrigin
         if let known = family.origins[selected] { origin = known }
-        else if detached != nil { origin = try await inferOrigin(of: selected, tip: tipSHA, base: baseRef) }
+        else if detached != nil || (catalog.refs.contains { $0.fullName == selected && $0.kind == .remote }) { origin = try await inferOrigin(of: selected, tip: tipSHA, base: baseRef) }
         else { origin = BranchOrigin(parent: nil, source: .unknown, reason: "No branch creation record is available.") }
         let common = try await query.mergeBase(baseSHA, tipSHA)
         let fork = try await forkPoint(origin: origin, tip: tipSHA, fallback: common)
+        var effectiveOrigins = family.origins; effectiveOrigins[selected] = origin
+        let effectiveFamily = BranchFamily(origins: effectiveOrigins)
         let worktree = detached ?? catalog.worktrees.first { "refs/heads/" + ($0.branch ?? "") == selected }
         return BranchLineage(branch: selected, base: baseRef, tip: tip, origin: origin,
             forkPoint: fork.0, forkSource: fork.1, merged: await merged(tip: tipSHA, base: baseSHA),
-            children: family.children(of: selected), parentChain: family.chain(from: selected, through: baseRef),
+            children: effectiveFamily.children(of: selected), parentChain: effectiveFamily.chain(from: selected, through: baseRef),
             upstream: await upstream(selected), worktree: worktree?.path,
             problems: common == nil ? [BranchMap.unrelated] : [])
     }
 
-    public func family(base: String) async throws -> BranchFamily {
+    public func family(base: String, includeRemotes: Bool = false) async throws -> BranchFamily {
         let baseRef = try await resolvedName(base)
-        let refs = catalog.refs.filter { $0.kind == .local }
+        let symbolic = try await git.string(["for-each-ref", "--format=%(refname)%00%(symref)", "refs/remotes"])
+        let aliases = Set(symbolic.split(separator: "\n").compactMap { line -> String? in
+            let fields = line.split(separator: "\0", omittingEmptySubsequences: false)
+            return fields.count == 2 && !fields[1].isEmpty ? String(fields[0]) : nil
+        })
+        let refs = catalog.refs.filter { ($0.kind == .local || (includeRemotes && $0.kind == .remote)) && !aliases.contains($0.fullName) }
         let records = await BoundedConcurrency.map(refs, limit: BranchMap.concurrency) { ref in
             do {
                 let data = try await git.data(["log", "-g", "--date=raw", BranchReflog.format, ref.fullName, "--"])
@@ -42,7 +49,7 @@ public struct BranchLineageReader: Sendable {
         var origins: [String: BranchOrigin] = [:]
         for (ref, record) in records {
             if ref == baseRef { continue }
-            if let record, let parent = record.parent, parent != "HEAD" {
+            if let record, let parent = record.parent {
                 origins[ref] = BranchOrigin(parent: canonical(parent), source: .reflog, date: record.date,
                                            atSHA: record.atSHA, reason: record.reason)
             }
@@ -111,6 +118,10 @@ public struct BranchLineageReader: Sendable {
 
     private func forkPoint(origin: BranchOrigin, tip: String, fallback: String?) async throws -> (BranchHistoryCommit?, BranchLineage.ForkSource) {
         let query = BranchGit(git: git)
+        if origin.source == .reflog, let sha = origin.atSHA, let parent = origin.parent,
+           !["refs/heads/", "refs/remotes/", "refs/tags/"].contains(where: parent.hasPrefix) {
+            return (try await query.commit(sha), .creationRecord)
+        }
         if let parent = origin.parent {
             if let sha = try? await query.mergeBase(parent, tip, forkPoint: true) { return (try await query.commit(sha), .parentReflog) }
             if let sha = try? await query.mergeBase(parent, tip) { return (try await query.commit(sha), .mergeBase) }
