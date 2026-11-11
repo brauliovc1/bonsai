@@ -104,7 +104,7 @@ struct LightCleanFlow {
                 )
                 outcomes.append(LightCleanOutcome(item: item, result: result))
             } catch {
-                outcomes.append(LightCleanOutcome(item: item, error: "\(error)"))
+                outcomes.append(LightCleanOutcome(item: item, error: CleanupPresentation.error(error)))
             }
             onEach()
         }

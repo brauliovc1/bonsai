@@ -117,7 +117,7 @@ struct CleanupQueueIntegrationTests {
         var ended = false
         let run = Task { let result = await world.autoMode.runNow(); ended = true; return result }
         #expect(await eventually { !queue.emptyWaiters.isEmpty || ended })
-        #expect(!ended, "auto mode must stay waiting while a manual task is pending")
+        #expect(!ended, "auto clean must stay waiting while a manual task is pending")
         #expect(!world.app.isAutoRunning)
         #expect(try world.saved().lastAutoRun == nil)
         gate.open()

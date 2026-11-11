@@ -25,8 +25,7 @@ struct DerivedDataDeleteSheet: View {
 
     private func confirmPage(_ confirmation: DerivedDataConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(confirmation.allowed.isEmpty ? "Nothing can be deleted" : "\(confirmation.deleteButtonTitle)?")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: confirmation.title)
             if let refusal = confirmation.refusal {
                 ProblemBanner(text: "The DerivedData folder is refused: \(refusal)")
             }
@@ -77,7 +76,7 @@ struct DerivedDataDeleteSheet: View {
                     model.queueDelete(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Palette.red)
                 .disabled(model.isDeleting)
             }
         }
@@ -85,14 +84,19 @@ struct DerivedDataDeleteSheet: View {
 
     private func resultPage(_ report: DerivedDataCleanupReport) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(report.summary).font(.title2.weight(.semibold))
+            SheetHeading(title: report.headline, subtitle: report.summary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(report.outcomes) { outcome in
+                    if report.outcomes.contains(where: \.isDeleted) { Text("Done").font(.headline) }
+                    ForEach(report.outcomes.filter(\.isDeleted)) { outcome in
+                        OutcomeView(outcome: outcome)
+                    }
+                    if report.outcomes.contains(where: { !$0.isDeleted }) { Text("Skipped").font(.headline).padding(.top, 4) }
+                    ForEach(report.outcomes.filter { !$0.isDeleted }) { outcome in
                         OutcomeView(outcome: outcome)
                     }
                     ForEach(report.warnings, id: \.self) { warning in
-                        Label(warning, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Label(warning, systemImage: "exclamationmark.triangle").foregroundStyle(Palette.orange)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -119,7 +123,7 @@ private struct FolderItemView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.name).fontWeight(.semibold).lineLimit(1).truncationMode(.middle)
                 Spacer()
-                Text(item.sizeText).monospacedDigit()
+                SizeText(bytes: item.bytes)
             }
             if let reason = item.leftAloneReason {
                 Label(reason, systemImage: "nosign")
@@ -156,8 +160,8 @@ private struct OutcomeView: View {
         switch outcome.status {
         case .deleted(let freed):
             "Deleted. Freed \(DisplayText.bytes(freed)) (estimate \(DisplayText.bytes(outcome.item.bytes)))."
-        case .refused(let why): "Refused, left alone: \(why)"
-        case .failed(let message): "Failed: \(message)"
+        case .refused(let why): "Left alone: \(why)"
+        case .failed(let message): "Couldn't clean: \(message)"
         }
     }
 
@@ -171,17 +175,17 @@ private struct OutcomeView: View {
 
     private var color: Color {
         switch outcome.status {
-        case .deleted: .green
-        case .refused: .orange
-        case .failed: .red
+        case .deleted: Palette.green
+        case .refused: Palette.orange
+        case .failed: Palette.orange
         }
     }
 
     private var detailColor: Color {
         switch outcome.status {
         case .deleted: .secondary
-        case .refused: .orange
-        case .failed: .red
+        case .refused: Palette.orange
+        case .failed: Palette.orange
         }
     }
 }

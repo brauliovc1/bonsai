@@ -6,7 +6,7 @@ import Testing
 
 /// The P8 review's items, each with the safe expectation: two instances, the last check before git,
 /// quitting mid-removal, on without a start date, the wording of a stopped run, the low-space date.
-@Suite("Auto mode review fixes")
+@Suite("Auto clean review fixes")
 @MainActor
 struct AutoModeReviewTests {
     /// 1. Two app instances on one settings folder run at once: `cleanup.lock` lets one remove, once; the
@@ -46,7 +46,7 @@ struct AutoModeReviewTests {
         #expect(hooksRun.value == 1, "only the instance that ran planned")
         #expect(try world.removedNames() == ["atlas-archive"], "removed once, one log entry")
         let errors = [world.autoMode.error, other.autoMode.error].compactMap { $0 }
-        #expect(errors == ["Auto mode waited: \(CleanupLock.busyMessage). The next check tries again."])
+        #expect(errors == ["Auto clean waited: \(CleanupLock.busyMessage). The next check tries again."])
         #expect(manual.value.map(\.error) == [CleanupLock.busyMessage])
         #expect(try world.exists("atlas-review"))
 
@@ -98,7 +98,7 @@ struct AutoModeReviewTests {
             gate.arm()
             Task { @MainActor in
                 #expect(await eventually { gate.isWaiting }, "the last check didn't reach lsof within \(TestWait.limit)")
-                #expect(throws: Never.self, "auto mode turned off on disk") { _ = try store.update { $0.autoEnabled = false } }
+                #expect(throws: Never.self, "auto clean turned off on disk") { _ = try store.update { $0.autoEnabled = false } }
                 gate.open()
             }
         }
@@ -131,7 +131,7 @@ struct AutoModeReviewTests {
         #expect(summary.removedCount == 0 && summary.stopReason == .rulesChanged)
         #expect(try world.exists("tidy-otter"))
         #expect(try world.logEntries().isEmpty)
-        #expect(world.notifier.posted.map(\.body) == ["Auto mode removed nothing. 1 idle worktree has local work. "
+        #expect(world.notifier.posted.map(\.body) == ["Auto clean removed nothing. 1 idle worktree has local work. "
             + "The rules changed, so the run stopped."])
     }
 
@@ -199,7 +199,7 @@ struct AutoModeReviewTests {
         let start = world.clock.now
         #expect(try world.saved().autoEnabledAt == start)
         let end = start.addingTimeInterval(7 * 86_400).formatted(date: .abbreviated, time: .shortened)
-        #expect(world.autoMode.statusText == "Auto mode: report-only until \(end)")
+        #expect(world.autoMode.statusText == "Auto clean: report-only until \(end)")
         #expect(await eventually { world.notifier.authorizationRequests == 1 })
         #expect(try #require(await world.autoMode.runNow()).reportOnly)
 

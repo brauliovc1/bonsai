@@ -13,7 +13,7 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(SettingsModel.Tab.general)
             AutoModeSettingsView(model: autoMode, launchAtLogin: launchAtLogin)
-                .tabItem { Label("Auto mode", systemImage: "clock.badge.checkmark") }
+                .tabItem { Label("Auto clean", systemImage: "clock.badge.checkmark") }
                 .tag(SettingsModel.Tab.autoMode)
         }
         .frame(width: 540)
@@ -29,12 +29,15 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                PageHeader(title: "General", subtitle: "Choose where Bonsai looks and when a project counts as idle.")
+            }
             if let error = model.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Palette.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Section("Scan roots") {
+            Section("Project folders to scan") {
                 rootsList
                 HStack {
                     Button("Add…") { add() }
@@ -43,7 +46,7 @@ struct GeneralSettingsView: View {
                     Spacer()
                 }
                 if let note = model.overrideText {
-                    Text(note).font(.callout).foregroundStyle(.orange)
+                    Text(note).font(.callout).foregroundStyle(Palette.orange)
                 }
                 Text(model.scanningText).font(.callout).foregroundStyle(.secondary)
             }
@@ -52,8 +55,7 @@ struct GeneralSettingsView: View {
                     Text("\(model.idleThresholdDays) days")
                         .monospacedDigit()
                 }
-                Text("A worktree counts as idle after this many days without activity. It sets the statuses "
-                    + "(auto-ready needs this many idle days) and is used by auto mode.")
+                Text("Projects and worktrees count as idle after this many days without activity. Auto clean uses the same threshold.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -91,7 +93,7 @@ struct GeneralSettingsView: View {
             if let refusal {
                 Text("Skipped: \(refusal)")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Palette.orange)
             }
         }
         .tag(root)

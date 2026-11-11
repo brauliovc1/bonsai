@@ -92,7 +92,7 @@ struct LightCleanModelTests {
         #expect(Set(confirmation.cleanable.map { $0.worktree.url.lastPathComponent }) == ["cobalt-web", "cobalt-swift", "cobalt"])
         #expect(Set(confirmation.others.map { $0.worktree.url.lastPathComponent }) == ["cobalt-py", "atlas-archive"])
         #expect(confirmation.folderCount == 3)
-        #expect(confirmation.deleteButtonTitle == "Delete 3 folders")
+        #expect(confirmation.deleteButtonTitle == "Clean 3")
         #expect(confirmation.estimatedTotalBytes > 19 * 1024 * 1024)
         #expect(LightCleanConfirmation.nextTimeLine
             == "Next time you use it, run npm ci / pod install / flutter pub get as needed.")

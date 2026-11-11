@@ -5,26 +5,32 @@ import SwiftUI
 /// own Storage settings. Its only button is Refresh.
 struct ClaudeUsageView: View {
     let model: ClaudeUsageModel
+    @State private var sort: ContentSort = .size
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Label(ClaudeUsageModel.note, systemImage: "info.circle")
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                PageHeader(title: "Claude usage", subtitle: "See where Claude stores its data.") {
+                    Button("Refresh") { Task { await model.refresh() } }.disabled(model.isScanning)
+                }
+                GroupedSection { Label(ClaudeUsageModel.note, systemImage: "info.circle").foregroundStyle(Palette.blue) }
+                ContentSortBar(selection: $sort)
                 if model.report == nil {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text("Measuring Claude's folders…").foregroundStyle(.secondary)
                     }
                 } else {
-                    totals
-                    transcripts
-                    versions
-                    desktop
+                    if model.report?.totalBytes == 0 {
+                        EmptyState(systemImage: "sparkles", headline: "No Claude data found", line: "Claude's folders appear here after you use it.")
+                            .frame(maxWidth: .infinity)
+                    }
+                    GroupedSection { totals }
+                    GroupedSection { transcripts }
+                    GroupedSection { versions }
+                    GroupedSection { desktop }
                     ForEach(model.warnings, id: \.self) { warning in
-                        Label(warning, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                        Label(warning, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Palette.orange)
                     }
                 }
                 HStack(spacing: 10) {
@@ -37,19 +43,10 @@ struct ClaudeUsageView: View {
                 }
             }
             .padding(20)
-            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Claude usage")
-        .toolbar {
-            ToolbarItem {
-                Button { Task { await model.refresh() } } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .help("Measure again")
-                .disabled(model.isScanning)
-            }
-        }
         .task { if model.report == nil { await model.refresh() } }
     }
 
@@ -60,14 +57,14 @@ struct ClaudeUsageView: View {
                 Spacer()
                 Text(model.totalText).font(.title3.weight(.semibold)).monospacedDigit()
             }
-            ForEach(model.summaryLines) { line in
+            ForEach(model.summaryLines.sorted { sort == .name ? $0.title < $1.title : $0.bytes > $1.bytes }) { line in
                 HStack(alignment: .firstTextBaseline) {
                     Text(line.title)
                     if let detail = line.detail {
                         Text(detail).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(line.sizeText).monospacedDigit()
+                    SizeText(bytes: line.bytes)
                 }
             }
         }
@@ -79,7 +76,7 @@ struct ClaudeUsageView: View {
             if model.transcriptRows.isEmpty {
                 Text("No transcripts found.").foregroundStyle(.secondary)
             }
-            ForEach(model.transcriptRows) { row in
+            ForEach(model.transcriptRows.sorted { sort == .name ? $0.title < $1.title : $0.bytes > $1.bytes }) { row in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(row.title)
@@ -89,10 +86,10 @@ struct ClaudeUsageView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if row.folderGone {
-                        Badge(text: "folder gone", color: .orange)
+                        StatusChip(words: StatusWords("Folder gone", .grey))
                             .help("The project this transcript folder belongs to no longer exists")
                     }
-                    Text(row.sizeText).monospacedDigit()
+                    SizeText(bytes: row.bytes)
                 }
             }
         }
@@ -115,11 +112,11 @@ struct ClaudeUsageView: View {
             if model.desktopRows.isEmpty {
                 Text("No desktop app data found.").foregroundStyle(.secondary)
             }
-            ForEach(model.desktopRows) { row in
+            ForEach(model.desktopRows.sorted { sort == .name ? $0.title < $1.title : $0.bytes > $1.bytes }) { row in
                 HStack(alignment: .firstTextBaseline) {
                     Text(row.title)
                     Spacer()
-                    Text(row.sizeText).monospacedDigit()
+                    SizeText(bytes: row.bytes)
                 }
             }
         }

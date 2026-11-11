@@ -27,4 +27,6 @@ public struct RemovalReport: Sendable {
         if otherFailures > 0 { text += " \(DisplayText.worktrees(otherFailures)) not removed." }
         return text
     }
+    public var headline: String { CleanupPresentation.headline(measuredFreedBytes) }
+
 }

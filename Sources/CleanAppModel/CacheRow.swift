@@ -61,6 +61,16 @@ public struct CacheRow: Identifiable, Hashable, Sendable {
         }
     }
 
+    public var statusWords: StatusWords {
+        switch finding.verdict {
+        case .ready: StatusWords("Ready to clean", .green, symbol: "checkmark.circle")
+        case .empty: StatusWords("Empty", .grey)
+        case .displayOnly(let why): StatusWords(Self.sentence(why), .grey, symbol: "lock")
+        case .refused(let why):
+            StatusWords(why.lowercased().contains("quit") ? Self.sentence(why) : "Can't clean: " + why, .blue, symbol: "info.circle")
+        }
+    }
+
     /// "Keeps 2026.10.19-6bbf2c4 (the version in use and the newest)"; nil when nothing is kept.
     public var keptText: String? {
         guard !finding.kept.isEmpty else { return nil }

@@ -24,7 +24,7 @@ struct DockerPruneSheet: View {
 
     private func confirmPage(_ confirmation: DockerPruneConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Run the Docker prune?").font(.title2.weight(.semibold))
+            SheetHeading(title: confirmation.title)
             Text("This runs")
             Text(DockerPruneConfirmation.command)
                 .font(.system(.title3, design: .monospaced))
@@ -37,8 +37,8 @@ struct DockerPruneSheet: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    list("It removes", items: DockerPruneConfirmation.removes, icon: "minus.circle", color: .red)
-                    list("It keeps", items: DockerPruneConfirmation.keeps, icon: "checkmark.circle", color: .green)
+                    list("It removes", items: DockerPruneConfirmation.removes, icon: "minus.circle", color: Palette.grey)
+                    list("It keeps", items: DockerPruneConfirmation.keeps, icon: "checkmark.circle", color: Palette.blue)
                     if confirmation.isAllowed {
                         Text("Docker says up to \(DisplayText.bytes(confirmation.estimatedBytes)) could be freed. "
                             + "That is an upper bound: unused tagged images stay.")
@@ -50,7 +50,7 @@ struct DockerPruneSheet: View {
             }
             Divider()
             if let blocker = confirmation.blocker {
-                Label(blocker, systemImage: "nosign").foregroundStyle(.red)
+                Label(blocker, systemImage: "nosign").foregroundStyle(Palette.orange)
             }
             HStack {
                 if model.isPruning {
@@ -62,9 +62,9 @@ struct DockerPruneSheet: View {
                     .keyboardShortcut(.cancelAction)
                     .disabled(model.isPruning)
                 // Deliberately not the default button: Return never prunes.
-                Button("Prune", role: .destructive) { model.queueDockerPrune(confirmation) }
+                Button(confirmation.buttonTitle, role: .destructive) { model.queueDockerPrune(confirmation) }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .tint(Palette.red)
                     .disabled(!confirmation.isAllowed || model.isPruning)
                     .help(confirmation.blocker ?? "Run \(DockerPruneConfirmation.command)")
             }

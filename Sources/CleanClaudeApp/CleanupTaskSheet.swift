@@ -9,7 +9,7 @@ struct CleanupTaskSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PageHeader(title: task.title, subtitle: subtitle)
+            PageHeader(title: task.isPending ? task.title : CleanupPresentation.headline(task.measuredFreedBytes), subtitle: subtitle)
             if task.state == .running || !task.isPending {
                 VStack(alignment: .leading, spacing: 8) {
                     ProgressView(value: Double(task.completedCount), total: Double(max(1, task.items.count)))
@@ -32,7 +32,7 @@ struct CleanupTaskSheet: View {
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(task.items) { item in
+                    ForEach(displayItems) { item in
                         CleanupProgressRow(item: item)
                         Divider()
                     }
@@ -54,6 +54,10 @@ struct CleanupTaskSheet: View {
         }
         .padding(24)
         .frame(width: 720)
+    }
+
+    private var displayItems: [CleanupItem] {
+        task.isPending ? task.items : task.items.filter { $0.state == .done } + task.items.filter { $0.state != .done }
     }
 
     private var subtitle: String {

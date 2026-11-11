@@ -46,4 +46,6 @@ public struct CleanupCommandReport: Sendable {
             return "Deleted the unavailable simulator devices. This disk gained \(freed) (measured)."
         }
     }
+    public var headline: String { CleanupPresentation.headline(freedBytes) }
+
 }

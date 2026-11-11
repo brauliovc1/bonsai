@@ -15,14 +15,14 @@ public enum DisplayText {
         return "detached at \(worktree.head.map { String($0.prefix(8)) } ?? "?")"
     }
 
-    /// "45d"; "–" for a main checkout or a missing folder; "unknown" when the idle clock couldn't tell.
+    /// "45d"; a dash for a repo folder or a missing folder; "unknown" when the idle clock couldn't tell.
     public static func idle(_ assessment: WorktreeAssessment) -> String {
         if assessment.worktree.isMain || assessment.safety.blockers.contains(.missingFolder) { return "–" }
         return assessment.idle.idleDays.map { "\($0)d" } ?? "unknown"
     }
 
     /// The last-activity column: "Today", "Yesterday", "45 days ago"; "Unknown" when the idle clock couldn't
-    /// tell; "–" for a main checkout or a missing folder.
+    /// tell; a dash for a repo folder or a missing folder.
     public static func activity(_ assessment: WorktreeAssessment) -> String {
         if assessment.worktree.isMain || assessment.safety.blockers.contains(.missingFolder) { return "–" }
         return assessment.idle.idleDays.map(daysAgo) ?? "Unknown"

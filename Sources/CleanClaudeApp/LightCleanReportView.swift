@@ -9,12 +9,18 @@ struct LightCleanReportView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(report.summary)
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: report.headline, subtitle: report.summary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    ForEach(report.outcomes) { outcome in
-                        OutcomeView(outcome: outcome)
+                    if report.deletedCount > 0 { Text("Done").font(.headline) }
+                    ForEach(report.outcomes.filter { $0.deletedCount > 0 }) { outcome in
+                        OutcomeView(outcome: outcome, showDeleted: true)
+                    }
+                    if report.outcomes.contains(where: { $0.error != nil || $0.folders.contains { !$0.isDeleted } }) {
+                        Text("Skipped").font(.headline).padding(.top, 4)
+                    }
+                    ForEach(report.outcomes.filter { $0.error != nil || $0.folders.contains { !$0.isDeleted } }) { outcome in
+                        OutcomeView(outcome: outcome, showDeleted: false)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -37,23 +43,21 @@ struct LightCleanReportView: View {
 
 private struct OutcomeView: View {
     let outcome: LightCleanOutcome
+    let showDeleted: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            WorktreeHeader(
-                repoName: outcome.item.repoName, branchText: outcome.item.branchText, kind: outcome.item.worktree.kind,
-                path: outcome.item.worktree.path, sizeText: outcome.freedBytes.map { "freed \(DisplayText.bytes($0))" }
-            )
-            if let error = outcome.error {
+            SheetItemHeader(title: outcome.item.repoName, detail: outcome.item.branchText, path: outcome.item.worktree.path)
+            if !showDeleted, let error = outcome.error {
                 Label("Nothing was deleted: \(error)", systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Palette.orange)
             }
-            ForEach(outcome.folders) { folder in
+            ForEach(outcome.folders.filter { $0.isDeleted == showDeleted }) { folder in
                 FolderResultView(folder: folder)
             }
-            ForEach(outcome.warnings, id: \.self) { warning in
+            ForEach(showDeleted || outcome.deletedCount == 0 ? outcome.warnings : [], id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Palette.orange)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -78,7 +82,7 @@ private struct FolderResultView: View {
         switch folder.status {
         case .deleted(let freed):
             "Deleted. Freed \(DisplayText.bytes(freed)) (estimate \(DisplayText.bytes(folder.estimatedBytes)))."
-        case .refused(let why): "Refused, left alone: \(why)"
+        case .refused(let why): "Left alone: \(why)"
         case .failed(let message): "Failed: \(message)"
         }
     }
@@ -93,17 +97,17 @@ private struct FolderResultView: View {
 
     private var color: Color {
         switch folder.status {
-        case .deleted: .green
-        case .refused: .orange
-        case .failed: .red
+        case .deleted: Palette.green
+        case .refused: Palette.orange
+        case .failed: Palette.orange
         }
     }
 
     private var detailColor: Color {
         switch folder.status {
         case .deleted: .secondary
-        case .refused: .orange
-        case .failed: .red
+        case .refused: Palette.orange
+        case .failed: Palette.orange
         }
     }
 }

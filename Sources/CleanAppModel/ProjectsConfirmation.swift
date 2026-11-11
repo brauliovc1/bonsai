@@ -81,11 +81,10 @@ public struct ProjectsConfirmation: Identifiable, Sendable {
 
     /// "Clean 2 projects?" or "Nothing to delete".
     public var title: String {
-        cleanable.isEmpty ? "Nothing to delete" : "Clean \(DisplayText.projects(cleanable.count))?"
+        CleanupPresentation.title("Clean", count: cleanable.count, noun: "project", bytes: estimatedTotalBytes)
     }
 
-    /// "Delete 5 folders".
-    public var deleteButtonTitle: String { "Delete \(DisplayText.folders(folderCount))" }
+    public var deleteButtonTitle: String { CleanupPresentation.button("Clean", count: folderCount) }
 
     /// "2 projects, 5 folders, about 1.2 GB (estimate)".
     public var summary: String {

@@ -68,7 +68,7 @@ struct WorktreesModelTests {
             "atlas-archive", "tidy-otter", "beacon-env", "cobalt-swift",
         ])
         #expect(Set(confirmation.blocked.map(\.worktree.url.lastPathComponent)) == ["atlas-wip", "cobalt-py"])
-        #expect(confirmation.removeButtonTitle == "Remove 4 worktrees")
+        #expect(confirmation.removeButtonTitle == "Remove 4")
         #expect(RemovalConfirmation.keptLine == "Branches are kept. You can restore from Recently removed.")
         let estimate = confirmation.allowed.compactMap(\.estimatedBytes).reduce(0, +)
         #expect(confirmation.estimatedTotalBytes == estimate)

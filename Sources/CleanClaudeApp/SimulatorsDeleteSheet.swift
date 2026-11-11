@@ -24,8 +24,7 @@ struct SimulatorsDeleteSheet: View {
 
     private func confirmPage(_ confirmation: SimulatorsConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(confirmation.devices.isEmpty ? "Nothing to delete" : "Delete the unavailable simulators?")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: confirmation.title)
             Text("This runs")
             Text(SimulatorsConfirmation.command)
                 .font(.system(.title3, design: .monospaced))
@@ -59,7 +58,7 @@ struct SimulatorsDeleteSheet: View {
             }
             Divider()
             if confirmation.report.state != .available, let blocker = confirmation.blocker {
-                Label(blocker, systemImage: "nosign").foregroundStyle(.red)
+                Label(blocker, systemImage: "nosign").foregroundStyle(Palette.orange)
             }
             HStack {
                 if model.isDeletingDevices {
@@ -72,11 +71,11 @@ struct SimulatorsDeleteSheet: View {
                     .disabled(model.isDeletingDevices)
                 if confirmation.isAllowed {
                     // Deliberately not the default button: Return never deletes anything.
-                    Button("Delete unavailable", role: .destructive) {
+                    Button(confirmation.buttonTitle, role: .destructive) {
                         model.queueSimulatorsDelete(confirmation)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .tint(Palette.red)
                     .disabled(model.isDeletingDevices)
                 }
             }

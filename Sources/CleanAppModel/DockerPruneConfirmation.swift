@@ -37,4 +37,7 @@ public struct DockerPruneConfirmation: Identifiable, Sendable {
     /// The most the prune can free (`docker system df` reclaimable, without volumes): an upper bound.
     public var estimatedBytes: Int64 { report.pruneCeilingBytes }
     public var usage: [DockerUsageLine] { report.usage.map(DockerUsageLine.init) }
+    public var title: String { "Clean up Docker (\(DisplayText.bytes(estimatedBytes)))?" }
+    public var buttonTitle: String { "Clean up Docker" }
+
 }

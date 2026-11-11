@@ -25,4 +25,6 @@ public struct LightCleanReport: Sendable {
         }
         return text
     }
+    public var headline: String { CleanupPresentation.headline(measuredFreedBytes) }
+
 }

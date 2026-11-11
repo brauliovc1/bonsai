@@ -8,11 +8,15 @@ struct RemovalReportView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(report.summary)
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: report.headline, subtitle: report.summary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(report.outcomes) { outcome in
+                    if report.outcomes.contains(where: \.removed) { Text("Done").font(.headline) }
+                    ForEach(report.outcomes.filter(\.removed)) { outcome in
+                        OutcomeView(outcome: outcome)
+                    }
+                    if report.outcomes.contains(where: { !$0.removed }) { Text("Skipped").font(.headline).padding(.top, 4) }
+                    ForEach(report.outcomes.filter { !$0.removed }) { outcome in
                         OutcomeView(outcome: outcome)
                     }
                 }
@@ -40,19 +44,19 @@ private struct OutcomeView: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: icon)
-                .foregroundStyle(outcome.removed ? .green : outcome.changedSinceConfirmed ? .orange : .red)
+                .foregroundStyle(outcome.removed ? Palette.green : Palette.orange)
             VStack(alignment: .leading, spacing: 3) {
-                ItemHeader(item: outcome.item)
+                SheetItemHeader(title: outcome.item.repoName, detail: outcome.item.branchText, path: outcome.item.worktree.path, bytes: outcome.item.estimatedBytes)
                 if outcome.removed {
                     Text("Removed. Freed \(DisplayText.bytes(outcome.freedBytes)) "
                         + "(estimate \(DisplayText.bytes(outcome.item.estimatedBytes))).")
                 } else if let error = outcome.error {
                     Text(outcome.changedSinceConfirmed ? error : "Not removed: \(error)")
-                        .foregroundStyle(outcome.changedSinceConfirmed ? .orange : .red)
+                        .foregroundStyle(Palette.orange)
                 }
                 ForEach(outcome.warnings, id: \.self) { warning in
                     Label(warning, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Palette.orange)
                 }
             }
         }

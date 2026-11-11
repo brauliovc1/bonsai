@@ -78,4 +78,6 @@ public struct CachesCleanReport: Sendable {
     private static func items(_ count: Int) -> String {
         count == 1 ? "1 item" : "\(count) items"
     }
+    public var headline: String { CleanupPresentation.headline(measuredFreedBytes) }
+
 }

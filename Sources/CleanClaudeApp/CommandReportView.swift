@@ -10,7 +10,7 @@ struct CommandReportView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label {
-                Text(report.summary).font(.title3.weight(.semibold))
+                SheetHeading(title: report.headline, subtitle: report.summary)
             } icon: {
                 Image(systemName: icon).foregroundStyle(color)
             }
@@ -19,7 +19,7 @@ struct CommandReportView: View {
                 .textSelection(.enabled)
             if let logError = report.logError {
                 Label("The command ran, but the log entry was not written: \(logError)", systemImage: "xmark.octagon.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Palette.orange)
             }
             if !report.output.isEmpty {
                 ScrollView {
@@ -49,6 +49,6 @@ struct CommandReportView: View {
     }
 
     private var color: Color {
-        report.didRun && report.succeeded && report.logError == nil ? .green : .red
+        report.didRun && report.succeeded && report.logError == nil ? Palette.green : Palette.orange
     }
 }

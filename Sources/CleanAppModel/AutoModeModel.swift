@@ -69,7 +69,7 @@ public final class AutoModeModel {
             }
             error = nil
         } catch {
-            self.error = "Auto mode was not turned on: \(error)"
+            self.error = "Auto clean was not turned on: \(error)"
             return
         }
         _ = await notifier.requestAuthorization()
@@ -78,7 +78,7 @@ public final class AutoModeModel {
     /// Turns auto mode off. A run that is going stops before git runs for its next removal.
     public func disable() {
         stopRequested = true
-        save("Auto mode was not turned off") { $0.autoEnabled = false }
+        save("Auto clean was not turned off") { $0.autoEnabled = false }
     }
 
     /// Includes or skips Claude-app worktrees, then scans again (the statuses use it).
@@ -98,7 +98,7 @@ public final class AutoModeModel {
                 if settings.autoEnabled && settings.autoEnabledAt == nil { settings.autoEnabledAt = start }
             }
         } catch {
-            self.error = "Auto mode has no start date and it could not be set: \(error)"
+            self.error = "Auto clean has no start date and it could not be set: \(error)"
             return
         }
         Task { _ = await notifier.requestAuthorization() }

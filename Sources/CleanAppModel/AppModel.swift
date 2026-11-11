@@ -203,7 +203,7 @@ public final class AppModel {
     /// guard, "another cleanup is still running" for this app's own, and `CleanupLock.busyMessage` when
     /// another app instance or the CLI holds `cleanup.lock`.
     public var busyReason: String {
-        if isAutoRunning { return "Auto mode is running" }
+        if isAutoRunning { return "Auto clean is running" }
         if isCleaningUp { return "another cleanup is still running" }
         return lastRefusal ?? "another cleanup is still running"
     }

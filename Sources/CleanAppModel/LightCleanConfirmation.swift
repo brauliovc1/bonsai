@@ -66,5 +66,7 @@ public struct LightCleanConfirmation: Identifiable, Sendable {
     public var hasUnknownSizes: Bool { cleanable.contains(where: \.hasUnknownSizes) }
 
     /// "Delete 3 folders".
-    public var deleteButtonTitle: String { "Delete \(DisplayText.folders(folderCount))" }
+    public var deleteButtonTitle: String { CleanupPresentation.button("Clean", count: folderCount) }
+    public var title: String { CleanupPresentation.title("Clean", count: folderCount, noun: "dependency folder", bytes: estimatedTotalBytes) }
+
 }

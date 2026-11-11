@@ -25,8 +25,7 @@ struct CachesCleanSheet: View {
 
     private func confirmPage(_ confirmation: CachesConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(confirmation.allowed.isEmpty ? "Nothing can be cleaned" : "\(confirmation.cleanButtonTitle)?")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: confirmation.title)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(confirmation.allowed) { item in
@@ -73,7 +72,7 @@ struct CachesCleanSheet: View {
                     model.queueClean(confirmation)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Palette.red)
                 .disabled(model.isCleaning)
             }
         }
@@ -81,14 +80,19 @@ struct CachesCleanSheet: View {
 
     private func resultPage(_ report: CachesCleanReport) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(report.summary).font(.title2.weight(.semibold))
+            SheetHeading(title: report.headline, subtitle: report.summary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(report.outcomes) { outcome in
+                    if report.outcomes.contains(where: \.isCleaned) { Text("Done").font(.headline) }
+                    ForEach(report.outcomes.filter(\.isCleaned)) { outcome in
+                        CacheOutcomeView(outcome: outcome)
+                    }
+                    if report.outcomes.contains(where: { !$0.isCleaned }) { Text("Skipped").font(.headline).padding(.top, 4) }
+                    ForEach(report.outcomes.filter { !$0.isCleaned }) { outcome in
                         CacheOutcomeView(outcome: outcome)
                     }
                     ForEach(report.warnings, id: \.self) { warning in
-                        Label(warning, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Label(warning, systemImage: "exclamationmark.triangle").foregroundStyle(Palette.orange)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -115,7 +119,7 @@ private struct CacheItemView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.name).fontWeight(.semibold)
                 Spacer()
-                Text(item.sizeText).monospacedDigit()
+                SizeText(bytes: item.bytes)
             }
             if let reason = item.leftAloneReason {
                 Label(reason, systemImage: "nosign")
@@ -159,7 +163,7 @@ private struct CacheOutcomeView: View {
             "Cleaned \(removed) \(removed == 1 ? "item" : "items"). Freed \(DisplayText.bytes(freed)) "
                 + "(estimate \(DisplayText.bytes(outcome.item.bytes)))."
                 + (failures.isEmpty ? "" : " \(failures.count) couldn't be removed: " + failures.prefix(3).joined(separator: "; "))
-        case .refused(let why): "Refused, left alone: \(why)"
+        case .refused(let why): "Left alone: \(why)"
         case .failed(let failures): "Failed: " + failures.prefix(3).joined(separator: "; ")
         }
     }
@@ -174,9 +178,9 @@ private struct CacheOutcomeView: View {
 
     private var color: Color {
         switch outcome.status {
-        case .cleaned(_, _, let failures): failures.isEmpty ? .green : .orange
-        case .refused: .orange
-        case .failed: .red
+        case .cleaned(_, _, let failures): failures.isEmpty ? Palette.green : Palette.orange
+        case .refused: Palette.orange
+        case .failed: Palette.orange
         }
     }
 }

@@ -31,16 +31,10 @@ struct RemoveAnywaySheet: View {
 
     private func confirmPage(_ confirmation: RemoveAnywayConfirmation) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.red)
-                Text(confirmation.title)
-                    .font(.title2.weight(.semibold))
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
+            SheetHeading(title: "Remove 1 worktree (\(DisplayText.bytes(confirmation.assessment.estimatedBytes))) anyway?", subtitle: confirmation.title)
             Text(confirmation.line)
                 .fontWeight(.medium)
-                .foregroundStyle(Palette.red)
+                .foregroundStyle(Palette.orange)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 StatusChip(words: WorktreeStatusText.chip(for: confirmation.assessment))
@@ -104,7 +98,7 @@ struct LossListView: View {
                 ForEach(list.sections, id: \.category) { section in
                     Text(RemoveAnywayText.heading(section))
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(section.category.isLost ? Palette.red : Color.secondary)
+                        .foregroundStyle(section.category.isLost ? Palette.orange : Color.secondary)
                         .padding(.top, 8)
                     if let files = WorktreeFileRow.rows(for: section, in: worktree) {
                         ForEach(files) { file in
@@ -175,7 +169,7 @@ private struct OutcomePage: View {
 
     init(outcome: RemoveAnywayOutcome, close: @escaping () -> Void) {
         switch outcome {
-        case .removed: (title, tone) = ("Removed anyway", .green)
+        case .removed(let result): (title, tone) = (CleanupPresentation.headline(result.freedBytes), .green)
         case .changed: (title, tone) = ("Nothing was removed", .orange)
         case .failed: (title, tone) = ("Nothing was removed", .orange)
         }
@@ -186,8 +180,7 @@ private struct OutcomePage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: tone == .green ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(.title2.weight(.semibold))
+            SheetHeading(title: title)
                 .foregroundStyle(Palette.color(tone))
             Text(text).fixedSize(horizontal: false, vertical: true)
             if !changes.isEmpty {
