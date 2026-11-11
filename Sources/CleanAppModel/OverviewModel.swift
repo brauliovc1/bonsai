@@ -137,7 +137,10 @@ public final class OverviewModel {
     /// nil when there is none (a part not measured, or not counted, is not "nothing").
     public var nothingText: String? {
         let summary = summary
-        let empty = OverviewCategory.allCases.filter { category in category.parts.allSatisfy(summary.emptyParts.contains) }
+        let empty = OverviewCategory.allCases.filter { category in
+            category.parts.allSatisfy(summary.emptyParts.contains)
+                && (category != .downloads || downloads.trash?.count == 0)
+        }
         guard !empty.isEmpty else { return nil }
         return "Nothing to clean in \(OverviewCategory.names(empty))."
     }
