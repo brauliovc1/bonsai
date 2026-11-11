@@ -31,9 +31,12 @@ struct CompareDiffPane: View {
                     EmptyState(systemImage: "doc.text", headline: file.isGenerated ? "Generated file" : "Large file",
                         line: file.isGenerated ? "Generated changes are collapsed to keep the review focused." : "More than 3,000 changed lines or 1 MB. Loading may take a moment.",
                         actionTitle: "Show anyway") { Task { await model.showAnyway() } }
-                } else if model.isLoadingDiff { Spacer(); ProgressView("Reading diff…"); Spacer() }
+                } else if model.isLoadingDiff && model.document == nil { Spacer(); ProgressView("Reading diff…"); Spacer() }
                 else if let document = model.document {
-                    NativeDiffView(document: document, path: file.path, sideBySide: model.sideBySide, change: change)
+                    NativeDiffView(document: document, path: file.path, sideBySide: model.sideBySide, change: change,
+                        fileStep: { delta in Task { await model.moveFile(delta) } },
+                        toggleViewed: { model.toggleViewed(file.path) },
+                        moreContext: { Task { await model.showMoreContext() } })
                     if !document.hunks.isEmpty {
                         Divider()
                         Button("Show 20 more lines") { Task { await model.showMoreContext() } }.buttonStyle(.link).padding(8)

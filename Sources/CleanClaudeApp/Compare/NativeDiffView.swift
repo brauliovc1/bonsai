@@ -8,6 +8,9 @@ struct NativeDiffView: NSViewRepresentable {
     let path: String
     let sideBySide: Bool
     let change: Int
+    var fileStep: @MainActor (Int) -> Void = { _ in }
+    var toggleViewed: @MainActor () -> Void = {}
+    var moreContext: @MainActor () -> Void = {}
     @Environment(\.colorScheme) private var scheme
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -17,7 +20,9 @@ struct NativeDiffView: NSViewRepresentable {
         for _ in 0..<2 {
             let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = true
             scroll.autohidesScrollers = true; scroll.borderType = .noBorder
-            let text = NSTextView(usingTextLayoutManager: true)
+            let text = ReviewTextView(usingTextLayoutManager: true)
+            text.delegate = context.coordinator
+            text.reviewKey = { [weak coordinator = context.coordinator] key in coordinator?.key(key) }
             text.isEditable = false; text.isSelectable = true; text.isRichText = false; text.usesFindBar = true
             text.isAutomaticLinkDetectionEnabled = false; text.isAutomaticDataDetectionEnabled = false
             text.isAutomaticTextReplacementEnabled = false; text.drawsBackground = false
@@ -39,34 +44,33 @@ struct NativeDiffView: NSViewRepresentable {
 
     func updateNSView(_ stack: NSStackView, context: Context) {
         let coordinator = context.coordinator
+        coordinator.fileStep = fileStep; coordinator.toggleViewed = toggleViewed; coordinator.moreContext = moreContext
         coordinator.scrolls[1].isHidden = !sideBySide
         let changed = coordinator.document != document || coordinator.path != path || coordinator.sideBySide != sideBySide || coordinator.dark != (scheme == .dark)
         if changed {
+            let sameFile = coordinator.path == path
+            if !sameFile { coordinator.hunk = -1 }
             coordinator.document = document; coordinator.path = path; coordinator.sideBySide = sideBySide; coordinator.dark = scheme == .dark
             for (i, scroll) in coordinator.scrolls.enumerated() where i == 0 || sideBySide {
                 guard let text = scroll.documentView as? NSTextView else { continue }
+                let origin = scroll.contentView.bounds.origin
                 let rendered = DiffRenderer.text(document, path: path, side: sideBySide ? (i == 0 ? .old : .new) : nil)
                 text.textStorage?.setAttributedString(rendered)
                 let longest = rendered.string.split(separator: "\n").map(\.utf16.count).max() ?? 0
                 text.setFrameSize(NSSize(width: max(scroll.contentSize.width, CGFloat(longest) * 7.3 + 30), height: max(scroll.contentSize.height, CGFloat(document.hunks.reduce(0) { $0 + $1.lines.count + 1 }) * 20 + 30)))
-                text.scrollToBeginningOfDocument(nil)
+                if sameFile {
+                    scroll.contentView.scroll(to: origin); scroll.reflectScrolledClipView(scroll.contentView)
+                } else { text.scrollToBeginningOfDocument(nil) }
             }
         }
         if coordinator.change != change {
             let direction = change > coordinator.change ? 1 : -1
             coordinator.change = change
-            coordinator.hunk = max(0, min(document.hunks.count - 1, coordinator.hunk + direction))
-            for scroll in coordinator.scrolls {
-                if let text = scroll.documentView as? NSTextView, !document.hunks.isEmpty {
-                    let header = document.hunks[coordinator.hunk].header
-                    let range = (text.string as NSString).range(of: header)
-                    if range.location != NSNotFound { text.scrollRangeToVisible(range) }
-                }
-            }
+            coordinator.moveHunk(direction)
         }
     }
 
-    @MainActor final class Coordinator: NSObject {
+    @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var document: DiffDocument?
         var path = ""
         var sideBySide = false
@@ -75,6 +79,34 @@ struct NativeDiffView: NSViewRepresentable {
         var hunk = -1
         var scrolls: [NSScrollView] = []
         var syncing = false
+        var fileStep: @MainActor (Int) -> Void = { _ in }
+        var toggleViewed: @MainActor () -> Void = {}
+        var moreContext: @MainActor () -> Void = {}
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            if ((link as? String) ?? (link as? URL)?.absoluteString) == "bonsai-compare-context" { moreContext() }
+            return true
+        }
+        func key(_ key: String) {
+            switch key {
+            case "down": fileStep(1)
+            case "up": fileStep(-1)
+            case " ": toggleViewed()
+            case "n": moveHunk(1)
+            case "p": moveHunk(-1)
+            default: break
+            }
+        }
+        func moveHunk(_ delta: Int) {
+            guard let document, !document.hunks.isEmpty else { return }
+            hunk = max(0, min(document.hunks.count - 1, hunk + delta))
+            for scroll in scrolls {
+                if let text = scroll.documentView as? NSTextView {
+                    let range = (text.string as NSString).range(of: document.hunks[hunk].header)
+                    if range.location != NSNotFound { text.scrollRangeToVisible(range) }
+                }
+            }
+        }
         @objc func scrolled(_ notification: Notification) {
             guard sideBySide, !syncing, let source = notification.object as? NSClipView else { return }
             syncing = true; defer { syncing = false }
@@ -83,5 +115,17 @@ struct NativeDiffView: NSViewRepresentable {
                 scroll.reflectScrolledClipView(scroll.contentView)
             }
         }
+    }
+}
+
+/// Review shortcuts still work when the native text view owns keyboard focus.
+@MainActor private final class ReviewTextView: NSTextView {
+    var reviewKey: ((String) -> Void)?
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty {
+            let key = event.keyCode == 125 ? "down" : event.keyCode == 126 ? "up" : event.charactersIgnoringModifiers ?? ""
+            if ["down", "up", "n", "p", " "].contains(key) { reviewKey?(key); return }
+        }
+        super.keyDown(with: event)
     }
 }
