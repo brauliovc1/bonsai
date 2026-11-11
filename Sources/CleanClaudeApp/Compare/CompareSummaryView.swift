@@ -17,7 +17,7 @@ struct CompareSummaryView: View {
                 Text("\(snapshot.range.ahead) ahead · \(snapshot.range.behind) behind \(baseLabel)")
                     .font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 if snapshot.range.compare.isWorktree {
-                    Text("Merge check uses committed changes").font(.caption).foregroundStyle(.secondary)
+                    Text("Merge check uses committed changes; submodule changes are left out").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)

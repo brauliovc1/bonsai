@@ -36,7 +36,7 @@ public struct CompareReader: Sendable {
     }
 
     public func files(from: String, to: String?) async throws -> [CompareFile] {
-        let args = ["diff", "--raw", "--numstat", "-z", "-M", "-C", "--find-copies-harder", "--ignore-submodules=all", from]
+        let args = ["diff", "--raw", "--numstat", "-z", "-M", "-C", "--find-copies-harder", to == nil ? "--ignore-submodules=all" : "--ignore-submodules=none", "--submodule=short", from]
             + (to.map { [$0] } ?? []) + ["--"]
         return CompareFileParser.parse(try await git.data(args))
     }
@@ -50,7 +50,7 @@ public struct CompareReader: Sendable {
             }
         }
         var arguments = ["diff", "--no-color", "--full-index", "--binary", "-M", "-C", "--find-copies-harder",
-            "--ignore-submodules=all", "--unified=\(context)"]
+            range.compare.isWorktree ? "--ignore-submodules=all" : "--ignore-submodules=none", "--submodule=short", "--unified=\(context)"]
         if whitespace { arguments.append("--ignore-all-space") }
         arguments += [range.mergeBase] + (range.compare.isWorktree ? [] : [range.compareSHA]) + ["--"]
         if let file { arguments += Array(Set([file.oldPath, file.path].compactMap { $0 })).sorted() }
@@ -68,10 +68,12 @@ public struct CompareReader: Sendable {
     public func fileDetails(_ file: CompareFile, range: CompareRange) async throws -> CompareFile {
         var file = file
         let work = try worktreeReader(range.compare)
-        if file.status != .added {
+        if file.oldMode == "160000" { file.oldBytes = nil }
+        else if file.status != .added {
             file.oldBytes = Int(try await git.string(["cat-file", "-s", range.mergeBase + ":" + (file.oldPath ?? file.path)]))
         } else { file.oldBytes = 0 }
-        if file.status == .deleted { file.newBytes = 0 }
+        if file.newMode == "160000" { file.newBytes = nil }
+        else if file.status == .deleted { file.newBytes = 0 }
         else if range.compare.isWorktree {
             let attributes = try FileManager.default.attributesOfItem(atPath: work.git.repository.appending(path: file.path).path)
             file.newBytes = (attributes[.size] as? NSNumber)?.intValue

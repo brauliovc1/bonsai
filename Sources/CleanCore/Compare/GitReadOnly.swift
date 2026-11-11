@@ -47,7 +47,7 @@ public final class GitReadOnly: Sendable {
             "rev-list": ["--left-right", "--count", "--reverse", "--topo-order", "--ancestry-path", "--merges"],
             "log": ["--date=raw", "-g", "--reverse", "--topo-order", "--date-order", "--first-parent", "--merges", "--ancestry-path"],
             "diff": ["--binary", "--no-index", "--numstat", "--name-status", "--name-only", "--raw", "-z", "-M", "-C", "--find-copies-harder", "--no-ext-diff",
-                     "--no-textconv", "--no-color", "--ignore-submodules=all", "--ignore-all-space", "--full-index"],
+                     "--no-textconv", "--no-color", "--ignore-submodules=all", "--ignore-submodules=none", "--submodule=short", "--ignore-all-space", "--full-index"],
             "show": ["--no-ext-diff", "--no-textconv", "--no-color", "--format=", "--numstat", "--name-status", "-z", "-M"],
             "cat-file": ["-s", "-p", "-t"],
             "ls-files": ["--others", "--exclude-standard", "-z", "--stage", "--cached"],
