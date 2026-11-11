@@ -31,7 +31,7 @@ struct NativeDiffView: NSViewRepresentable {
             text.textContainer?.widthTracksTextView = false
             text.textContainer?.containerSize = NSSize(width: 10_000_000, height: CGFloat.greatestFiniteMagnitude)
             text.textContainerInset = NSSize(width: 8, height: 10)
-            text.autoresizingMask = [.width]
+            text.autoresizingMask = []
             scroll.documentView = text
             scroll.contentView.postsBoundsChangedNotifications = true
             NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.scrolled(_:)),
