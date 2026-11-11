@@ -1,3 +1,4 @@
+import CleanAppModel
 import SwiftUI
 
 /// One category that has something to free: its icon, name, size (green: it can be freed), what the size is in
@@ -8,6 +9,7 @@ struct CategoryCard: View {
     let sizeText: String
     let detail: String
     let buttonTitle: String
+    var tone: StatusTone = .green
     let action: () -> Void
 
     var body: some View {
@@ -15,16 +17,16 @@ struct CategoryCard: View {
             HStack(spacing: 8) {
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.green)
+                    .foregroundStyle(Palette.color(tone))
                     .frame(width: 26, height: 26)
-                    .background(Palette.tint(.green), in: RoundedRectangle(cornerRadius: 7))
+                    .background(Palette.tint(tone), in: RoundedRectangle(cornerRadius: 7))
                 Text(title).font(.headline)
                 Spacer(minLength: 0)
             }
             Text(sizeText)
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Palette.green)
+                .foregroundStyle(Palette.color(tone))
             Text(detail)
                 .font(.callout)
                 .foregroundStyle(.secondary)

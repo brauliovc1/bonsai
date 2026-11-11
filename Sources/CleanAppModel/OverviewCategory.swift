@@ -4,6 +4,7 @@ public enum OverviewCategory: String, CaseIterable, Identifiable, Sendable {
     case worktrees
     case projectFolders
     case toolCaches
+    case downloads
     case dockerSimulators
     case derivedData
 
@@ -15,6 +16,7 @@ public enum OverviewCategory: String, CaseIterable, Identifiable, Sendable {
         case .worktrees: .worktrees
         case .projectFolders: .projects
         case .toolCaches: .caches
+        case .downloads: .downloads
         case .dockerSimulators: .dockerSimulators
         case .derivedData: .derivedData
         }

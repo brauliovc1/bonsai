@@ -16,6 +16,8 @@ public struct RemovalLogEntry: Sendable, Codable, Hashable, Identifiable {
     public var freedBytes: Int64?
     public var notes: [String]
     public var restoredAt: Date?
+    public var trashPath: String?
+    public var trashIdentity: DownloadIdentity?
 
     public init(
         id: UUID = UUID(),
@@ -30,7 +32,9 @@ public struct RemovalLogEntry: Sendable, Codable, Hashable, Identifiable {
         estimatedBytes: Int64? = nil,
         freedBytes: Int64? = nil,
         notes: [String] = [],
-        restoredAt: Date? = nil
+        restoredAt: Date? = nil,
+        trashPath: String? = nil,
+        trashIdentity: DownloadIdentity? = nil
     ) {
         self.id = id
         self.date = Self.wholeSeconds(date)
@@ -45,6 +49,8 @@ public struct RemovalLogEntry: Sendable, Codable, Hashable, Identifiable {
         self.freedBytes = freedBytes
         self.notes = notes
         self.restoredAt = restoredAt.map(Self.wholeSeconds)
+        self.trashPath = trashPath
+        self.trashIdentity = trashIdentity
     }
 
     /// The log stores ISO 8601 dates to the second; entries keep the same precision in memory, so an

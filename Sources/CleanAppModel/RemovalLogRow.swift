@@ -25,6 +25,9 @@ public struct RemovalLogRow: Identifiable, Hashable, Sendable {
             .dockerPrune: "Docker prune",
             .simulatorsDeleteUnavailable: "Deleted unavailable simulators",
             .cacheClean: "Cleaned tool cache",
+            .movedToTrash: "Moved to Trash",
+            .putBack: "Put back from Trash",
+            .trashEmptied: "Emptied Trash",
         ]
         let action = labels[entry.action] ?? entry.action.rawValue
         return entry.mode == .auto ? "\(action) (auto)" : action

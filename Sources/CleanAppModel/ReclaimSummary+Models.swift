@@ -9,7 +9,8 @@ extension ReclaimSummary {
         projects: ProjectsModel,
         caches: CachesModel,
         derivedData: DerivedDataModel,
-        dockerSimulators: DockerSimulatorsModel
+        dockerSimulators: DockerSimulatorsModel,
+        downloads: DownloadsTrashModel? = nil
     ) {
         self.init([
             .worktrees: Self.worktrees(app),
@@ -18,7 +19,15 @@ extension ReclaimSummary {
             .docker: Self.docker(dockerSimulators),
             .derivedData: Self.derivedData(derivedData),
             .simulators: Self.simulators(dockerSimulators),
+            .downloads: Self.downloads(downloads),
         ])
+    }
+
+    @MainActor
+    private static func downloads(_ model: DownloadsTrashModel?) -> State {
+        guard let model else { return .notMeasured }
+        guard model.listing != nil else { return model.isScanning ? .measuring : .notMeasured }
+        return .measured(bytes: model.readyBytes, count: model.eligible.count)
     }
 
     @MainActor

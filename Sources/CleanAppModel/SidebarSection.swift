@@ -6,6 +6,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     case worktrees
     case projects
     case caches
+    case downloads
     case dockerSimulators
     case derivedData
     case recentlyRemoved
@@ -33,7 +34,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
 
     public var group: Group {
         switch self {
-        case .overview, .worktrees, .projects, .caches, .dockerSimulators, .derivedData: .cleanUp
+        case .overview, .worktrees, .projects, .caches, .downloads, .dockerSimulators, .derivedData: .cleanUp
         case .recentlyRemoved, .claudeUsage: .historyAndInfo
         }
     }
@@ -44,6 +45,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .worktrees: "Worktrees"
         case .projects: "Project folders"
         case .caches: "Tool caches"
+        case .downloads: "Downloads & Trash"
         case .dockerSimulators: "Docker & Simulators"
         case .derivedData: "Xcode DerivedData"
         case .recentlyRemoved: "Recently removed"
@@ -58,6 +60,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .worktrees: "arrow.triangle.branch"
         case .projects: "folder"
         case .caches: "archivebox"
+        case .downloads: "arrow.down.doc"
         case .dockerSimulators: "shippingbox"
         case .derivedData: "hammer"
         case .recentlyRemoved: "clock.arrow.circlepath"
@@ -72,6 +75,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .worktrees: [.worktrees]
         case .projects: [.projectFolders]
         case .caches: [.toolCaches]
+        case .downloads: [.downloads]
         case .dockerSimulators: [.docker, .simulators]
         case .derivedData: [.derivedData]
         case .overview, .recentlyRemoved, .claudeUsage: []

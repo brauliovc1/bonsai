@@ -13,6 +13,7 @@ public final class ScreenModels {
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
     public let caches: CachesModel
+    public let downloads: DownloadsTrashModel
     public let claudeUsage: ClaudeUsageModel
     public let overview: OverviewModel
     public let settings: SettingsModel
@@ -31,6 +32,7 @@ public final class ScreenModels {
         navigation: NavigationModel = NavigationModel(),
         notifier: (any Notifier)? = nil,
         loginItems: (any LoginItemService)? = nil,
+        trashEmptier: any TrashEmptier = UnavailableTrashEmptier(),
         appName: String = "Bonsai"
     ) {
         let notifier = notifier ?? SilentNotifier()
@@ -42,6 +44,7 @@ public final class ScreenModels {
         derivedData = DerivedDataModel(app: app, runner: runner)
         dockerSimulators = DockerSimulatorsModel(app: app, runner: runner)
         caches = CachesModel(app: app, processes: processes)
+        downloads = DownloadsTrashModel(app: app, runner: runner, emptier: trashEmptier)
         claudeUsage = ClaudeUsageModel(app: app)
         settings = SettingsModel(app: app)
         autoMode = AutoModeModel(app: app, notifier: notifier, appName: appName)
@@ -62,6 +65,7 @@ public final class ScreenModels {
             derivedData: derivedData,
             dockerSimulators: dockerSimulators,
             caches: caches,
+            downloads: downloads,
             autoMode: autoMode,
             navigation: navigation
         )

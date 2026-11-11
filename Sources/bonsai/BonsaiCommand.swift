@@ -20,6 +20,7 @@ struct BonsaiCommand: AsyncParsableCommand {
             DerivedDataCommand.self,
             ProjectsCommand.self,
             CachesCommand.self,
+            DownloadsCommand.self,
         ]
     )
 }

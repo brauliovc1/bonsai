@@ -18,6 +18,12 @@ public enum RemovalAction: String, Sendable, Codable, Hashable {
     /// One tool-cache entry cleaned (PLAN §4.6): `repoPath` is the catalog entry id (`npm`), `path` its folder,
     /// what was removed in `notes`. Not restorable.
     case cacheClean
+    /// A confirmed old download moved with the system Trash operation.
+    case movedToTrash
+    /// A previously trashed download moved back without replacing another file.
+    case putBack
+    /// Finder emptied the Trash after the user's confirmation.
+    case trashEmptied
 
     /// A worktree removal of either kind: restorable from its branch or commit.
     public var isWorktreeRemoval: Bool {

@@ -33,6 +33,7 @@ struct CleanClaudeApp: App {
             navigation: navigation,
             notifier: notifier,
             loginItems: hasBundle ? SystemLoginItems() : nil,
+            trashEmptier: FinderTrashEmptier(),
             appName: AppInfo.name
         )
         _models = State(initialValue: models)

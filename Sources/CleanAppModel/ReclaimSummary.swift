@@ -18,6 +18,8 @@ public struct ReclaimSummary: Equatable, Sendable {
         case derivedData
         /// Unavailable simulators.
         case simulators
+        /// Old installers and archives in Downloads; Trash and snapshots are excluded.
+        case downloads
 
         public var id: String { rawValue }
 
@@ -29,6 +31,7 @@ public struct ReclaimSummary: Equatable, Sendable {
             case .docker: "Docker"
             case .derivedData: "Xcode DerivedData"
             case .simulators: "Simulators"
+            case .downloads: "Downloads"
             }
         }
     }

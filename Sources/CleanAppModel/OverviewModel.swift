@@ -15,6 +15,7 @@ public final class OverviewModel {
     public let derivedData: DerivedDataModel
     public let dockerSimulators: DockerSimulatorsModel
     public let caches: CachesModel
+    public let downloads: DownloadsTrashModel
     public let autoMode: AutoModeModel
     public let navigation: NavigationModel
     /// Render seam: a summary to show instead of the models' (the off-screen renders use it for a full disk).
@@ -27,6 +28,7 @@ public final class OverviewModel {
         derivedData: DerivedDataModel,
         dockerSimulators: DockerSimulatorsModel,
         caches: CachesModel,
+        downloads: DownloadsTrashModel? = nil,
         autoMode: AutoModeModel,
         navigation: NavigationModel
     ) {
@@ -36,6 +38,7 @@ public final class OverviewModel {
         self.derivedData = derivedData
         self.dockerSimulators = dockerSimulators
         self.caches = caches
+        self.downloads = downloads ?? DownloadsTrashModel(app: app)
         self.autoMode = autoMode
         self.navigation = navigation
     }
@@ -45,13 +48,13 @@ public final class OverviewModel {
     /// The one total, as the screens' models have it now.
     public var summary: ReclaimSummary {
         summaryOverride
-            ?? ReclaimSummary(app: app, projects: projects, caches: caches, derivedData: derivedData, dockerSimulators: dockerSimulators)
+            ?? ReclaimSummary(app: app, projects: projects, caches: caches, derivedData: derivedData, dockerSimulators: dockerSimulators, downloads: downloads)
     }
 
     /// True while anything the Overview sums is being scanned.
     public var isRefreshing: Bool {
         app.isScanning || derivedData.isScanning || dockerSimulators.isScanning || projects.isScanning
-            || caches.isScanning
+            || caches.isScanning || downloads.isScanning
     }
 
     // MARK: - Headline and bar
@@ -122,6 +125,9 @@ public final class OverviewModel {
             return parts.joined(separator: " and ")
         case .derivedData:
             return "\(DisplayText.folders(summary.count(.derivedData))) of deleted projects' DerivedData"
+        case .downloads:
+            let count = summary.count(.downloads)
+            return "\(count) old \(count == 1 ? "installer or archive" : "installers and archives") to move to Trash; empty Trash to free the space"
         }
     }
 
@@ -174,6 +180,9 @@ public final class OverviewModel {
         case .derivedData:
             derivedData.selection = derivedData.selectableIDs
             navigation.show(.derivedData)
+        case .downloads:
+            downloads.selectAllReady()
+            navigation.show(.downloads)
         }
     }
 
@@ -186,7 +195,8 @@ public final class OverviewModel {
         async let derivedDataScan: Void = derivedData.refresh()
         async let dockerScan: Void = dockerSimulators.refresh()
         async let cachesScan: Void = caches.refresh()
-        _ = await (worktreeScan, derivedDataScan, dockerScan, cachesScan)
+        async let downloadsScan: Void = downloads.refresh()
+        _ = await (worktreeScan, derivedDataScan, dockerScan, cachesScan, downloadsScan)
         await projects.refresh()
     }
 
@@ -198,6 +208,7 @@ public final class OverviewModel {
         async let dockerScan: Void = dockerSimulators.loadIfNeeded()
         async let cachesScan: Void = caches.loadIfNeeded()
         async let projectsScan: Void = projects.loadIfNeeded()
-        _ = await (derivedDataScan, dockerScan, cachesScan, projectsScan)
+        async let downloadsScan: Void = downloads.loadIfNeeded()
+        _ = await (derivedDataScan, dockerScan, cachesScan, projectsScan, downloadsScan)
     }
 }

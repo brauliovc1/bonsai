@@ -24,6 +24,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Bonsai asks Finder to empty the Trash when you choose Empty Trash.</string>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
 </dict>
