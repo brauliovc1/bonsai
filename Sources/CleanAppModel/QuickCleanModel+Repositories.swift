@@ -43,7 +43,13 @@ extension QuickCleanModel {
                 if let reason = await policy.reason(project: true) { return reason }
                 let index = await ProcessCwdIndex.capture(in: environment)
                 if let reason = LightCleaner.inUseReason(index, worktree: fresh.url) { return reason.sentence }
-                if let reason = LightCleanFlow.linkedUse(of: fresh, known: known, index: index) { return reason }
+                let records: [Worktree]
+                do {
+                    records = try await WorktreeScanner(git: git, cursorWorktreesDirectory: environment.cursorWorktreesDirectory)
+                        .worktrees(in: fresh.repoURL)
+                } catch { return "Its linked worktrees could not be checked again: \(error)" }
+                let currentKnown = records + known.filter { !CanonicalPath.same($0.repoURL, fresh.repoURL) }
+                if let reason = LightCleanFlow.linkedUse(of: fresh, known: currentKnown, index: index) { return reason }
                 return await policy.reason(project: true)
             }
             do {
