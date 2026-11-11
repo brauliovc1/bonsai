@@ -53,8 +53,7 @@ public final class BranchMapModel {
 
     /// A hidden or unknown parent cannot be drawn as an edge from the base.
     public func timelineParent(for ref: String) -> TimelineParent? {
-        guard let entry = snapshot?.entries.first(where: { $0.ref == ref }),
-              (timeline[ref]?.fork ?? entry.metrics.fork) != nil,
+        guard let data = timeline[ref], data.problem == nil, data.fork != nil,
               let parent = family?.origins[ref]?.parent else { return nil }
         let base = snapshot?.base ?? ""
         let baseRef: String?

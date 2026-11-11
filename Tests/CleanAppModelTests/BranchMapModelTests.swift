@@ -94,6 +94,14 @@ struct BranchMapModelTests {
 
         #expect(model.timelineParent(for: "refs/heads/a") == .base)
         #expect(model.timelineParent(for: "refs/heads/c") == .branch("refs/heads/b"))
+        let loaded = try #require(model.timeline["refs/heads/c"])
+        let fallback = try #require(model.snapshot?.entries.first { $0.ref == "refs/heads/c" }?.metrics.fork)
+        model.timeline["refs/heads/c"] = BranchTimelineEntry(ref: "refs/heads/c", fork: fallback, commits: [],
+                                                           commitCount: 0, problem: "Couldn't read the parent history.")
+        #expect(model.timelineParent(for: "refs/heads/c") == nil)
+        model.timeline["refs/heads/c"] = nil
+        #expect(model.timelineParent(for: "refs/heads/c") == nil)
+        model.timeline["refs/heads/c"] = loaded
         #expect(model.timelineParent(for: "refs/heads/remote-child") == nil)
         #expect(model.timelineParent(for: "refs/heads/survivor") == nil)
         #expect(model.timeline["refs/heads/disconnected"]?.fork == nil)
