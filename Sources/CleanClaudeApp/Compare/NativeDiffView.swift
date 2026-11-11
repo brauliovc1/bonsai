@@ -59,6 +59,7 @@ struct NativeDiffView: NSViewRepresentable {
                 // Font fallback changes glyph advances (CJK, emoji). Measure the actual attributed
                 // layout once; TextKit still draws and scrolls only the visible part of the document.
                 let width = ceil(rendered.size().width) + text.textContainerInset.width * 2 + 16
+                text.minSize = NSSize(width: width, height: 0)
                 text.setFrameSize(NSSize(width: max(scroll.contentSize.width, width), height: max(scroll.contentSize.height, CGFloat(document.hunks.reduce(0) { $0 + $1.lines.count + 1 }) * 20 + 30)))
                 if sameFile {
                     scroll.contentView.scroll(to: origin); scroll.reflectScrolledClipView(scroll.contentView)
