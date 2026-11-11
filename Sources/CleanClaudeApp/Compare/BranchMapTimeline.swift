@@ -34,7 +34,7 @@ struct BranchMapTimeline: View {
                             context.stroke(base, with: .color(grey.opacity(0.6)), lineWidth: 2)
                             for (index, entry) in rows.enumerated() {
                                 guard let tip = entry.metrics.tip,
-                                      let fork = timeline[entry.ref]?.fork ?? entry.metrics.fork,
+                                      let fork = timeline[entry.ref]?.fork,
                                       let parent = model.timelineParent(for: entry.ref) else { continue }
                                 let y = heading + CGFloat(index) * rowHeight + rowHeight / 2
                                 let forkX = Self.x(fork.date, width: size.width, start: start, end: end)
@@ -93,7 +93,7 @@ struct BranchMapTimeline: View {
     private func tooltip(_ entry: BranchMapEntry, data: BranchTimelineEntry?) -> String {
         var text = BranchHistoryText.plain(entry.name) + "\n" + BranchHistoryText.counts(entry)
         if let fork = data?.fork { text += "\nFork: " + BranchHistoryText.commit(fork) }
-        if let data, data.fork != nil { text += "\n\(data.commitCount) commits since this fork" }
+        if let data, data.problem == nil, data.fork != nil { text += "\n\(data.commitCount) commits since this fork" }
         if let problem = data?.problem ?? entry.metrics.problem { text += "\n" + BranchHistoryText.plain(problem) }
         return text
     }
