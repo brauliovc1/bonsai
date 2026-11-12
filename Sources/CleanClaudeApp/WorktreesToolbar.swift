@@ -1,33 +1,11 @@
 import CleanAppModel
 import SwiftUI
 
-/// The Worktrees toolbar (PLAN §8.4): the segmented filter with counts, Remove… (enabled only when the selection
-/// holds something that can be removed; otherwise its tooltip says why) and More. (⌘R lives on the screen itself,
-/// `WorktreesView`, so it works when More is in the overflow menu.)
+/// Secondary worktree actions. Filters live in content and the primary removal action stays in the footer.
 struct WorktreesToolbar: ToolbarContent {
     @Bindable var model: WorktreesModel
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Picker("Show", selection: $model.filter) {
-                ForEach(WorktreesModel.Filter.allCases) { filter in
-                    Text(model.title(filter)).tag(filter)
-                }
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
-            .help("Worktrees that can be removed, those with local work that needs you, or all of them")
-        }
-        // Two items, not one group: when the window is narrow, More goes to the overflow menu first and Remove…
-        // stays as long as it fits.
-        ToolbarItem(placement: .primaryAction) {
-            Button { Task { await model.removeSelection() } } label: {
-                Label("Remove…", systemImage: "trash")
-            }
-            .labelStyle(.titleAndIcon)
-            .disabled(!model.canRemoveSelection)
-            .help(model.removeDisabledReason ?? "Remove the selected worktrees (you confirm first)")
-        }
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 WorktreesMoreMenu(model: model)

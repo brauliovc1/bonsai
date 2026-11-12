@@ -95,6 +95,8 @@ Choose **Quick clean…** in Overview or the menu bar to review eligible cleanup
 
 Quick clean considers worktrees and project dependencies after at least seven days of inactivity, with the existing checks for local work and running apps. Other categories keep their own eligibility rules. Old Downloads move to Trash and are shown separately from the space a cleanup can free. Emptying Trash remains a separate confirmation.
 
+Overview's category total and Quick clean have different scopes. The preview shows Quick clean's exact eligible items and estimate before you confirm.
+
 ## Keep working while Bonsai cleans
 
 Confirm a cleanup and keep using the app. Bonsai queues tasks in order, shows live progress, and lets you stop after the current item. Anything that changed is left alone for you to review.
@@ -176,7 +178,7 @@ make install
 
 Open **Compare** in the Review sidebar group to inspect a branch before opening a pull request. Pick a base and branch, or a worktree to include unsaved and new files. Files show word and syntax highlights, generated files stay collapsed, and the Commits tab reviews one commit at a time. Compare never fetches or changes your repo. Branch reviews include committed submodule version changes. Worktree reviews leave out submodule changes; pick the branch to review its committed versions. Files inside submodules are not compared.
 
-Choose **View branches** in Overview or the menu bar to open the visual Timeline directly. In Compare, **Show branch map** opens a shared-scale distance list, and **Timeline** shows forks and stacked branches. Pick a branch to see where it came from, when a merge brought it into the base, its children, upstream status and worktree. Creation records from this Mac are labeled as facts; an inferred parent says “probably” and explains the evidence. Expired reflogs, unrelated history and cycles are shown explicitly. Tracking information can be unavailable in repos with included config files.
+Choose **View branches** in Overview or the menu bar to explore the visual Timeline in an expanded workspace. In Compare, expand **Branch map** to see the distance list or Timeline; **Expand map** gives it more room, and **Back to changes** restores the diff. Selecting a branch updates the comparison. Choose **History…** to inspect its origin, merges, children, upstream status and worktree. Creation records from this Mac are labeled as facts; an inferred parent says “probably” and explains the evidence. Expired reflogs, unrelated history and cycles are shown explicitly. Tracking information can be unavailable in repos with included config files.
 
 ```sh
 bonsai compare --repo /path/to/repo main feature --json

@@ -7,7 +7,12 @@ struct CompareSummaryView: View {
     @State private var showsDetails = false
 
     var body: some View {
-        HStack(spacing: 18) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) { counts; Spacer(minLength: 0); mergeStatus }
+            VStack(alignment: .leading, spacing: 6) { counts; mergeStatus }
+        }.padding(.horizontal, 16).padding(.bottom, 8)
+    }
+    private var counts: some View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 9) {
                     Text("\(snapshot.range.commits.count) commits · \(snapshot.files.count) files").font(.headline)
@@ -20,9 +25,10 @@ struct CompareSummaryView: View {
                     Text("Merge check uses committed changes; submodule changes are left out").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 0)
+    }
+    private var mergeStatus: some View {
             Button { showsDetails.toggle() } label: {
-                StatusChip(words: StatusWords(snapshot.merge.message(base: baseLabel), tone, symbol: icon))
+                StatusChip(words: StatusWords(snapshot.merge.message(base: baseLabel), tone, symbol: icon), wraps: true)
             }.buttonStyle(.plain)
                 .popover(isPresented: $showsDetails) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -32,7 +38,6 @@ struct CompareSummaryView: View {
                         if snapshot.range.compare.isWorktree { Text("The merge check uses committed changes. Unsaved files are shown in Files.").foregroundStyle(.secondary) }
                     }.padding(18).frame(maxWidth: 440)
                 }
-        }.padding(.horizontal, 18).padding(.bottom, 16)
     }
     private var baseLabel: String {
         let name = snapshot.range.base

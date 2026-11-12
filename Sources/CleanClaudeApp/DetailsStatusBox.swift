@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The top of the details panel: the status chip and its notes, the status in one plain sentence, and the one
 /// action that does the job or fixes what stops it. For a repo folder, Remove… is there but disabled, and says
-/// why (PLAN §8.5). A blocked worktree whose blockers Bonsai can all list gets "Remove anyway…" next to its fix
+/// why (PLAN §8.5). A blocked worktree whose blockers Bonsai can all list gets "Remove anyway…" below its fix
 /// (PLAN §4.8); one that also has a blocker Remove anyway never overrides says what to do instead.
 struct DetailsStatusBox: View {
     let model: WorktreesModel
@@ -12,22 +12,22 @@ struct DetailsStatusBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 if model.app.cleanupQueue.task(for: row.path) != nil {
                     QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path)
-                } else { StatusChip(words: row.chip) }
+                } else { StatusChip(words: row.chip, wraps: true) }
                 if let notes = row.notesText {
                     Text(notes)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Text(row.explanation)
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
                 fixButton
                 if row.worktree.isMain {
                     Button("Remove…") {}

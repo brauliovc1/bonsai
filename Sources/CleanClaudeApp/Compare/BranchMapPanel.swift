@@ -6,60 +6,83 @@ struct BranchMapPanel: View {
     @Bindable var model: BranchMapModel
     let navigation: NavigationModel
     var worktrees: WorktreesModel?
+    var focused = false
+    @State private var search = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 8) {
+            if focused {
+                HStack {
+                    Button { model.isFocused = false; Task { await model.setOpen(false) } } label: { Label("Back to changes", systemImage: "chevron.left") }
+                    Spacer()
                     Text("Branch map").font(.headline)
-                    Text(BranchHistoryText.plain(model.collapsedSummary))
-                        .font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if model.isLoading { ProgressView().controlSize(.small) }
-                if model.isOpen {
-                    Button("Hide branch map") { Task { await model.setOpen(false) } }
-                } else {
-                    Button("Show branch map") { Task { await model.setOpen(true) } }
-                        .help("See branch distances, family history and merge status.")
-                    Button("Timeline") {
-                        Task {
-                            await model.setLayout(.timeline)
-                            await model.setOpen(true)
-                        }
-                    }
-                    .accessibilityLabel("Show branch map timeline")
-                    .help("See when branches forked and their commits on a timeline.")
                 }
-            }.controlSize(.small)
-            if model.isOpen {
-                HStack(spacing: 14) {
-                    Picker("View", selection: Binding(get: { model.layout }, set: { value in Task { await model.setLayout(value) } })) {
-                        Text("List").tag(BranchMapModel.Layout.list)
-                        Text("Timeline").tag(BranchMapModel.Layout.timeline)
-                    }.pickerStyle(.segmented).fixedSize().accessibilityLabel("Branch map view")
-                    Picker("Sort", selection: $model.sort) {
+            } else {
+                Button { Task { await model.setOpen(!model.isOpen) } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: model.isOpen ? "chevron.down" : "chevron.right").font(.caption)
+                        Text("Branch map").fontWeight(.medium)
+                        if model.collapsedSummary != "Branch map" {
+                            Text(BranchHistoryText.plain(model.collapsedSummary)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        }
+                        Spacer(minLength: 0)
+                        if model.isLoading { ProgressView().controlSize(.mini) }
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel(model.isOpen ? "Hide branch map" : "Show branch map")
+            }
+            if model.isOpen || focused {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { layout; searchField; Spacer(minLength: 0); actions }
+                    VStack(spacing: 8) {
+                        HStack { layout; Spacer(minLength: 0); actions }
+                        searchField
+                    }
+                }
+                HStack(spacing: 10) {
+                    Picker("Sort branches", selection: $model.sort) {
                         Text("Closest to base").tag(BranchMapLayout.Sort.closest)
                         Text("Most recent").tag(BranchMapLayout.Sort.recent)
                         Text("Name").tag(BranchMapLayout.Sort.name)
-                    }.fixedSize()
-                    Spacer(minLength: 8)
+                    }.labelsHidden().fixedSize()
+                    Spacer(minLength: 0)
                     Toggle("Remote branches", isOn: Binding(get: { model.includesRemotes }, set: { value in Task { await model.setIncludesRemotes(value) } }))
                         .toggleStyle(.checkbox).fixedSize()
-                }.font(.callout)
+                }.font(.callout).controlSize(.small)
                 if let problem = model.problem { ProblemBanner(text: BranchHistoryText.plain(problem)) }
-                ScrollView {
-                    if model.layout == .list { BranchMapList(model: model) }
-                    else { BranchMapTimeline(model: model) }
-                }.frame(minHeight: 90, maxHeight: 220)
+                if model.layout == .timeline { BranchTimelineAxis(model: model) }
+                else { BranchMapListAxis() }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        if model.layout == .list { BranchMapList(model: model, search: search) }
+                        else { BranchMapTimeline(model: model, search: search) }
+                    }
+                    .onAppear { if let ref = model.selectedRef { proxy.scrollTo(ref, anchor: .center) } }
+                    .onChange(of: model.selectedRef) { _, ref in if let ref { proxy.scrollTo(ref, anchor: .center) } }
+                    .onChange(of: model.rows.map(\.ref)) { _, _ in if let ref = model.selectedRef { proxy.scrollTo(ref, anchor: .center) } }
+                }
+                .frame(minHeight: focused ? 100 : 90, maxHeight: focused ? .infinity : 180)
             }
         }
-        .padding(.horizontal, 18).padding(.bottom, 12)
+        .padding(.horizontal, 16).padding(.vertical, focused ? 12 : 8)
         .popover(isPresented: $model.showsHistory) {
             BranchHistoryCard(model: model) { path in
-                worktrees?.revealWorktree(path)
-                model.showsHistory = false
-                navigation.show(.worktrees)
+                worktrees?.revealWorktree(path); model.showsHistory = false; navigation.show(.worktrees)
             }
         }
+    }
+    private var layout: some View {
+        Picker("Branch map view", selection: Binding(get: { model.layout }, set: { value in Task { await model.setLayout(value) } })) {
+            Text("List").tag(BranchMapModel.Layout.list)
+            Text("Timeline").tag(BranchMapModel.Layout.timeline)
+        }.labelsHidden().pickerStyle(.segmented).fixedSize()
+    }
+    private var searchField: some View {
+        TextField("Find branch", text: $search).textFieldStyle(.roundedBorder).frame(minWidth: 110, maxWidth: 220)
+    }
+    private var actions: some View {
+        HStack(spacing: 8) {
+            Button("History…") { Task { await model.requestHistory() } }.disabled(model.selectedRef == nil)
+            if !focused { Button("Expand map") { model.isFocused = true } }
+        }.fixedSize()
     }
 }

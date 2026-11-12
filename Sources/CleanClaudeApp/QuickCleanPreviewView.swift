@@ -94,7 +94,7 @@ struct QuickCleanPreviewView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Estimated cleanup").font(.caption).foregroundStyle(.secondary)
+                    Text("Estimated space from cleanup").font(.caption).foregroundStyle(.secondary)
                     Text(reclaimEstimate).font(.title2.weight(.semibold)).foregroundStyle(Palette.green)
                 }
                 Spacer()
@@ -106,7 +106,7 @@ struct QuickCleanPreviewView: View {
                     }
                 }
             }
-            Text("Worktrees and project dependencies: idle for at least 7 days. Other age and safety checks stay the same.")
+            Text("Worktrees and project dependencies: inactive **7+ days**. Other age and safety checks stay the same.")
                 .font(.callout).foregroundStyle(.secondary)
             if preview.groups.contains(where: { $0.id == .downloads && !$0.items.isEmpty }) {
                 Text("Downloads move to the Trash. They free no space now; space is freed only when the Trash is emptied.")

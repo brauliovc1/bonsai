@@ -125,7 +125,7 @@ private struct ReclaimRow: View {
                 Image(systemName: "scissors")
                     .foregroundStyle(.green)
                     .frame(width: 18)
-                Text("Ready to clean")
+                Text("Review cleanup")
                 Spacer(minLength: 8)
                 Text(DisplayText.bytes(bytes))
                     .fontWeight(.semibold)

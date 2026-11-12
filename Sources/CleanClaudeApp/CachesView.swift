@@ -7,13 +7,10 @@ struct CachesView: View {
     @State private var sort: ContentSort = .size
     var body: some View {
         VStack(spacing: 0) {
-            PageHeader(title: "Tool caches", subtitle: "Downloaded packages and temporary tool data.") {
-                Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
-            }.padding(20)
+            CleanupPageHeader(subtitle: "Downloaded packages and temporary tool data. Each tool keeps its own safety checks.")
             HStack {
                 ContentSortBar(selection: $sort)
                 Button("Select all ready") { model.selectAllReady() }.disabled(model.readyRows.isEmpty)
-                Button("Refresh") { Task { await model.refresh() } }.disabled(model.isScanning)
             }.padding(.trailing, 20)
             Divider()
             ScrollView {
@@ -23,7 +20,7 @@ struct CachesView: View {
                         EmptyState(systemImage: "shippingbox", headline: "No tool caches to clean", line: "Caches appear here when your tools download packages.")
                             .frame(maxWidth: .infinity)
                     }
-                    ForEach([ToolCacheEntry.Section.packages, .cursor], id: \.self) { section in
+                    ForEach(model.allRows.isEmpty ? [] : [ToolCacheEntry.Section.packages, .cursor], id: \.self) { section in
                         GroupedSection(title: section.title) {
                             if section == .cursor, let line = model.cursorRunningLine {
                                 Label(line, systemImage: "info.circle").foregroundStyle(Palette.blue)
@@ -43,11 +40,18 @@ struct CachesView: View {
             }
             if !model.selectedRows.isEmpty {
                 SelectionBar(text: "\(model.selectedRows.count) selected · \(CleanupPresentation.estimate(model.selectedRows.map(\.bytes)))") {
+                    Button("Clear") { model.selection.removeAll() }
                     Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
                 }
+            } else {
+                SelectionBar(text: "Select caches to review cleanup") { EmptyView() }
             }
         }
         .navigationTitle("Tool caches")
+        .toolbar {
+            Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .keyboardShortcut("r").disabled(model.isScanning)
+        }
         .sheet(isPresented: $model.isShowingCleanSheet, onDismiss: { model.dismissClean() }) { CachesCleanSheet(model: model) }
         .task { await model.loadIfNeeded() }
     }

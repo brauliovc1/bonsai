@@ -19,24 +19,27 @@ struct MainWindowView: View {
     var body: some View {
         NavigationSplitView {
             AppSidebar(summary: models.overview.summary, selection: $navigation.section)
-                .navigationSplitViewColumnWidth(min: 214, ideal: 240)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 256)
         } detail: {
-            VStack(spacing: 0) {
-                detail.frame(maxWidth: .infinity, maxHeight: .infinity)
-                VStack(spacing: 8) {
-                    if !queue.toasts.isEmpty {
-                        ScrollView {
-                            VStack(spacing: 8) {
-                                ForEach(queue.toasts) { toast in CleanupToastView(toast: toast, queue: queue) }
+            GeometryReader { viewport in
+                VStack(spacing: 0) {
+                    detail.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(spacing: 8) {
+                        if !queue.toasts.isEmpty {
+                            ScrollView {
+                                VStack(spacing: 8) {
+                                    ForEach(queue.toasts) { toast in CleanupToastView(toast: toast, queue: queue) }
+                                }
+                                .padding(.horizontal, 1)
                             }
-                            .padding(.horizontal, 1)
+                            .frame(height: min(CGFloat(queue.toasts.count) * 76, 152))
                         }
-                        .frame(height: min(CGFloat(queue.toasts.count) * 76, 152))
+                        CleanupActivityView(queue: queue)
                     }
-                    CleanupActivityView(queue: queue)
+                    .padding(queue.hasPending || !queue.toasts.isEmpty ? 12 : 0)
+                    .background(Color(nsColor: .windowBackgroundColor))
                 }
-                .padding(queue.hasPending || !queue.toasts.isEmpty ? 12 : 0)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
             }
         }
         .frame(minWidth: 860, minHeight: 480)
@@ -78,7 +81,7 @@ struct AppSidebar: View {
 
     var body: some View {
         List(selection: $selection) {
-            ForEach(SidebarSection.Group.allCases) { group in
+            ForEach([SidebarSection.Group.cleanUp, .review, .historyAndInfo]) { group in
                 Section(group.title) {
                     ForEach(group.sections) { section in
                         SidebarRow(section: section, badge: section.badge(in: summary))
@@ -98,13 +101,22 @@ private struct SidebarRow: View {
     let badge: String?
 
     var body: some View {
-        Label {
-            Text(section.title)
-        } icon: {
+        HStack(spacing: 8) {
             Image(systemName: section.systemImage)
                 .font(.system(size: 13))
                 .frame(width: 20, height: 18)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    Text(section.title).fixedSize()
+                    Spacer(minLength: 0)
+                    if let badge { Text(badge).font(.caption).foregroundStyle(.secondary).monospacedDigit().fixedSize() }
+                }
+                Text(section.title).fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .badge(badge.map { Text($0).monospacedDigit() })
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(section.title + (badge.map { ", " + $0 } ?? ""))
+        .help(section.title + (badge.map { " · " + $0 + " available to review" } ?? ""))
     }
 }

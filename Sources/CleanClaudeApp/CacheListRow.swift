@@ -20,9 +20,9 @@ struct CacheListRow: View {
                 Text(row.isDisplayOnly ? row.statusText : row.note).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let kept = row.keptText { Text(kept).font(.caption).foregroundStyle(.secondary) }
+                if queued { QueuedItemStatus(queue: model.app.cleanupQueue, resource: model.queueResource(row.id)) }
+                else if !row.isDisplayOnly { StatusChip(words: row.statusWords, wraps: true).help(row.statusText) }
             }.frame(maxWidth: .infinity, alignment: .leading)
-            if queued { QueuedItemStatus(queue: model.app.cleanupQueue, resource: model.queueResource(row.id)) }
-            else if !row.isDisplayOnly { StatusChip(words: row.statusWords, wraps: true).frame(maxWidth: 280, alignment: .trailing).help(row.statusText) }
             SizeText(bytes: row.bytes).frame(width: 85, alignment: .trailing)
         }
         .foregroundStyle(row.isDisplayOnly ? .secondary : .primary)

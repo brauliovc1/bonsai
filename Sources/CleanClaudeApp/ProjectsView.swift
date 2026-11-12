@@ -10,22 +10,11 @@ struct ProjectsView: View {
     var body: some View {
         VStack(spacing: 0) {
             TestModeBanner(app: model.app)
-            PageHeader(title: "Project folders", subtitle: "Dependencies and build output you can get back when needed.") {
-                Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
-            }.padding(20)
+            CleanupPageHeader(subtitle: "Dependencies and build output can be restored when needed. Source files stay.")
             if let problem = model.app.problem { ProblemBanner(text: problem) }
-            HStack {
-                Picker("Show projects", selection: $model.filter) {
-                    if model.filter == .canFree {
-                        Text("Ready to clean · \(model.idleTotal.count)").tag(ProjectsModel.Filter.canFree)
-                    }
-                    Text("Idle \(model.threshold)+ days · \(model.allRows.count { ($0.idleDays ?? -1) >= model.threshold })")
-                        .tag(ProjectsModel.Filter.idle)
-                    Text("All · \(model.allRows.count)").tag(ProjectsModel.Filter.all)
-                }.pickerStyle(.segmented).frame(maxWidth: 470)
-                Spacer()
-                Button("Select all idle") { model.selectAllIdle() }.disabled(model.idleTotal.count == 0)
-                Button("Refresh") { Task { await model.refreshAll() } }.disabled(model.isScanning || model.app.isScanning)
+            ViewThatFits(in: .horizontal) {
+                HStack { projectFilter.labelsHidden().pickerStyle(.segmented).fixedSize(); Spacer(minLength: 8); selectIdle }
+                HStack { projectFilter.pickerStyle(.menu); Spacer(minLength: 8); selectIdle }
             }.padding(.horizontal, 20).padding(.bottom, 8)
             ContentSortBar(selection: $sort, showsActivity: true)
                 .onChange(of: sort) { _, value in
@@ -70,12 +59,30 @@ struct ProjectsView: View {
             ProjectsFooter(model: model) { navigation.show(.worktrees) }
             if !model.selectedRows.isEmpty {
                 SelectionBar(text: "\(model.selectedRows.count) selected · \(CleanupPresentation.estimate(model.selectedRows.flatMap { $0.project.folders }.map(\.bytes)))") {
+                    Button("Clear") { model.selection.removeAll() }
                     Button("Clean selected…") { Task { await model.beginClean() } }.disabled(!model.canClean)
                 }
+            } else {
+                SelectionBar(text: "Select projects to review cleanup") { EmptyView() }
             }
         }
         .navigationTitle("Project folders")
+        .toolbar {
+            Button { Task { await model.refreshAll() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .keyboardShortcut("r").disabled(model.isScanning || model.app.isScanning)
+        }
         .sheet(isPresented: $model.isShowingCleanSheet, onDismiss: { model.dismissClean() }) { ProjectsCleanSheet(model: model) }
         .task { await model.loadIfNeeded() }
     }
+    private var projectFilter: some View {
+        Picker("Show projects", selection: $model.filter) {
+            if model.filter == .canFree { Text("Ready to clean · \(model.idleTotal.count)").tag(ProjectsModel.Filter.canFree) }
+            Text("Idle \(model.threshold)+ days · \(model.allRows.count { ($0.idleDays ?? -1) >= model.threshold })").tag(ProjectsModel.Filter.idle)
+            Text("All · \(model.allRows.count)").tag(ProjectsModel.Filter.all)
+        }
+    }
+    private var selectIdle: some View {
+        Button("Select all idle") { model.selectAllIdle() }.disabled(model.idleTotal.count == 0).fixedSize()
+    }
+
 }

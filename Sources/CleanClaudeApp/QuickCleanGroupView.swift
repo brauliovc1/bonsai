@@ -31,15 +31,27 @@ struct QuickCleanGroupView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(group.title).font(.callout.weight(.medium))
-            Text(countText).font(.callout).foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            if !group.items.isEmpty {
-                Text(groupSizeText)
-                    .font(.callout).monospacedDigit()
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(group.title).font(.callout.weight(.medium)).fixedSize()
+                Text(countText).font(.callout).foregroundStyle(.secondary).fixedSize()
+                Spacer(minLength: 8)
+                amount
             }
-        }.frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(group.title).font(.callout.weight(.medium))
+                    Text(countText).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                amount
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var amount: some View {
+        if !group.items.isEmpty { Text(groupSizeText).font(.callout).monospacedDigit().fixedSize() }
     }
 
     private var groupSizeText: String {

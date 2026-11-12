@@ -7,7 +7,12 @@ struct WorktreeCompareButton: View {
     @State private var base = "base branch"
 
     var body: some View {
-        Button("Compare with \(base)…") { model.openCompare(row) }
+        Button { model.openCompare(row) } label: {
+            Text("Compare with \(base)…")
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+            .help("Compare with \(base)…")
             .disabled(!row.isOpenableFolder || model.onCompare == nil)
             .task(id: row.worktree.repoPath) { base = await model.compareBase(for: row.worktree.repoPath) }
     }

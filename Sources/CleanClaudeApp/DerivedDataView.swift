@@ -6,14 +6,11 @@ struct DerivedDataView: View {
     @State private var sort: ContentSort = .size
     var body: some View {
         VStack(spacing: 0) {
-            PageHeader(title: "Xcode DerivedData", subtitle: "Old build folders whose projects are gone can be deleted.") {
-                Button("Delete selected…") { Task { await model.beginDelete() } }.disabled(!model.canDelete)
-            }.padding(20)
+            CleanupPageHeader(subtitle: "Delete build folders of projects that are gone. Current projects and shared caches stay.")
             if let refusal = model.refusal { ProblemBanner(text: "Can't read this DerivedData folder: \(refusal)") }
             HStack {
                 ContentSortBar(selection: $sort)
                 Button("Select all orphaned") { model.selection = model.selectableIDs }.disabled(model.selectableIDs.isEmpty)
-                Button("Refresh") { Task { await model.refresh() } }.disabled(model.isScanning)
             }.padding(.trailing, 20)
             Divider()
             ScrollView {
@@ -34,14 +31,21 @@ struct DerivedDataView: View {
             }
             if !model.selectedOrphans.isEmpty {
                 SelectionBar(text: "\(model.selectedOrphans.count) selected · \(CleanupPresentation.estimate(model.selectedOrphans.map(\.bytes)))") {
+                    Button("Clear") { model.selection.removeAll() }
                     Button("Delete selected…") { Task { await model.beginDelete() } }.disabled(!model.canDelete)
                 }
+            } else {
+                SelectionBar(text: "Select old build folders to review deletion") { EmptyView() }
             }
         }
         .onChange(of: sort) { _, value in
             model.sortOrder = value == .size ? [KeyPathComparator(\DerivedDataRow.sizeSortKey, order: .reverse)] : [KeyPathComparator(\DerivedDataRow.name)]
         }
         .navigationTitle("Xcode DerivedData")
+        .toolbar {
+            Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .keyboardShortcut("r").disabled(model.isScanning)
+        }
         .sheet(isPresented: $model.isShowingDeleteSheet, onDismiss: { model.dismissDelete() }) { DerivedDataDeleteSheet(model: model) }
         .task { await model.loadIfNeeded() }
     }

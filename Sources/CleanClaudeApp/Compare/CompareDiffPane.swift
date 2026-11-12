@@ -7,6 +7,10 @@ struct CompareDiffPane: View {
     let change: Int
 
     var body: some View {
+        GeometryReader { geometry in content(width: geometry.size.width) }
+    }
+
+    private func content(width: CGFloat) -> some View {
         VStack(spacing: 0) {
             if let file = model.selectedFile {
                 HStack {
@@ -16,13 +20,19 @@ struct CompareDiffPane: View {
                         .menuStyle(.borderlessButton).fixedSize()
                 }.padding(12)
                 HStack {
-                    Picker("Layout", selection: $model.sideBySide) {
-                        Text("Unified").tag(false); Text("Side by side").tag(true)
-                    }.pickerStyle(.segmented).fixedSize()
-                    Spacer()
-                    Toggle("Ignore whitespace", isOn: $model.ignoresWhitespace).toggleStyle(.checkbox)
-                        .onChange(of: model.ignoresWhitespace) { Task { await model.changeWhitespace() } }
-                }.font(.callout).padding(.horizontal, 12).padding(.bottom, 10)
+                    if width >= 480 {
+                        layout.pickerStyle(.segmented).fixedSize()
+                        Spacer(minLength: 0)
+                        whitespace
+                    } else if width >= 320 {
+                        layout.pickerStyle(.segmented).fixedSize()
+                        Spacer(minLength: 0)
+                        Menu("Options") { whitespace }
+                    } else {
+                        Menu("Diff options") { layout; whitespace }
+                        Spacer(minLength: 0)
+                    }
+                }.font(.callout).padding(.horizontal, 12).padding(.bottom, 8)
                 Divider()
                 if file.modeChanged { Text("Mode changed: \(file.oldMode ?? "") → \(file.newMode ?? "")").font(.callout).foregroundStyle(.secondary).padding(10) }
                 if file.isBinary {
@@ -43,9 +53,20 @@ struct CompareDiffPane: View {
                     } else { Text("No text changes with these options.").foregroundStyle(.secondary).padding(18) }
                 }
             } else {
-                EmptyState(systemImage: "doc.text.magnifyingglass", headline: "Pick a file", line: "Select a changed file to read its diff.")
+                EmptyState(systemImage: model.files.isEmpty ? "checkmark.circle" : "doc.text.magnifyingglass",
+                           headline: model.files.isEmpty ? "No changes since these branches split" : "Pick a file",
+                           line: model.files.isEmpty ? "Choose another branch or open the branch map to explore." : "Select a changed file to read its diff.")
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    private var layout: some View {
+        Picker("Diff layout", selection: $model.sideBySide) {
+            Text("Unified").tag(false); Text("Side by side").tag(true)
+        }.labelsHidden().accessibilityLabel("Diff layout")
+    }
+    private var whitespace: some View {
+        Toggle("Ignore whitespace", isOn: $model.ignoresWhitespace)
+            .onChange(of: model.ignoresWhitespace) { Task { await model.changeWhitespace() } }
     }
     private func size(_ bytes: Int?) -> String { bytes.map { DisplayText.bytes(Int64($0)) } ?? "Size unavailable" }
 }

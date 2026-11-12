@@ -22,6 +22,9 @@ struct CompareFilesView: View {
                             }.buttonStyle(.plain).padding(.horizontal, 12).padding(.leading, CGFloat(min(5, folder.split(separator: "/").count - 1)) * 10)
                         } else if let file = entry.file { fileRow(file).padding(.leading, model.flatList ? 0 : CGFloat(min(5, file.path.split(separator: "/").count - 1)) * 10) }
                     }
+                    if entries.isEmpty, !model.filter.isEmpty {
+                        EmptyState(systemImage: "magnifyingglass", headline: "No matching files", line: "Try another file name.", actionTitle: "Clear filter") { model.filter = "" }
+                    }
                     if model.generatedCount > 0 {
                         Button { model.showsGenerated.toggle() } label: {
                             Label("Generated files (\(model.generatedCount))", systemImage: model.showsGenerated ? "chevron.down" : "chevron.right")

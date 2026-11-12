@@ -24,6 +24,7 @@ struct WorktreeListRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                if !showsActivity { status }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .help(row.path)
@@ -35,24 +36,22 @@ struct WorktreeListRow: View {
             }
             SizeText(bytes: row.sizeBytes, isMeasuring: row.isMeasuringSize)
                 .frame(width: WorktreeColumns.size, alignment: .trailing)
-            VStack(alignment: .leading, spacing: 2) {
-                if let queue, queue.task(for: row.path) != nil {
-                    QueuedItemStatus(queue: queue, resource: row.path)
-                } else { StatusChip(words: row.chip) }
-                if let notes = row.notesText {
-                    Text(notes)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            }
-            .frame(width: WorktreeColumns.status, alignment: .leading)
-            .help(row.reasonsHelp)
+            if showsActivity { status.frame(width: WorktreeColumns.status, alignment: .leading) }
         }
         .padding(.leading, showsRepo ? 0 : WorktreeColumns.indent)
         .padding(.vertical, 3)
     }
+    private var status: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let queue, queue.task(for: row.path) != nil { QueuedItemStatus(queue: queue, resource: row.path) }
+            else { StatusChip(words: row.chip, wraps: !showsActivity) }
+            if let notes = row.notesText {
+                Text(notes).font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(showsActivity ? 1 : nil).fixedSize(horizontal: false, vertical: true)
+            }
+        }.help(row.reasonsHelp)
+    }
+
 }
 
 /// The widths the rows and their headers share, and the narrowest list that still shows the activity column.

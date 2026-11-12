@@ -17,7 +17,7 @@ struct SelectionBar<Actions: View>: View {
         }
         .font(.callout)
         .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .padding(.vertical, 9)
         .background(.bar)
     }
 }

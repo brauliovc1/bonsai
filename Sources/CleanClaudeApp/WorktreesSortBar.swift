@@ -7,26 +7,26 @@ struct WorktreesSortBar: View {
     @Bindable var model: WorktreesModel
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("Sort:").foregroundStyle(.secondary)
-            Picker("Sort", selection: $model.sortKey) {
-                ForEach(WorktreesModel.SortKey.allCases) { key in
-                    Text(key.title).tag(key)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                filter.labelsHidden().pickerStyle(.segmented).fixedSize()
+                filter.pickerStyle(.menu)
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
-            .help("Size: largest first. Last activity: oldest first. Name: by repo and branch.")
-            Text("·").foregroundStyle(.tertiary)
-            Toggle("Group by repo", isOn: $model.groupsByRepo)
-                .toggleStyle(.checkbox)
-                .help("Off: one list across all repos, sorted the same way, each row with its repo's name")
-            Spacer(minLength: 0)
-        }
-        .font(.callout)
-        .controlSize(.small)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 5)
+            HStack(spacing: 8) {
+                Text("Sort:").foregroundStyle(.secondary)
+                Picker("Sort", selection: $model.sortKey) {
+                    ForEach(WorktreesModel.SortKey.allCases) { key in Text(key.title).tag(key) }
+                }.labelsHidden().pickerStyle(.menu).fixedSize()
+                Text("·").foregroundStyle(.tertiary)
+                Toggle("Group by repo", isOn: $model.groupsByRepo).toggleStyle(.checkbox)
+                Spacer(minLength: 0)
+            }.font(.callout).controlSize(.small)
+        }.padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    private var filter: some View {
+        Picker("Show worktrees", selection: $model.filter) {
+            ForEach(WorktreesModel.Filter.allCases) { filter in Text(model.title(filter)).tag(filter) }
+        }.help("Worktrees that can be removed, those with local work that needs you, or all of them")
     }
 }

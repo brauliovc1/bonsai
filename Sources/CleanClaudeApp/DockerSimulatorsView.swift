@@ -7,11 +7,9 @@ struct DockerSimulatorsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                PageHeader(title: "Docker & Simulators", subtitle: "Clean unused Docker data and devices that can no longer boot.") {
-                    Button("Refresh") { Task { await model.refresh() } }.disabled(model.isScanning)
-                }
+                CleanupPageHeader(subtitle: "Clean unused Docker data and devices that can no longer boot.")
                 ContentSortBar(selection: $sort)
-                HStack(alignment: .top, spacing: 18) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), alignment: .top)], alignment: .leading, spacing: 16) {
                     docker.frame(maxWidth: .infinity)
                     simulators.frame(maxWidth: .infinity)
                 }
@@ -19,6 +17,10 @@ struct DockerSimulatorsView: View {
             }.padding(20)
         }
         .navigationTitle("Docker & Simulators")
+        .toolbar {
+            Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .keyboardShortcut("r").disabled(model.isScanning)
+        }
         .sheet(isPresented: $model.isShowingDockerSheet, onDismiss: { model.dismissDockerPrune() }) { DockerPruneSheet(model: model) }
         .sheet(isPresented: $model.isShowingSimulatorsSheet, onDismiss: { model.dismissSimulatorsDelete() }) { SimulatorsDeleteSheet(model: model) }
         .task { await model.loadIfNeeded() }

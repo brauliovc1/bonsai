@@ -8,11 +8,9 @@ struct DownloadsTrashView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            CleanupPageHeader(subtitle: "Old downloads can be put back until Trash is emptied. Trash and Time Machine are separate below.")
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    PageHeader(title: "Downloads & Trash", subtitle: "Old downloads can be put back until the Trash is emptied.") {
-                        Button("Refresh") { Task { await model.refresh() } }.disabled(model.isScanning)
-                    }
                     if model.isScanning && model.listing == nil { ProgressView("Looking in Downloads…") }
                     installers
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), alignment: .top)], alignment: .leading, spacing: 16) {
@@ -51,7 +49,14 @@ struct DownloadsTrashView: View {
                     Button("Clear") { model.selection.removeAll() }
                     Button("Move to Trash…") { model.prepareMove() }.buttonStyle(.borderedProminent)
                 }
+            } else {
+                SelectionBar(text: "Select old downloads to review moving them to Trash") { EmptyView() }
             }
+        }
+        .navigationTitle("Downloads & Trash")
+        .toolbar {
+            Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .keyboardShortcut("r").disabled(model.isScanning)
         }
         .sheet(item: $model.moveConfirmation) { confirmation in DownloadsMoveSheet(model: model, confirmation: confirmation) }
         .sheet(isPresented: $model.isShowingEmptySheet) { EmptyTrashSheet(model: model) }

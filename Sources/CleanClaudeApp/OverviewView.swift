@@ -16,8 +16,8 @@ struct OverviewView: View {
             LaunchNoticeBanner(app: model.app)
             ScrollView {
                 content
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 20)
                     .frame(maxWidth: 940, alignment: .leading)
                     .frame(maxWidth: .infinity)
             }
@@ -47,31 +47,26 @@ struct OverviewView: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 16) {
             if let problem = model.app.problem {
                 ProblemBanner(text: problem)
             }
-            PageHeader(title: model.headline, subtitle: subtitle) {
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(model.canFreeText)
-                        .font(.title3.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(model.canFreeSomething ? Palette.green : .secondary)
-                    if let measuring = model.measuringText {
-                        HStack(spacing: 5) {
-                            ProgressView().controlSize(.mini)
-                            Text(measuring).lineLimit(1)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
+            VStack(alignment: .leading, spacing: 12) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 16) { reclaimHeading; Spacer(minLength: 12); quickCleanAction }
+                    VStack(alignment: .leading, spacing: 12) { reclaimHeading; quickCleanAction }
                 }
+                if quickClean != nil {
+                    Text("Worktrees and project dependencies inactive for **7+ days**, plus eligible caches and old installers.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Text("Quick clean checks its own eligible items. The preview shows the exact total.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                Divider()
+                Text(model.headline).font(.body.weight(.medium)).monospacedDigit().foregroundStyle(headlineColor)
+                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+                if let space = model.space { SpaceBar(space: space, level: model.level) }
             }
-            .foregroundStyle(headlineColor)
-            if let space = model.space {
-                SpaceBar(space: space, level: model.level)
-            }
-            quickCleanAction
             cards
             lines
             AutoCleanRow(line: model.autoClean, settings: settings)
@@ -81,27 +76,26 @@ struct OverviewView: View {
         }
     }
 
+    private var reclaimHeading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(model.canFreeText)
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .monospacedDigit().foregroundStyle(model.canFreeSomething ? Palette.green : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let measuring = model.measuringText {
+                HStack(spacing: 5) { ProgressView().controlSize(.mini); Text(measuring) }
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     @ViewBuilder
     private var quickCleanAction: some View {
         if let quickClean {
-            GroupedSection {
-                HStack(spacing: 18) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Review before cleaning").font(.headline)
-                        Text("Worktrees and project folders inactive for 7+ days, plus eligible caches and old installers.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    Button { Task { await quickClean.begin() } } label: {
-                        Label("Quick clean…", systemImage: "sparkles")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(quickClean.isPreparing || model.app.isQuitting)
-                    .help("Review the summary and expand its details before confirming")
-                }
-            }
+            Button { Task { await quickClean.begin() } } label: { Label("Quick clean…", systemImage: "sparkles") }
+                .buttonStyle(.borderedProminent).controlSize(.large).fixedSize()
+                .disabled(quickClean.isPreparing || model.app.isQuitting)
+                .help("Review the exact items and total before confirming cleanup")
         }
     }
 
@@ -109,25 +103,22 @@ struct OverviewView: View {
     private var cards: some View {
         let cards = model.cards
         if cards.isEmpty, model.measuringText == nil {
-            EmptyState(
-                systemImage: "checkmark.circle",
-                headline: "Nothing to clean",
-                line: "Bonsai found nothing it can free right now. It looks again after every scan."
-            )
-            .frame(maxWidth: .infinity)
-        } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 420), spacing: 14)], alignment: .leading, spacing: 14) {
-                ForEach(cards) { card in
-                    CategoryCard(
-                        systemImage: card.category.systemImage,
-                        title: card.title,
-                        sizeText: card.sizeText,
-                        detail: card.detail,
-                        buttonTitle: card.buttonTitle
-                    ) {
-                        model.open(card.category)
+            EmptyState(systemImage: "checkmark.circle", headline: "Nothing to clean",
+                       line: "Bonsai found nothing it can free right now. It looks again after every scan.")
+                .frame(maxWidth: .infinity)
+        } else if !cards.isEmpty {
+            GroupedSection(title: "Review by category") {
+                VStack(spacing: 0) {
+                    ForEach(cards) { card in
+                        CategorySummaryRow(systemImage: card.category.systemImage, title: card.title,
+                                           amount: card.sizeText, detail: card.detail) { model.open(card.category) }
+                        if card.id != cards.last?.id { Divider() }
                     }
                 }
+            }
+            if cards.contains(where: { $0.category == .downloads }) {
+                Text("Downloads move to Trash. Their space is freed only when Trash is emptied.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
         }
     }

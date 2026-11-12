@@ -16,11 +16,10 @@ struct ProjectFolderRow: View {
                 Text(row.name).fontWeight(.medium)
                 Text(row.folderText).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 Text(row.foldersText.replacingOccurrences(of: ", ", with: " · "))
-                    .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Palette.surface, in: Capsule()).lineLimit(1).help(row.foldersHelp)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2).help(row.foldersHelp)
+                if queued { QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path) }
+                else { StatusChip(words: row.statusWords, wraps: true).help(row.statusHelp) }
             }.frame(maxWidth: .infinity, alignment: .leading)
-            if queued { QueuedItemStatus(queue: model.app.cleanupQueue, resource: row.path) }
-            else { StatusChip(words: row.statusWords).help(row.statusHelp) }
             SizeText(bytes: row.measuredSizeBytes, hasUnknownParts: row.project.hasUnknownSizes).frame(width: 85, alignment: .trailing)
         }
         .contextMenu {

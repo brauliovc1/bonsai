@@ -62,6 +62,7 @@ public final class CompareModel {
     }
 
     public func configure(repo: String, base: String? = nil, compare: CompareSelection? = nil) async {
+        if repository != repo { catalog = nil }
         repository = repo
         self.base = base ?? ""
         self.compare = compare ?? .ref("HEAD")

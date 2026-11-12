@@ -4,36 +4,57 @@ import SwiftUI
 
 struct BranchMapList: View {
     let model: BranchMapModel
+    var search = ""
+    @State private var showsDate = true
+
     var body: some View {
         LazyVStack(spacing: 0) {
-            ForEach(model.rows) { entry in
-                Button { Task { await model.pick(entry.ref) } } label: {
-                    HStack(spacing: 12) {
+            ForEach(model.rows.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { entry in
+                Button { Task { await model.pick(entry.ref, showHistory: false) } } label: {
+                    HStack(spacing: 10) {
                         Label(BranchHistoryText.plain(entry.name), systemImage: BranchHistoryText.icon(entry.kind))
-                            .lineLimit(1).truncationMode(.middle).frame(minWidth: 130, maxWidth: 220, alignment: .leading)
+                            .lineLimit(1).truncationMode(.middle).frame(minWidth: 120, maxWidth: 220, alignment: .leading)
                             .help(BranchHistoryText.plain(entry.name))
-                        BranchDistanceBar(ahead: entry.metrics.ahead ?? 0, behind: entry.metrics.behind ?? 0, maximum: model.snapshot?.maximumDistance ?? 0)
-                            .frame(minWidth: 70, maxWidth: .infinity)
+                        if let ahead = entry.metrics.ahead, let behind = entry.metrics.behind, entry.metrics.problem == nil {
+                            BranchDistanceBar(ahead: ahead, behind: behind, maximum: model.snapshot?.maximumDistance ?? 0)
+                                .frame(minWidth: 70, maxWidth: .infinity)
+                        } else { Text("Unknown").font(.caption).foregroundStyle(.secondary).frame(minWidth: 70, maxWidth: .infinity) }
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(entry.metrics.behind ?? 0) behind").foregroundStyle(.secondary)
-                            Text("\(entry.metrics.ahead ?? 0) ahead").foregroundStyle(Palette.green)
-                        }.font(.caption).monospacedDigit().frame(width: 78, alignment: .trailing)
-                        if let date = entry.metrics.tip?.date {
-                            Text(date, format: .dateTime.month(.abbreviated).day().year())
+                            Text(entry.metrics.behind.map { "\($0) behind" } ?? "Behind unknown").foregroundStyle(.secondary)
+                            Text(entry.metrics.ahead.map { "\($0) ahead" } ?? "Ahead unknown").foregroundStyle(entry.metrics.problem == nil ? Palette.green : .secondary)
+                        }.font(.caption).monospacedDigit().frame(width: 88, alignment: .trailing)
+                        if showsDate {
+                            Text(entry.metrics.tip?.date.formatted(.dateTime.month(.abbreviated).day().year()) ?? "Unknown")
                                 .font(.caption).foregroundStyle(.secondary).frame(width: 88, alignment: .trailing)
                         }
-                        Group {
-                            if let problem = entry.metrics.problem {
-                                StatusChip(words: StatusWords("Couldn't check", .grey, symbol: "questionmark.circle"))
-                                    .help(BranchHistoryText.plain(problem))
-                            } else if entry.metrics.isMerged { StatusChip(words: StatusWords("Merged", .grey, symbol: "checkmark")) }
-                            else { Text("").frame(width: 62) }
-                        }
-                    }.padding(.vertical, 8).contentShape(Rectangle())
+                        Text(entry.ref == model.baseRef ? "Base" : entry.metrics.problem != nil ? "Unknown" : entry.metrics.isMerged ? "Merged" : "")
+                            .font(.caption).foregroundStyle(.secondary).frame(width: 60, alignment: .trailing)
+                    }.padding(.horizontal, 6).padding(.vertical, 8).contentShape(Rectangle())
                 }.buttonStyle(.plain)
+                    .background(model.selectedRef == entry.ref ? Palette.tint(.blue) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                    .id(entry.ref)
+                    .contextMenu { Button("History…") { Task { await model.pick(entry.ref) } } }
                 Divider()
             }
         }
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 740 } action: { showsDate = $0 }
+    }
+}
+
+/// Its scale labels stay visible when the selected branch is far down the list.
+struct BranchMapListAxis: View {
+    @State private var showsDate = true
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("Branch").frame(minWidth: 120, maxWidth: 220, alignment: .leading)
+            HStack { Text("Behind base"); Spacer(); Text("Ahead") }.frame(minWidth: 70, maxWidth: .infinity)
+            Text("Commits").frame(width: 88, alignment: .trailing)
+            if showsDate { Text("Last commit").frame(width: 88, alignment: .trailing) }
+            Text("State").frame(width: 60, alignment: .trailing)
+        }.font(.caption).foregroundStyle(.secondary).padding(.vertical, 7)
+            .help("Branch distances use one shared logarithmic scale; exact counts are shown beside it.")
+            .padding(.horizontal, 6)
+            .onGeometryChange(for: Bool.self) { $0.size.width >= 740 } action: { showsDate = $0 }
     }
 }
 

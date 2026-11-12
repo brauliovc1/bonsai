@@ -2,8 +2,7 @@ import CleanAppModel
 import SwiftUI
 
 /// A repo's header in the Worktrees list: the repo folder itself, never a row and never removable (PLAN §8.4).
-/// "aitiu0  repo folder 120 MB · 2 worktrees, 3.7 GB · last commit 10 weeks ago", with "Clean dependencies…"
-/// when the folder has dependency or build folders and "Remove all N" when the group has worktrees that can go.
+/// Its compact summary keeps the name readable; available cleanup actions are in More.
 /// The chevron collapses the group.
 struct RepoGroupHeader: View {
     let model: WorktreesModel
@@ -25,16 +24,13 @@ struct RepoGroupHeader: View {
             .accessibilityLabel(expanded ? "Collapse \(group.name)" : "Expand \(group.name)")
             Image(systemName: "folder.fill")
                 .foregroundStyle(.secondary)
-            Text(group.name)
-                .font(.headline)
-                .lineLimit(1)
-                .layoutPriority(1)
-            Text(group.headerDetail)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .monospacedDigit()
-            Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name).font(.headline).lineLimit(1).truncationMode(.middle)
+                Text(group.headerDetail).font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(2).monospacedDigit()
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            if group.dependencyBytes != nil || !group.removableRows.isEmpty {
+                Menu("More") {
             if let bytes = group.dependencyBytes {
                 Button("Clean dependencies…") { Task { await model.cleanDependencies(of: group) } }
                     .disabled(model.app.cleanupQueue.task(for: group.repoPath) != nil)
@@ -47,6 +43,8 @@ struct RepoGroupHeader: View {
                     .disabled(removable.allSatisfy { model.app.cleanupQueue.task(for: $0.path) != nil })
                     .help(removable.allSatisfy { model.app.cleanupQueue.task(for: $0.path) != nil }
                         ? CleanupQueue.lockedHelp : removeAllHelp(removable))
+            }
+                }.fixedSize()
             }
         }
         .controlSize(.small)

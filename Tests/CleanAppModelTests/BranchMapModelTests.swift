@@ -41,16 +41,85 @@ struct BranchMapModelTests {
         #expect(!compare.branches.isLoadingHistory)
     }
 
-    @Test func choosingTheCompareSideOpensHistoryWithoutLoadingTheClosedMap() async throws {
+    @Test func choosingTheCompareSideKeepsHistoryLazyUntilRequested() async throws {
         let world = try await BranchHistoryFixture.make()
         defer { world.remove() }
         let compare = CompareModel(app: makeApp(world.fixture))
         await compare.configure(repo: world.repo.path, base: "main", compare: .ref("a"))
         compare.compare = .ref("c")
         await compare.refresh()
-        #expect(compare.branches.showsHistory && compare.branches.history?.branch == "refs/heads/c")
+        #expect(!compare.branches.showsHistory && compare.branches.history == nil)
+        #expect(compare.branches.family == nil)
         #expect(compare.branches.snapshot == nil && !compare.branches.isOpen)
         #expect(await compare.branches.cache.computations == 0)
+        await compare.branches.requestHistory()
+        #expect(compare.branches.showsHistory && compare.branches.history?.branch == "refs/heads/c")
+        #expect(compare.branches.snapshot == nil)
+    }
+
+    @Test func mapSelectionDoesNotPresentHistoryAndContextChangesClearIt() async throws {
+        let world = try await BranchHistoryFixture.make()
+        defer { world.remove() }
+        let compare = CompareModel(app: makeApp(world.fixture))
+        await compare.configure(repo: world.repo.path, base: "main", compare: .ref("a"))
+        await compare.branches.setOpen(true)
+        await compare.branches.pick("refs/heads/b", showHistory: false)
+        #expect(compare.compare == .ref("refs/heads/b"))
+        #expect(compare.branches.selectedRef == "refs/heads/b")
+        #expect(!compare.branches.showsHistory && compare.branches.history == nil && compare.branches.family == nil)
+        await compare.branches.requestHistory()
+        #expect(compare.branches.history?.origin.parent == "refs/heads/a")
+        await compare.branches.setOpen(false)
+        compare.base = "a"
+        await compare.refresh()
+        #expect(!compare.branches.showsHistory && compare.branches.history == nil)
+        #expect(compare.branches.snapshot == nil && compare.branches.family == nil)
+        await compare.branches.requestHistory()
+        #expect(compare.branches.history?.base == "refs/heads/a")
+        await compare.configure(repo: world.repo.deletingLastPathComponent().appending(path: "missing").path)
+        #expect(!compare.branches.showsHistory && compare.branches.history == nil)
+        #expect(compare.catalog == nil && compare.problem != nil)
+    }
+
+    @Test func selectedRefResolvesShorthandHeadAndWorktreeIdentity() async throws {
+        let world = try await BranchHistoryFixture.make()
+        defer { world.remove() }
+        let path = world.fixture.scanRoot.appending(path: "identity-b")
+        try await world.fixture.run(["worktree", "add", "--quiet", path.path, "b"], in: world.repo)
+        let compare = CompareModel(app: makeApp(world.fixture))
+        await compare.configure(repo: world.repo.path, base: "main", compare: .ref("c"))
+        #expect(compare.branches.selectedRef == "refs/heads/c")
+        await compare.configure(repo: world.repo.path, base: "main", compare: .ref("HEAD"))
+        #expect(compare.branches.selectedRef == "refs/heads/main")
+        await compare.configure(repo: world.repo.path, base: "main", compare: .worktree(path.path))
+        #expect(compare.branches.selectedRef == "refs/heads/b")
+    }
+
+    @Test func refIdentityFollowsGitTagPrecedenceAndExplicitNamespaces() async throws {
+        let world = try await BranchHistoryFixture.make()
+        defer { world.remove() }
+        try await world.fixture.run(["tag", "-a", "a", "c", "-m", "Different tag tip"], in: world.repo)
+        let compare = CompareModel(app: makeApp(world.fixture))
+        await compare.configure(repo: world.repo.path, base: "main", compare: .ref("a"))
+        #expect(compare.branches.selectedRef == "refs/tags/a")
+        #expect(compare.snapshot?.range.compareSHA == (try await world.sha("refs/tags/a^{commit}")))
+        await compare.branches.requestHistory()
+        #expect(compare.branches.history?.branch == "refs/tags/a")
+        #expect(compare.branches.history?.tip.sha == compare.snapshot?.range.compareSHA)
+
+        await compare.configure(repo: world.repo.path, base: "a", compare: .ref("refs/heads/a"))
+        #expect(compare.branches.selectedRef == "refs/heads/a")
+        #expect(compare.branches.baseRef == "refs/tags/a")
+        await compare.branches.requestHistory()
+        #expect(compare.branches.history?.base == "refs/tags/a")
+        #expect(compare.branches.history?.tip.sha == compare.snapshot?.range.compareSHA)
+
+        await compare.configure(repo: world.repo.path, base: "heads/a", compare: .ref("refs/tags/a"))
+        #expect(compare.branches.selectedRef == "refs/tags/a")
+        #expect(compare.branches.baseRef == "refs/heads/a")
+        await compare.configure(repo: world.repo.path, base: "HEAD", compare: .ref("heads/a"))
+        #expect(compare.branches.selectedRef == "refs/heads/a")
+        #expect(compare.branches.baseRef == "refs/heads/main")
     }
 
     @Test func switchingFromListToTimelineLoadsCommitsAfterHistoryLoadedTheFamily() async throws {
@@ -60,6 +129,7 @@ struct BranchMapModelTests {
         _ = compare.branches
         await compare.configure(repo: world.repo.path, base: "main", compare: .ref("c"))
         let model = compare.branches
+        await model.requestHistory()
         #expect(model.history?.branch == "refs/heads/c")
         await model.setOpen(true)
         #expect(model.layout == .list && model.family != nil && model.timeline.isEmpty)

@@ -2,10 +2,8 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// The Worktrees screen (PLAN §8.4): the toolbar's "Can remove · Needs attention · All" filter, search,
-/// Remove… and More; "Sort: … · Group by repo" above the list; the worktrees grouped under their repo folder or
-/// in one flat list; the details panel; the selection bar.
-/// Keyboard: Delete opens the removal confirmation, Space shows or hides the details, ⌘R scans again.
+/// Grouped worktrees, stable content filters, a details inspector and a pinned selection action.
+/// Delete opens normal removal confirmation, Space toggles details and ⌘R refreshes.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
     /// False in a narrow window: the activity column goes first.
@@ -108,12 +106,16 @@ struct WorktreesView: View {
     private var bottomBar: some View {
         if let text = model.selectionText {
             SelectionBar(text: text) {
+                Button("Clear") { model.selection.removeAll() }
                 Button("Remove…") { Task { await model.removeSelection() } }
                     .disabled(!model.canRemoveSelection)
                     .help(model.removeDisabledReason ?? "Remove the selected worktrees (you confirm first)")
             }
         } else {
-            ScanStatusBar(app: model.app, shown: model.rows.count, total: model.linkedRows.count)
+            VStack(spacing: 0) {
+                SelectionBar(text: "Select worktrees to review removal") { EmptyView() }
+                ScanStatusBar(app: model.app, shown: model.rows.count, total: model.linkedRows.count)
+            }
         }
     }
 

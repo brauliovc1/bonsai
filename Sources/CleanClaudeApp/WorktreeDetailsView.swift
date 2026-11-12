@@ -112,7 +112,7 @@ struct WorktreeDetailsContent: View {
 
     private var secondaryActions: some View {
         let openable = row.isOpenableFolder
-        return HStack(spacing: 14) {
+        return VStack(alignment: .leading, spacing: 10) {
             Button("Show in Finder") { FolderActions.reveal([row.url]) }.disabled(!openable)
             Button("Open in Terminal") { FolderActions.openInTerminal([row.url]) }.disabled(!openable)
             Button("Copy path") { FolderActions.copy([row.path]) }
@@ -137,7 +137,7 @@ struct SelectionSummaryView: View {
             Text(summary.title).font(.title3.weight(.semibold))
             Text(summary.sizeText).monospacedDigit()
             Text(summary.removableText).foregroundStyle(.secondary)
-            HStack {
+            VStack(alignment: .leading, spacing: 10) {
                 Button(summary.removableCount > 0 ? "Remove \(summary.removableCount)…" : "Remove…", role: .destructive) {
                     Task { await model.removeSelection() }
                 }
