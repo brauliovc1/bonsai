@@ -8,6 +8,7 @@ struct BranchMapPanel: View {
     var worktrees: WorktreesModel?
     var focused = false
     @State private var search = ""
+    @State private var scrollTarget: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -51,15 +52,16 @@ struct BranchMapPanel: View {
                 if let problem = model.problem { ProblemBanner(text: BranchHistoryText.plain(problem)) }
                 if model.layout == .timeline { BranchTimelineAxis(model: model) }
                 else { BranchMapListAxis() }
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        if model.layout == .list { BranchMapList(model: model, search: search) }
-                        else { BranchMapTimeline(model: model, search: search) }
-                    }
-                    .onAppear { if let ref = model.selectedRef { proxy.scrollTo(ref, anchor: .center) } }
-                    .onChange(of: model.selectedRef) { _, ref in if let ref { proxy.scrollTo(ref, anchor: .center) } }
-                    .onChange(of: model.rows.map(\.ref)) { _, _ in if let ref = model.selectedRef { proxy.scrollTo(ref, anchor: .center) } }
+                ScrollView {
+                    if model.layout == .list { BranchMapList(model: model, search: search) }
+                    else { BranchMapTimeline(model: model, search: search) }
                 }
+                // Native targets follow the lane's settled geometry as the viewport/layout changes. Manual
+                // scrolling updates only this local position, so it never changes Compare or snaps back.
+                .scrollPosition(id: $scrollTarget, anchor: .center)
+                .onAppear { scrollTarget = model.selectedRef }
+                .onChange(of: revealContext) { _, _ in scrollTarget = model.selectedRef }
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in scrollTarget = model.selectedRef }
                 .frame(minHeight: focused ? 100 : 90, maxHeight: focused ? .infinity : 180)
             }
         }
@@ -70,6 +72,18 @@ struct BranchMapPanel: View {
             }
         }
     }
+    private struct RevealContext: Equatable {
+        let selected: String?
+        let layout: BranchMapModel.Layout
+        let focused: Bool
+        let refs: [String]
+        let search: String
+    }
+    private var revealContext: RevealContext {
+        RevealContext(selected: model.selectedRef, layout: model.layout, focused: focused,
+                      refs: model.rows.map(\.ref), search: search)
+    }
+
     private var layout: some View {
         Picker("Branch map view", selection: Binding(get: { model.layout }, set: { value in Task { await model.setLayout(value) } })) {
             Text("List").tag(BranchMapModel.Layout.list)

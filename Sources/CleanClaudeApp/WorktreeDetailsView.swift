@@ -23,7 +23,7 @@ struct WorktreeDetailsView: View {
             }
             .task(id: row.detailsKey) { await model.details.load(for: row) }
         case .several(let summary):
-            SelectionSummaryView(model: model, summary: summary)
+            ScrollView { SelectionSummaryView(model: model, summary: summary) }
         }
     }
 }

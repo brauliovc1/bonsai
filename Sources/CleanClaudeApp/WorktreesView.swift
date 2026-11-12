@@ -2,7 +2,7 @@ import CleanAppModel
 import CleanCore
 import SwiftUI
 
-/// Grouped worktrees, stable content filters, a details inspector and a pinned selection action.
+/// Grouped worktrees, stable content filters, a bounded details panel and a pinned selection action.
 /// Delete opens normal removal confirmation, Space toggles details and ⌘R refreshes.
 struct WorktreesView: View {
     @Bindable var model: WorktreesModel
@@ -17,14 +17,9 @@ struct WorktreesView: View {
             }
             WorktreesSortBar(model: model)
             Divider()
-            list
+            workspace
             Divider()
             bottomBar
-        }
-        // Measured outside the list and only when it crosses the line, so the list isn't reloaded from inside
-        // its own layout.
-        .onGeometryChange(for: Bool.self) { $0.size.width >= WorktreeColumns.activityMinimumListWidth } action: {
-            showsActivity = $0
         }
         // Every screen keeps the same toolbar structure, title included: removing the title here alone moved the
         // sidebar when switching to this screen (11-09). At narrow widths the search field collapses and what
@@ -40,10 +35,6 @@ struct WorktreesView: View {
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Repo, branch, folder or commit")
         .toolbar { WorktreesToolbar(model: model) }
-        .inspector(isPresented: $model.isShowingDetails) {
-            WorktreeDetailsView(model: model)
-                .inspectorColumnWidth(min: 280, ideal: 320, max: 460)
-        }
         .sheet(isPresented: $model.isShowingRemovalSheet, onDismiss: { model.dismissRemoval() }) {
             RemovalConfirmationSheet(model: model)
         }
@@ -57,6 +48,24 @@ struct WorktreesView: View {
             PruneSheet(model: model)
         }
         .task(id: model.app.scanCount) { await model.computeDependenciesIfNeeded() }
+    }
+
+    private var workspace: some View {
+        GeometryReader { viewport in
+            let panelWidth: CGFloat = viewport.size.width >= 680 ? 320 : 280
+            let listWidth = max(0, viewport.size.width - (model.isShowingDetails ? panelWidth + 1 : 0))
+            HStack(spacing: 0) {
+                list.frame(width: listWidth, height: viewport.size.height)
+                    .onGeometryChange(for: Bool.self) { $0.size.width >= WorktreeColumns.activityMinimumListWidth } action: {
+                        showsActivity = $0
+                    }
+                if model.isShowingDetails {
+                    Divider()
+                    WorktreeDetailsPanel(model: model)
+                        .frame(width: panelWidth, height: viewport.size.height)
+                }
+            }.frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
+        }
     }
 
     private var list: some View {

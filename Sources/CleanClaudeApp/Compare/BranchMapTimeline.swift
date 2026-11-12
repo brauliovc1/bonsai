@@ -27,7 +27,7 @@ struct BranchMapTimeline: View {
                             .background(model.selectedRef == entry.ref ? Palette.tint(.blue) : .clear, in: RoundedRectangle(cornerRadius: 5))
                             .help(BranchHistoryText.plain(entry.name)).id(entry.ref)
                     }
-                }.frame(width: 170, alignment: .leading)
+                }.scrollTargetLayout().frame(width: 170, alignment: .leading)
                 GeometryReader { geometry in
                     let green = Palette.green, grey = Palette.grey
                     ZStack(alignment: .topLeading) {

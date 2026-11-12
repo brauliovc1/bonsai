@@ -37,6 +37,7 @@ struct BranchMapList: View {
                 Divider()
             }
         }
+        .scrollTargetLayout()
         .onGeometryChange(for: Bool.self) { $0.size.width >= 740 } action: { showsDate = $0 }
     }
 }
