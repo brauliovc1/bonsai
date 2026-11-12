@@ -8,7 +8,8 @@ struct BranchMapPanel: View {
     var worktrees: WorktreesModel?
     var focused = false
     @State private var search = ""
-    @State private var scrollTarget: String?
+    @State private var viewportSize: CGSize = .zero
+    @State private var documentSize: CGSize = .zero
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -52,16 +53,25 @@ struct BranchMapPanel: View {
                 if let problem = model.problem { ProblemBanner(text: BranchHistoryText.plain(problem)) }
                 if model.layout == .timeline { BranchTimelineAxis(model: model) }
                 else { BranchMapListAxis() }
-                ScrollView {
-                    if model.layout == .list { BranchMapList(model: model, search: search) }
-                    else { BranchMapTimeline(model: model, search: search) }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Group {
+                            if model.layout == .list { BranchMapList(model: model, search: search) }
+                            else { BranchMapTimeline(model: model, search: search) }
+                        }
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { documentSize = $0 }
+                    }
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { viewportSize = $0 }
+                    .task(id: revealContext) {
+                        guard viewportSize.width > 0, viewportSize.height > 0, documentSize.height > 0,
+                              let ref = model.selectedRef else { return }
+                        // Eager row geometry and the viewport have been measured. Yield this view task once
+                        // so the native scroll view can apply that layout; a newer context cancels the reveal.
+                        await Task.yield()
+                        guard !Task.isCancelled, model.selectedRef == ref else { return }
+                        proxy.scrollTo(ref, anchor: .center)
+                    }
                 }
-                // Native targets follow the lane's settled geometry as the viewport/layout changes. Manual
-                // scrolling updates only this local position, so it never changes Compare or snaps back.
-                .scrollPosition(id: $scrollTarget, anchor: .center)
-                .onAppear { scrollTarget = model.selectedRef }
-                .onChange(of: revealContext) { _, _ in scrollTarget = model.selectedRef }
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in scrollTarget = model.selectedRef }
                 .frame(minHeight: focused ? 100 : 90, maxHeight: focused ? .infinity : 180)
             }
         }
@@ -78,10 +88,12 @@ struct BranchMapPanel: View {
         let focused: Bool
         let refs: [String]
         let search: String
+        let viewport: CGSize
+        let document: CGSize
     }
     private var revealContext: RevealContext {
         RevealContext(selected: model.selectedRef, layout: model.layout, focused: focused,
-                      refs: model.rows.map(\.ref), search: search)
+                      refs: model.rows.map(\.ref), search: search, viewport: viewportSize, document: documentSize)
     }
 
     private var layout: some View {
