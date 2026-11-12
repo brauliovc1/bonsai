@@ -9,6 +9,29 @@ struct CompareView: View {
     @State private var change = 0
 
     var body: some View {
+        // Keep the native navigation column within its viewport when its ideal height changes.
+        GeometryReader { _ in content }
+        .navigationTitle("Compare")
+        .task(id: navigation.compareRequest) {
+            if let request = navigation.compareRequest {
+                await model.configure(repo: request.repo, base: request.base, compare: request.compare)
+            } else { await model.loadIfNeeded() }
+        }
+        .task(id: model.repositories) { await model.loadIfNeeded() }
+        .background {
+            Button("Refresh") { Task { await model.refresh() } }.keyboardShortcut("r").hidden()
+            Button("Find in diff") { find() }.keyboardShortcut("f").hidden()
+        }
+        .onKeyPress(.downArrow) { reviewKey { Task { await model.moveFile(1) } } }
+        .onKeyPress(.upArrow) { reviewKey { Task { await model.moveFile(-1) } } }
+        .onKeyPress("n") { reviewKey { change += 1 } }
+        .onKeyPress("p") { reviewKey { change -= 1 } }
+        .onKeyPress(.space) {
+            reviewKey { if let path = model.selectedPath { model.toggleViewed(path) } }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             CompareTopBar(model: model)
             if let snapshot = model.snapshot { CompareSummaryView(snapshot: snapshot) }
@@ -33,6 +56,7 @@ struct CompareView: View {
                 Spacer(); ProgressView("Reading branches…"); Spacer()
             } else if model.snapshot == nil {
                 EmptyState(systemImage: "arrow.left.arrow.right", headline: "Compare branches", line: "Choose a repo to review changes since two branches split.")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HSplitView {
                     if model.showsCommits { CompareCommitsView(model: model).frame(minWidth: 220, idealWidth: 270, maxWidth: 340) }
@@ -41,24 +65,7 @@ struct CompareView: View {
                 }
             }
         }
-        .navigationTitle("Compare")
-        .task(id: navigation.compareRequest) {
-            if let request = navigation.compareRequest {
-                await model.configure(repo: request.repo, base: request.base, compare: request.compare)
-            } else { await model.loadIfNeeded() }
-        }
-        .task(id: model.repositories) { await model.loadIfNeeded() }
-        .background {
-            Button("Refresh") { Task { await model.refresh() } }.keyboardShortcut("r").hidden()
-            Button("Find in diff") { find() }.keyboardShortcut("f").hidden()
-        }
-        .onKeyPress(.downArrow) { reviewKey { Task { await model.moveFile(1) } } }
-        .onKeyPress(.upArrow) { reviewKey { Task { await model.moveFile(-1) } } }
-        .onKeyPress("n") { reviewKey { change += 1 } }
-        .onKeyPress("p") { reviewKey { change -= 1 } }
-        .onKeyPress(.space) {
-            reviewKey { if let path = model.selectedPath { model.toggleViewed(path) } }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func reviewKey(_ action: () -> Void) -> KeyPress.Result {
