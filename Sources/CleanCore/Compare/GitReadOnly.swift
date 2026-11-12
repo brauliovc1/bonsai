@@ -80,7 +80,7 @@ public final class GitReadOnly: Sendable {
         let safeArguments = [arguments[0]] + safety + Array(arguments.dropFirst())
         let args = ["--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.precomposeunicode=true",
                     "--git-dir=\(directory.path)", "--work-tree=\(repository.path)"] + safeArguments
-        return try await ProcessRunner.run(
+        let result = try await ProcessRunner.run(
             executable: executable, arguments: args, directory: repository,
             environmentAdditions: ["GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_SYSTEM": "/dev/null",
                 "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0", "GIT_NO_REPLACE_OBJECTS": "1",
@@ -89,6 +89,9 @@ public final class GitReadOnly: Sendable {
                 "GIT_ALTERNATE_OBJECT_DIRECTORIES": CompareGitView.quotedAlternate(commonDirectory.appending(path: "objects").path)],
             removingInherited: ["GIT_"], timeout: timeout
         )
+        // ProcessRunner terminates a cancelled child but returns its exit result.
+        try Task.checkCancellation()
+        return result
     }
 
     public func data(_ arguments: [String]) async throws -> Data {
