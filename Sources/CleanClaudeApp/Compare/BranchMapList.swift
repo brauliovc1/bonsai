@@ -8,7 +8,8 @@ struct BranchMapList: View {
     @State private var showsDate = true
 
     var body: some View {
-        LazyVStack(spacing: 0) {
+        // Map rows use exact geometry for native target reveal, including the last row in a short viewport.
+        VStack(spacing: 0) {
             ForEach(model.rows.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { entry in
                 Button { Task { await model.pick(entry.ref, showHistory: false) } } label: {
                     HStack(spacing: 10) {
