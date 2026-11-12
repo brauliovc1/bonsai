@@ -8,6 +8,7 @@ struct WorktreesView: View {
     @Bindable var model: WorktreesModel
     /// False in a narrow window: the activity column goes first.
     @State private var showsActivity = true
+    @FocusState private var listIsFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,6 +93,10 @@ struct WorktreesView: View {
             }
         }
         .listStyle(.inset)
+        // Bind the List's intrinsic focus before its command handlers. A simultaneous tap requests that
+        // focus without adding a separate focusable wrapper or replacing native List gestures.
+        .focused($listIsFocused)
+        .simultaneousGesture(TapGesture().onEnded { _ in listIsFocused = true })
         .onDeleteCommand { Task { await model.removeSelection() } }
         .onKeyPress(.space) {
             model.isShowingDetails.toggle()
